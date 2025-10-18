@@ -94,6 +94,9 @@ export default function UnifiedBalanceDisplay({ balances, isSimpleMode = false }
       </div>
     );
   }
+
+  // Group balances by token symbol
+  const groupedBalances: { [key: string]: UnifiedBalance[] } = {};
   tokenBalances.forEach(token => {
     if (token && token.symbol) {
       if (!groupedBalances[token.symbol]) {
@@ -129,11 +132,11 @@ export default function UnifiedBalanceDisplay({ balances, isSimpleMode = false }
       <h4>Unified Balances</h4>
       <div className="balance-grid">
         {Object.entries(groupedBalances).map(([token, tokenBalances]) => {
-          const totalBalance = tokenBalances.reduce((sum, tokenBalance) => {
+          const totalBalance = tokenBalances.reduce((sum: number, tokenBalance: UnifiedBalance) => {
             return sum + parseFloat(tokenBalance.balance || '0');
           }, 0);
 
-          const totalFiat = tokenBalances.reduce((sum, tokenBalance) => {
+          const totalFiat = tokenBalances.reduce((sum: number, tokenBalance: UnifiedBalance) => {
             return sum + (tokenBalance.balanceInFiat || 0);
           }, 0);
 

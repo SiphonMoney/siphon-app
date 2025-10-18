@@ -2,15 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Area,
-  AreaChart,
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from "recharts";
 
 interface PriceData {
@@ -24,14 +16,8 @@ interface PriceChartProps {
   timeframe?: '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
 }
 
-export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) {
-  const [priceData, setPriceData] = useState<PriceData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentPrice, setCurrentPrice] = useState(0);
-  const [priceChange, setPriceChange] = useState(0);
-
-  // Generate mock price data that simulates real market behavior
-  const generateMockData = () => {
+// Generate mock price data that simulates real market behavior
+const generateMockData = (pair: string) => {
     const data: PriceData[] = [];
     const now = new Date();
     const basePrice = pair.includes('SOL') ? 150 : pair.includes('ETH') ? 3000 : 45000;
@@ -60,12 +46,18 @@ export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) 
     return data;
   };
 
+export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) {
+  const [priceData, setPriceData] = useState<PriceData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPrice, setCurrentPrice] = useState(0);
+  const [priceChange, setPriceChange] = useState(0);
+
   useEffect(() => {
     setIsLoading(true);
     
     // Simulate API call delay
     setTimeout(() => {
-      const data = generateMockData();
+      const data = generateMockData(pair);
       setPriceData(data);
       
       if (data.length > 0) {

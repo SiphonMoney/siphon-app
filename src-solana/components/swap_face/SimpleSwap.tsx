@@ -3,15 +3,35 @@
 import { useState, useEffect } from "react";
 import ConnectButton from "./ConnectButton";
 import TokenSelector from "./TokenSelector";
-import { isInitialized, transferTokens, bridgeTokens, initializeWithProvider, getUnifiedBalances } from "../../lib/nexus";
+import { isInitialized, transferTokens, initializeWithProvider, getUnifiedBalances } from "../../lib/nexus";
 import { WalletInfo } from "../../lib/walletManager";
+
+interface UnifiedBalance {
+  symbol: string;
+  balance: string;
+  balanceInFiat?: number;
+  breakdown?: Array<{
+    balance: string;
+    balanceInFiat?: number;
+    chain: {
+      id: number;
+      logo: string;
+      name: string;
+    };
+    contractAddress?: `0x${string}`;
+    decimals?: number;
+    isNative?: boolean;
+  }>;
+  decimals?: number;
+  icon?: string;
+}
 
 interface SimpleSwapProps {
   isLoaded: boolean;
   sdkInitialized: boolean;
   setSdkInitialized: (value: boolean) => void;
-  unifiedBalances: any[] | null;
-  setUnifiedBalances: (balances: any[] | null) => void;
+  unifiedBalances: UnifiedBalance[] | null;
+  setUnifiedBalances: (balances: UnifiedBalance[] | null) => void;
   walletConnected: boolean;
   setWalletConnected: (value: boolean) => void;
   connectedWallet: WalletInfo | null;
@@ -30,7 +50,6 @@ export default function SimpleSwap({
   setConnectedWallet,
 }: SimpleSwapProps) {
   const [swapFromToken, setSwapFromToken] = useState("");
-  const [swapToToken, setSwapToToken] = useState("USDC");
   const [swapAmount, setSwapAmount] = useState("");
   const [withdrawAddress, setWithdrawAddress] = useState("");
   const [isTransferring, setIsTransferring] = useState(false);
