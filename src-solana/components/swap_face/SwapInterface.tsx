@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import "./SwapInterface.css";
-import UnifiedBalanceDisplay from "./UnifiedBalanceDisplay";
+import UnifiedBalanceDisplay from "./extensions/UnifiedBalanceDisplay";
 import SimpleSwap from "./SimpleSwap";
 import ProSwap from "./ProSwap";
 import BookOrder from "./BookOrder";

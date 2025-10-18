@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import ConnectButton from "./ConnectButton";
-import TokenSelector from "./TokenSelector";
+import ConnectButton from "./extensions/ConnectButton";
+import TokenSelector from "./extensions/TokenSelector";
 import { isInitialized, transferTokens, initializeWithProvider, getUnifiedBalances } from "../../lib/nexus";
 import { WalletInfo } from "../../lib/walletManager";
 
