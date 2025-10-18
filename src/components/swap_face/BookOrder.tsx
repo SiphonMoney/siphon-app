@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import PriceChart from "./PriceChart";
-import TransactionList from "./TransactionList";
+import PriceChart from "./extensions/PriceChart";
+import TransactionList from "./extensions/TransactionList";
 
 interface BookOrderProps {
   isLoaded: boolean;
