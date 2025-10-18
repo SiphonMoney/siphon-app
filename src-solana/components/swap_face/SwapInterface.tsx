@@ -121,9 +121,7 @@ export default function SwapInterface() {
             setSdkInitialized={setSdkInitialized}
             unifiedBalances={unifiedBalances}
             setUnifiedBalances={setUnifiedBalances}
-            walletConnected={walletConnected}
             setWalletConnected={setWalletConnected}
-            connectedWallet={connectedWallet}
             setConnectedWallet={setConnectedWallet}
           />
         ) : isBookOrderMode ? (
