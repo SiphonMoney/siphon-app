@@ -1,4 +1,4 @@
-/* SwapInterface.css */
+/* SwapInterface.css - Common styles shared between modes */
 
 .siphon-container {
   position: fixed;
@@ -11,23 +11,42 @@
   justify-content: center;
   z-index: 1;
   pointer-events: none;
-  gap: 2rem;
   padding: 2rem;
 }
 
-.siphon-window {
-  background: rgba(0, 0, 0, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+/* Floating Mode Toggle */
+.floating-mode-toggle {
+  position: fixed;
+  top: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
+  padding: 0.5rem;
+  gap: 0.5rem;
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.siphon-window {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   padding: 0;
   pointer-events: auto;
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(5px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   opacity: 0;
   transform: translateY(20px);
   transition: opacity 0.8s ease, transform 0.8s ease, width 0.6s ease, height 0.6s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .siphon-window.loaded {
@@ -38,8 +57,17 @@
 /* Pro mode sizing */
 .siphon-window.pro-mode {
   width: 99vw;
-  height: 95vh;
+  height: calc(95vh - 100px);
   max-width: 1800px;
+  margin-top: 50px;
+}
+
+/* Dark Pool mode sizing - same as pro mode for full width */
+.siphon-window.darkpool-mode {
+  width: 99vw;
+  height: calc(95vh - 100px);
+  max-width: 1800px;
+  margin-top: 50px;
 }
 
 /* Simple mode sizing */
@@ -50,356 +78,36 @@
   max-width: 500px;
 }
 
-.mode-toggle {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 2rem;
-  background: transparent;
-  padding: 0.5rem;
-  gap: 2rem;
-}
-
 .toggle-button {
   background: transparent;
   border: none;
-  padding: 0.5rem 1rem;
-  color: rgba(255, 255, 255, 0.4);
+  padding: 0.75rem 1.5rem;
+  color: rgba(255, 255, 255, 0.5);
   font-family: var(--font-source-code), monospace;
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .toggle-button.active {
   color: white;
+  background: rgba(255, 255, 255, 0.1);
   font-weight: 600;
 }
 
 .toggle-button:hover {
   color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .toggle-button.active:hover {
   color: white;
-}
-
-/* Simple Mode Styles */
-.simple-swap {
-  padding: 2rem;
-  text-align: center;
-  max-width: 400px;
-  margin: 0 auto;
-  opacity: 0;
-  transform: translateY(10px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.simple-swap.loaded {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.simple-swap h3 {
-  margin-bottom: 2rem;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Swap Step Styles */
-.swap-step {
-  margin-bottom: 2rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 1.5rem;
-}
-
-.step-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.step-number {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.step-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.step-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.step-connect-button {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 1rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.step-connect-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.connected-wallet-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-.connected-wallet-info .wallet-icon {
-  font-size: 10px;
-  font-weight: 600;
-  width: 24px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.8);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-family: var(--font-source-code), monospace;
-}
-
-.connected-wallet-info .wallet-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.connected-wallet-info .wallet-address {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  font-family: var(--font-source-code), monospace;
-  margin-left: auto;
-}
-
-.simple-swap .swap-inputs {
-  margin-bottom: 1.5rem;
-}
-
-.simple-swap .swap-inputs .input-group {
-  margin-bottom: 1rem;
-}
-
-.wallet-input {
-  margin-top: 1rem;
-  text-align: left;
-}
-
-.wallet-input label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 12px;
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.wallet-input input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 0.875rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-
-.wallet-input input:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.privacy-info {
-  position: relative;
-  margin: 1rem 0;
-  text-align: center;
-}
-
-.privacy-text {
-  font-size: 12px;
-  opacity: 0.7;
-  cursor: help;
-  border-bottom: 1px dotted rgba(255, 255, 255, 0.3);
-  transition: opacity 0.2s ease;
-}
-
-.privacy-text:hover {
-  opacity: 1;
-}
-
-.privacy-tooltip {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 0.75rem;
-  font-size: 11px;
-  line-height: 1.4;
-    width: 280px;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-  z-index: 1000;
-  backdrop-filter: blur(10px);
-}
-
-.privacy-info:hover .privacy-tooltip {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Pro Mode Styles */
-.three-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  height: 100%;
-  gap: 0;
-  opacity: 0;
-  transform: translateY(10px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.three-columns.loaded {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.column {
-  background: rgba(255, 255, 255, 0.03);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 3rem;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.column:last-child {
-  border-right: none;
-}
-
-.column-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.step-number {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.column h3 {
-  font-size: 22px;
-  font-weight: 600;
-  margin: 0;
-  letter-spacing: 0.5px;
-}
-
-.step-title {
-  position: relative;
-  cursor: help;
-}
-
-.step-title:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 1.5rem;
-  font-size: 14px;
-  line-height: 1.6;
-  max-width: 400px;
-  width: 350px;
-  z-index: 1000;
-  backdrop-filter: blur(10px);
-  white-space: normal;
-  margin-top: 0.5rem;
-}
-
-.column-description {
-  margin-bottom: 1rem;
-  opacity: 0.7;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.step-explanation {
-  margin-bottom: 2rem;
-  opacity: 0.6;
-  font-size: 13px;
-  line-height: 1.4;
-  font-style: italic;
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* Common Input Styles */
@@ -448,11 +156,17 @@
   flex: 1;
 }
 
-.deposit-input-group .token-input {
-  margin-bottom: 0;
+.token-input label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-size: 13px;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
 }
 
-.deposit-input-group .token-input input {
+.token-input input {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
@@ -464,20 +178,10 @@
   width: 100%;
 }
 
-.deposit-input-group .token-input input:focus {
+.token-input input:focus {
   outline: none;
   border-color: rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.08);
-}
-
-.token-input label {
-  display: block;
-  margin-bottom: 0.75rem;
-  font-size: 13px;
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
 }
 
 .swap-arrow {
@@ -560,1796 +264,30 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Custom Token Selector Styles */
-.token-selector-custom {
-  position: relative;
-  display: inline-block;
-  width: 100%;
-}
-
-.token-selector-button {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 1rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 14px;
-  min-width: 90px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-}
-
-.token-selector-button:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.token-selector-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.token-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  padding: 0.5rem;
-  z-index: 1000;
-  backdrop-filter: blur(20px);
-  margin-top: 0.25rem;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.token-option {
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  padding: 0.75rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.token-option:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.column .action-button {
-  margin-top: auto;
-}
-
-/* Deposit Section Styles */
-.deposit-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.deposit-item {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 1rem;
-}
-
-.deposit-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.deposit-label {
-  font-size: 12px;
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.remove-deposit {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
-
-.remove-deposit:hover {
-  background: rgba(255, 0, 0, 0.1);
-  color: rgba(255, 0, 0, 0.8);
-}
-
-.deposit-input-group {
-  display: flex;
-  flex-direction: row;
-  gap: 1rem;
-  align-items: end;
-}
-
-.deposit-stats {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 1rem;
-}
-
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  font-size: 12px;
-}
-
-.stat-row:last-child {
-  margin-bottom: 0;
-}
-
-.stat-row span:first-child {
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.stat-row span:last-child {
-  font-weight: 600;
-  color: white;
-}
-
-.add-deposit-button {
-  width: 100%;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  padding: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-  font-family: var(--font-source-code), monospace;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.add-deposit-button:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-/* Strategy Section Styles */
-.strategy-section {
-  margin-bottom: 1.5rem;
-}
-
-.swap-item {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-}
-
-.swap-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.swap-label {
-  font-size: 12px;
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.strategy-section .swap-inputs {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.strategy-section .swap-inputs .input-group {
-  flex: 1;
-}
-
-.strategy-section .swap-inputs .token-selector {
-  min-width: 80px;
-}
-
-.strategy-section .swap-arrow {
-  font-size: 16px;
-  opacity: 0.6;
-  font-weight: 600;
-}
-
-.add-swap-button {
-  width: 100%;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  padding: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-  font-family: var(--font-source-code), monospace;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.add-swap-button:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-/* Swap Options Styles */
-.swap-options {
-  margin-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.option-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.option-label {
-  font-size: 12px;
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.option-tooltip {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  cursor: help;
-  position: relative;
-}
-
-.option-tooltip:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 0.75rem;
-  font-size: 11px;
-  line-height: 1.4;
-  max-width: 250px;
-  width: 200px;
-  z-index: 1000;
-  backdrop-filter: blur(10px);
-  white-space: normal;
-  margin-bottom: 0.5rem;
-}
-
-.radio-group {
-  display: flex;
-  gap: 1rem;
-}
-
-.radio-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.radio-option input[type="radio"] {
-  accent-color: rgba(255, 255, 255, 0.8);
-}
-
-.radio-option span {
-  opacity: 0.8;
-}
-
-.radio-option:hover span {
-  opacity: 1;
-}
-
-/* Swap Preview Styles */
-.swap-preview {
-  margin-top: 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 0.75rem;
-}
-
-.preview-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.25rem;
-  font-size: 12px;
-}
-
-.preview-row:last-child {
-  margin-bottom: 0;
-}
-
-.preview-row span:first-child {
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.preview-row span:last-child {
-  font-weight: 600;
-  color: white;
-}
-
-/* Withdraw Section Styles */
-.withdraw-section {
-  margin-bottom: 1.5rem;
-}
-
-.withdraw-item {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-}
-
-.withdraw-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.withdraw-label {
-  font-size: 12px;
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.remove-withdraw {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
-
-.remove-withdraw:hover {
-  background: rgba(255, 0, 0, 0.1);
-  color: rgba(255, 0, 0, 0.8);
-}
-
-.withdraw-inputs {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.withdraw-input-group {
-  display: flex;
-  flex-direction: row;
-  gap: 1rem;
-  align-items: end;
-}
-
-.withdraw-input-group .token-input {
-  margin-bottom: 0;
-  flex: 1;
-}
-
-.withdraw-input-group .token-input input {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 1rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 15px;
-  transition: all 0.2s ease;
-  width: 100%;
-}
-
-.withdraw-input-group .token-input input:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.withdraw-inputs input[type="text"] {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 0.875rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-
-.withdraw-inputs input[type="text"]:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.add-withdraw-button {
-  width: 100%;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  padding: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-  font-family: var(--font-source-code), monospace;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.add-withdraw-button:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-/* Full-screen Mode Styles */
-.siphon-container.fullscreen {
+/* Absolute Balance Sidebar Styles */
+.absolute-balance-sidebar {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 9999;
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(10px);
-}
-
-.fullscreen-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.exit-fullscreen {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  width: 44px;
-  height: 44px;
-  color: white;
-  font-size: 20px;
-  font-weight: 300;
-  cursor: pointer;
-  pointer-events: all;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  z-index: 10000;
-}
-
-.exit-fullscreen:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: scale(1.05);
-}
-
-.siphon-window.fullscreen-mode {
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
-  margin: 0;
-  border-radius: 0;
-  background: rgba(0, 0, 0, 0.8);
-}
-
-/* Book Order Mode Styles */
-.book-order-mode {
-  padding: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin: 0;
-  overflow: hidden;
-}
-
-.book-header {
-  text-align: center;
-  margin-bottom: 1rem;
-}
-
-.book-header h3 {
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.book-header p {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.9rem;
-}
-
-.book-content {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
-  flex: 1;
-}
-
-.chart-section {
-  grid-column: 1 / -1;
-  margin-bottom: 1rem;
-}
-
-.book-trading-section {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 2rem;
-}
-
-/* Pool Selection */
-.pool-selection h4,
-.order-book h4,
-.order-form h4 {
-  color: white;
-  font-size: 1.1rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 0.5rem;
-}
-
-.pool-grid {
-  display: grid;
-  gap: 1rem;
-}
-
-.pool-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.pool-card:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.pool-card.active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.pool-pair {
-  font-weight: bold;
-  color: white;
-  font-size: 1.1rem;
-  margin-bottom: 0.5rem;
-}
-
-.pool-liquidity,
-.pool-apy,
-.pool-fee {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
-}
-
-/* Order Book */
-.book-tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.book-tab {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.book-tab.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-}
-
-.book-table {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.book-header-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.75rem;
-  font-weight: bold;
-  color: white;
-  font-size: 0.9rem;
-}
-
-.book-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  padding: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.9rem;
-}
-
-.book-row:last-child {
-  border-bottom: none;
-}
-
-.book-row .price {
-  color: #4ade80;
-  font-weight: bold;
-}
-
-/* Order Form */
-.order-form {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  padding: 1.5rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group label {
-  display: block;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
-}
-
-.form-group select,
-.form-group input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0.75rem;
-  color: white;
-  font-size: 0.9rem;
-}
-
-.form-group select:focus,
-.form-group input:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.side-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.side-btn {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.side-btn.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-}
-
-.place-order-btn {
-  width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  border-radius: 8px;
-  padding: 1rem;
-  color: white;
-  font-weight: bold;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-top: 1rem;
-}
-
-.place-order-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-}
-
-/* Price Chart Styles */
-.price-chart {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.price-chart.loading {
-  opacity: 0.7;
-}
-
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.chart-header h4 {
-  color: white;
-  font-size: 1.1rem;
-  margin: 0;
-}
-
-.price-info {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.current-price {
-  color: white;
-  font-size: 1.2rem;
-  font-weight: bold;
-  font-family: 'Source Code Pro', monospace;
-}
-
-.price-change {
-  font-size: 0.9rem;
-  font-weight: bold;
-  font-family: 'Source Code Pro', monospace;
-}
-
-.price-change.positive {
-  color: #4ade80;
-}
-
-.price-change.negative {
-  color: #f87171;
-}
-
-.chart-container {
-  margin-bottom: 1rem;
-}
-
-.chart-placeholder {
-  height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-}
-
-.loading-text {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.9rem;
-}
-
-.loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-top: 2px solid #667eea;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.chart-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.timeframe-selector {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.timeframe-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.timeframe-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.timeframe-btn.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.chart-stats {
-  display: flex;
-  gap: 1.5rem;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.stat-label {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.8rem;
-}
-
-.stat-value {
-  color: white;
-  font-size: 0.9rem;
-  font-weight: bold;
-  font-family: 'Source Code Pro', monospace;
-}
-
-/* Transaction List Styles */
-.transaction-list {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  padding: 1.5rem;
-}
-
-.transaction-list.loading {
-  opacity: 0.7;
-}
-
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.list-header h4 {
-  color: white;
-  font-size: 1.1rem;
-  margin: 0;
-}
-
-.filter-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.filter-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.filter-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.filter-btn.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.transaction-table {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 1rem;
-}
-
-.table-header {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1.5fr;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.75rem;
-  font-weight: bold;
-  color: white;
-  font-size: 0.9rem;
-}
-
-.table-body {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.table-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1.5fr;
-  padding: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 0.9rem;
-  transition: background-color 0.2s ease;
-}
-
-.table-row:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.table-row:last-child {
-  border-bottom: none;
-}
-
-.table-row.buy {
-  border-left: 3px solid #4ade80;
-}
-
-.table-row.sell {
-  border-left: 3px solid #f87171;
-}
-
-.tx-type {
-  font-weight: bold;
-}
-
-.tx-type.buy {
-  color: #4ade80;
-}
-
-.tx-type.sell {
-  color: #f87171;
-}
-
-.tx-amount,
-.tx-price,
-.tx-total {
-  color: rgba(255, 255, 255, 0.8);
-  font-family: 'Source Code Pro', monospace;
-}
-
-.tx-time {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.8rem;
-}
-
-.tx-user {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.8rem;
-  font-family: 'Source Code Pro', monospace;
-}
-
-.list-footer {
-  text-align: center;
-}
-
-.load-more-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0.75rem 1.5rem;
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.load-more-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.list-placeholder {
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-}
-
-/* Pool Selection Styles */
-.pool-selection-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.pool-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 1.5rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.pool-card:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-}
-
-.pool-card.active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.2);
-}
-
-.pool-card.active::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  border-radius: 8px 8px 0 0;
-}
-
-.pool-pair {
-  font-weight: bold;
-  color: white;
-  font-size: 1.2rem;
-  margin-bottom: 0.5rem;
-}
-
-.pool-liquidity,
-.pool-apy,
-.pool-fee {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
-}
-
-.pool-liquidity {
-  font-weight: bold;
-  color: #4ade80;
-}
-
-.pool-apy {
-  color: #fbbf24;
-}
-
-.pool-fee {
-  color: #a78bfa;
-}
-
-/* Pool Details Navigation */
-.pool-details-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.back-button {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  padding: 0.5rem;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-}
-
-.back-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-/* Pool Details Content */
-.pool-details-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  height: 100vh;
-  padding: 0;
-  margin: 0;
-}
-
-/* Book Order 2x2 Grid Layout */
-.book-grid-layout {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 0;
-  height: 100vh;
-  padding: 0;
-  margin: 0;
-}
-
-.grid-row {
-  display: contents;
-}
-
-/* Grid Item Styles */
-.chart-section {
-  grid-column: 1;
-  grid-row: 1;
-  padding: 1rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  flex-direction: column;
-}
-
-.order-form-section {
-  grid-column: 2;
-  grid-row: 1;
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  flex-direction: column;
-}
-
-.transaction-section {
-  grid-column: 1;
-  grid-row: 2;
-  padding: 1rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  overflow-y: auto;
-}
-
-.order-book-section {
-  grid-column: 2;
-  grid-row: 2;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.order-form-section .order-form {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.order-book-section .order-book {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.order-book-section .book-table {
-  flex: 1;
-  overflow-y: auto;
-}
-
-/* Scrollbar styling for all scrollable sections */
-.transaction-section::-webkit-scrollbar,
-.order-book-section .book-table::-webkit-scrollbar {
-  width: 6px;
-}
-
-.transaction-section::-webkit-scrollbar-track,
-.order-book-section .book-table::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-}
-
-.transaction-section::-webkit-scrollbar-thumb,
-.order-book-section .book-table::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.transaction-section::-webkit-scrollbar-thumb:hover,
-.order-book-section .book-table::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* Responsive adjustments for book order 2x2 grid layout */
-@media (max-width: 768px) {
-  .book-grid-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    height: 100vh;
-    padding: 0;
-    margin: 0;
-  }
-  
-  .chart-section {
-    order: 2;
-    padding: 0.5rem;
-    border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .order-form-section {
-    order: 1;
-    padding: 0.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .transaction-section {
-    order: 3;
-    padding: 0.5rem;
-    border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .order-book-section {
-    order: 4;
-    padding: 0.5rem;
-  }
-  
-  .chart-footer {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .timeframe-selector {
-    justify-content: center;
-  }
-  
-  .chart-stats {
-    justify-content: center;
-  }
-}
-
-.table-header,
-.table-row {
-  grid-template-columns: 1fr 1fr 1fr;
-  font-size: 0.8rem;
-}
-
-.table-header span:nth-child(n+4),
-.table-row span:nth-child(n+4) {
-  display: none;
-}
-
-/* Simple Balance Display Styles */
-.balance-display.simple-mode {
-  padding: 1rem;
-}
-
-.simple-balances {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.simple-balance-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.token-symbol {
-  font-weight: bold;
-  color: white;
-  font-size: 0.9rem;
-}
-
-.token-balance {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.9rem;
-  font-family: 'Source Code Pro', monospace;
-}
-
-/* Responsive adjustments for book order mode */
-@media (max-width: 1200px) {
-  .book-trading-section {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-}
-
-/* Mock SDK Controls Styles */
-.mock-controls {
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.mock-status {
-  display: flex;
-  align-items: center;
-}
-
-.status-indicator {
-  font-size: 14px;
-  font-family: var(--font-source-code), monospace;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.wallet-status {
-  font-size: 12px;
-  font-family: var(--font-source-code), monospace;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.6);
-  margin-left: 0.5rem;
-}
-
-.mock-buttons {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.mock-button {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-
-.mock-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.mock-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Unified Balance Display Styles */
-.balance-display {
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 1.5rem 2rem;
-}
-
-.balance-display h4 {
-  margin: 0 0 1rem 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.balance-display p {
-  margin: 0;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.6);
-  font-style: italic;
-}
-
-.balance-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.token-balance-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  padding: 1rem;
-}
-
-.token-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.token-symbol {
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.balance-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
-}
-
-.total-balance {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
-  font-family: var(--font-source-code), monospace;
-}
-
-.fiat-balance {
-  font-size: 12px;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.6);
-  font-family: var(--font-source-code), monospace;
-}
-
-.chain-breakdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.chain-balance {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-}
-
-.chain-name {
-  opacity: 0.6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.chain-balance-amount {
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
-  font-family: var(--font-source-code), monospace;
-}
-
-/* Wallet Selector Styles */
-.wallet-selector {
-  position: relative;
-  display: inline-block;
-}
-
-.wallet-selector-trigger {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
-  color: white;
-  font-family: var(--font-source-code), monospace;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.wallet-selector-trigger:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.wallet-icon {
-  font-size: 14px;
-}
-
-.wallet-text {
-  flex: 1;
-}
-
-.dropdown-arrow {
-  font-size: 10px;
-  opacity: 0.7;
-}
-
-.wallet-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 1.5rem;
-  z-index: 1000;
-  backdrop-filter: blur(20px);
-  margin-top: 0.5rem;
-  min-width: 320px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.wallet-dropdown-header {
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-.wallet-dropdown-header h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.wallet-dropdown-header p {
-  margin: 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.4;
-}
-
-.wallet-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.wallet-option {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 0.875rem;
-  color: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.wallet-option:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
-}
-
-.wallet-option-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.wallet-option-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.wallet-option-icon {
-  font-size: 10px;
-  font-weight: 600;
-  width: 32px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.8);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-family: var(--font-source-code), monospace;
-}
-
-.wallet-option-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-}
-
-.wallet-option-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
-}
-
-.wallet-option-chain {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.wallet-option-description {
-  margin: 0;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.3;
-}
-
-/* Connected Wallet Styles */
-.connected-wallet {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  min-width: 200px;
-}
-
-.wallet-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex: 1;
-}
-
-.wallet-icon {
-  font-size: 16px;
-  width: 20px;
-  text-align: center;
-}
-
-.wallet-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.wallet-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: white;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.wallet-address {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
-  font-family: var(--font-source-code), monospace;
-}
-
-.disconnect-button {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 0.25rem 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
-  font-family: var(--font-source-code), monospace;
-  font-size: 10px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.disconnect-button:hover {
-  background: rgba(255, 0, 0, 0.1);
-  border-color: rgba(255, 0, 0, 0.3);
-  color: rgba(255, 0, 0, 0.8);
-}
-
-/* Left Sidebar Styles */
-.sidebar-left {
-  position: relative;
+  top: 40%;
+  left: calc(35% - 150px - 140px); /* Center of screen - half swap width (500px/2) - gap */
+  transform: translateY(-50%);
   width: 320px;
   height: auto;
   max-height: calc(100vh - 4rem);
   pointer-events: auto;
   overflow-y: auto;
+  z-index: 100;
 }
 
-.sidebar-left .balance-display {
-  background: rgba(0, 0, 0, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+.absolute-balance-sidebar .balance-display {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   padding: 1.5rem;
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(5px);
   margin: 0;
 }
 
-.sidebar-left .balance-display h4 {
+.absolute-balance-sidebar .balance-display h4 {
   margin: 0 0 1rem 0;
   font-size: 14px;
   font-weight: 600;
@@ -2359,20 +297,20 @@
   text-align: center;
 }
 
-.sidebar-left .balance-grid {
+.absolute-balance-sidebar .balance-grid {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.sidebar-left .token-balance-card {
+.absolute-balance-sidebar .token-balance-card {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   padding: 0.75rem;
 }
 
-.sidebar-left .token-header {
+.absolute-balance-sidebar .token-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2381,7 +319,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.sidebar-left .token-symbol {
+.absolute-balance-sidebar .token-symbol {
   font-size: 14px;
   font-weight: 600;
   color: white;
@@ -2389,34 +327,48 @@
   letter-spacing: 0.5px;
 }
 
-.sidebar-left .total-balance {
+.absolute-balance-sidebar .balance-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-end;
+}
+
+.absolute-balance-sidebar .total-balance {
   font-size: 12px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.8);
   font-family: var(--font-source-code), monospace;
 }
 
-.sidebar-left .chain-breakdown {
+.absolute-balance-sidebar .fiat-balance {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-source-code), monospace;
+}
+
+.absolute-balance-sidebar .chain-breakdown {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.sidebar-left .chain-balance {
+.absolute-balance-sidebar .chain-balance {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
 }
 
-.sidebar-left .chain-name {
+.absolute-balance-sidebar .chain-name {
   opacity: 0.6;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 500;
 }
 
-.sidebar-left .chain-balance-amount {
+.absolute-balance-sidebar .chain-balance-amount {
   font-weight: 500;
   color: rgba(255, 255, 255, 0.8);
   font-family: var(--font-source-code), monospace;

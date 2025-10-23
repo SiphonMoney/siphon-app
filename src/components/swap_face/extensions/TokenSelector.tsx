@@ -47,137 +47,26 @@ interface TokenSelectorProps {
 export default function TokenSelector({ balances, selectedToken, onTokenSelect, className }: TokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  if (!balances) {
-    return (
-      <div className="token-selector-custom">
-        <button className={`token-selector-button ${className}`} disabled>
-          Select Token & Chain
-        </button>
-      </div>
-    );
-  }
-
-  // Extract tokens with chain information from balances
-  const getTokenChainOptions = () => {
-    const tokenChains: TokenOption[] = [];
+  // Always show token options, even without wallet connected
+  const getPredefinedTokens = () => {
+    const predefinedTokens = [
+      { value: "ZEC-Zcash", label: "ZEC on Zcash", symbol: "ZEC", shortName: "Z", isActive: !balances },
+      { value: "SOL-Solana", label: "SOL on Solana", symbol: "SOL", shortName: "S", isActive: !balances },
+      { value: "BTC-Bitcoin", label: "BTC on Bitcoin", symbol: "BTC", shortName: "B", isActive: false },
+      { value: "XMR-Monero", label: "XMR on Monero", symbol: "XMR", shortName: "M", isActive: false },
+      { value: "SOL-Solflare", label: "SOL on Solflare", symbol: "SOL", shortName: "SF", isActive: !!balances }
+    ];
     
-    try {
-      if (Array.isArray(balances)) {
-        // Handle the actual Mock SDK balance structure
-        balances.forEach((tokenBalance: {
-          symbol: string;
-          balance: string;
-          balanceInFiat?: number;
-          breakdown?: Array<{
-            balance: string;
-            balanceInFiat?: number;
-            chain: {
-              id: number;
-              logo: string;
-              name: string;
-            };
-            contractAddress?: `0x${string}`;
-            decimals?: number;
-            isNative?: boolean;
-          }>;
-          decimals?: number;
-          icon?: string;
-        }) => {
-          if (tokenBalance && tokenBalance.symbol && tokenBalance.balance && parseFloat(tokenBalance.balance) > 0) {
-            // Process each chain in the breakdown
-            if (tokenBalance.breakdown && Array.isArray(tokenBalance.breakdown)) {
-              tokenBalance.breakdown.forEach((chainBalance: {
-                balance: string;
-                balanceInFiat?: number;
-                chain: {
-                  id: number;
-                  logo: string;
-                  name: string;
-                };
-                contractAddress?: `0x${string}`;
-                decimals?: number;
-                isNative?: boolean;
-              }) => {
-                if (chainBalance.balance && parseFloat(chainBalance.balance) > 0) {
-                  const chainName = chainBalance.chain.name || chainBalance.chain.id.toString() || 'Unknown';
-                  // Create short chain identifier with smaller text
-                  const chainShort = chainName === 'Base' ? 'B' : 
-                                   chainName === 'Sepolia' ? 'S' : 
-                                   chainName === 'Polygon' ? 'P' : 
-                                   chainName === 'Arbitrum' ? 'A' : 
-                                   chainName.charAt(0).toUpperCase();
-                  
-                  tokenChains.push({
-                    value: `${tokenBalance.symbol}-${chainName}`,
-                    label: `${tokenBalance.symbol} on ${chainShort}`,
-                    balance: chainBalance.balance,
-                    symbol: tokenBalance.symbol,
-                    key: `${tokenBalance.symbol}-${chainName}`,
-                    shortName: chainShort,
-                    displayName: `${tokenBalance.symbol} on ${chainShort}`
-                  });
-                }
-              });
-            }
-          }
-        });
-      } else if (typeof balances === 'object') {
-        Object.values(balances).forEach((chainBalances: unknown) => {
-          if (Array.isArray(chainBalances)) {
-            chainBalances.forEach((balance: Balance) => {
-              if (balance && balance.symbol && parseFloat(balance.balance) > 0) {
-                tokenChains.push({
-                  value: `${balance.symbol}-${balance.chain}`,
-                  label: `${balance.symbol} on ${balance.chain}`,
-                  balance: balance.balance,
-                  symbol: balance.symbol,
-                  key: `${balance.symbol}-${balance.chain}`,
-                  displayName: `${balance.symbol} on ${balance.chain}`
-                });
-              }
-            });
-          } else if (typeof chainBalances === 'object' && chainBalances !== null) {
-            Object.values(chainBalances).forEach((nestedBalances: unknown) => {
-              if (Array.isArray(nestedBalances)) {
-                nestedBalances.forEach((balance: Balance) => {
-                  if (balance && balance.symbol && parseFloat(balance.balance) > 0) {
-                    tokenChains.push({
-                      value: `${balance.symbol}-${balance.chain}`,
-                      label: `${balance.symbol} on ${balance.chain}`,
-                      balance: balance.balance,
-                      symbol: balance.symbol,
-                      key: `${balance.symbol}-${balance.chain}`,
-                      displayName: `${balance.symbol} on ${balance.chain}`
-                    });
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error processing balances for token selector:', error);
-    }
-
-    return tokenChains;
+    return predefinedTokens;
   };
 
-  const tokenChainOptions = getTokenChainOptions();
+  const tokenOptions = getPredefinedTokens();
 
-  if (tokenChainOptions.length === 0) {
-    return (
-      <select className={className} disabled>
-        <option>Select Token & Chain</option>
-      </select>
-    );
-  }
-
-  // Find the selected option to show short name
-  const selectedOption = tokenChainOptions.find(option => option.key === selectedToken);
+  // Find the selected option to show display text
+  const selectedOption = tokenOptions.find(option => option.value === selectedToken);
   const displayText = selectedOption ? (
     <span>
-      {selectedOption.symbol} <span className="chain-short">{selectedOption.shortName?.split(' ')[1] || ''}</span>
+      {selectedOption.symbol} <span className="chain-short">{selectedOption.shortName}</span>
     </span>
   ) : 'Select Token & Chain';
 
@@ -193,16 +82,25 @@ export default function TokenSelector({ balances, selectedToken, onTokenSelect, 
 
       {isOpen && (
         <div className="token-dropdown">
-          {tokenChainOptions.map((option) => (
+          {tokenOptions.map((option) => (
             <button
-              key={option.key}
-              className="token-option"
+              key={option.value}
+              className={`token-option ${option.isActive ? 'active' : 'inactive'}`}
               onClick={() => {
-                onTokenSelect(option.key || '');
-                setIsOpen(false);
+                if (option.isActive) {
+                  onTokenSelect(option.value);
+                  setIsOpen(false);
+                }
               }}
+              disabled={!option.isActive}
             >
-              {option.displayName}
+              <span className="token-symbol">{option.symbol}</span>
+              <span className="token-chain">{option.label.split(' on ')[1]}</span>
+              {option.isActive ? (
+                <span className="status-indicator active">●</span>
+              ) : (
+                <span className="status-indicator inactive">○</span>
+              )}
             </button>
           ))}
         </div>

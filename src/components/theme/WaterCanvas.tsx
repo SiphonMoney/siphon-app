@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   simulationVertexShader,
@@ -9,8 +9,9 @@ import {
   renderFragmentShader,
 } from "@/lib/shaders";
 
-export default function WaterCanvas() {
+export default function SoftHorizonCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const scene = new THREE.Scene();
@@ -64,6 +65,8 @@ export default function WaterCanvas() {
       uniforms: {
         textureA: { value: null },
         textureB: { value: null },
+        resolution: { value: new THREE.Vector2(width, height) },
+        time: { value: 0 },
       },
       vertexShader: renderVertexShader,
       fragmentShader: renderFragmentShader,
@@ -95,8 +98,8 @@ export default function WaterCanvas() {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.textRendering = "geometricPrecision" as CanvasTextRendering;
-    (ctx as CanvasRenderingContext2D & { imageSmoothingEnabled: boolean }).imageSmoothingEnabled = true;
-    (ctx as CanvasRenderingContext2D & { imageSmoothingQuality: string }).imageSmoothingQuality = "high";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     
     // Calculate text width to position logo
     const textMetrics = ctx.measureText("siphon");
@@ -119,7 +122,7 @@ export default function WaterCanvas() {
     
     // Subtitle
     ctx.font = `${subtitleFontSize}px Source Code Pro`;
-    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.fillStyle = "#ffffff";
     ctx.fillText("trade without a trace.", width / 2 + 120, height / 2 + mainFontSize * 0.4);
 
     const textTexture = new THREE.CanvasTexture(canvas2d);
@@ -173,7 +176,7 @@ export default function WaterCanvas() {
       
       // Subtitle
       ctx.font = `${newSubtitleFontSize}px Source Code Pro`;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.fillStyle = "#ffffff";
       ctx.fillText("Trade anywhere, visible nowhere.", width / 2 + 40, height / 2 + newMainFontSize * 0.4);
       
       textTexture.needsUpdate = true;
@@ -193,8 +196,10 @@ export default function WaterCanvas() {
 
     let rafId = 0;
     const animate = () => {
+      const currentTime = performance.now() / 1000;
       (simMaterial.uniforms.frame.value as number) = frame++;
-      (simMaterial.uniforms.time.value as number) = performance.now() / 1000;
+      (simMaterial.uniforms.time.value as number) = currentTime;
+      (renderMaterial.uniforms.time.value as number) = currentTime;
 
       (simMaterial.uniforms.textureA.value as THREE.Texture) = rtA.texture;
       renderer.setRenderTarget(rtB);
@@ -212,6 +217,9 @@ export default function WaterCanvas() {
       rafId = requestAnimationFrame(animate);
     };
     animate();
+
+    // Trigger loaded state after a short delay for smooth animation
+    setTimeout(() => setIsLoaded(true), 100);
 
     return () => {
       cancelAnimationFrame(rafId);
@@ -231,7 +239,15 @@ export default function WaterCanvas() {
     };
   }, []);
 
-  return <div ref={containerRef} />;
+  return (
+    <div 
+      ref={containerRef} 
+      style={{
+        opacity: isLoaded ? 1 : 0,
+        transition: 'opacity 1.5s ease-in-out'
+      }}
+    />
+  );
 }
 
 
