@@ -8,36 +8,49 @@ interface WalletOption {
   icon: string;
   chain: string;
   description: string;
+  active: boolean;
 }
 
 const walletOptions: WalletOption[] = [
+  {
+    id: 'solflare',
+    name: 'Solflare',
+    icon: 'SOL',
+    chain: 'Solana',
+    description: 'Connect to Solana blockchain',
+    active: true
+  },
+  {
+    id: 'phantom',
+    name: 'Phantom',
+    icon: 'PH',
+    chain: 'Solana',
+    description: 'Connect to Solana blockchain',
+    active: true
+  },
   {
     id: 'metamask',
     name: 'MetaMask',
     icon: 'MM',
     chain: 'EVM',
-    description: 'Connect to Ethereum, Polygon, Arbitrum, and other EVM chains'
-  },
-  {
-    id: 'solana',
-    name: 'Solflare',
-    icon: 'SOL',
-    chain: 'Solana',
-    description: 'Connect to Solana blockchain'
+    description: 'Connect to Ethereum, Polygon, Arbitrum, and other EVM chains',
+    active: false
   },
   {
     id: 'bitcoin',
     name: 'Xverse',
     icon: 'BTC',
     chain: 'Bitcoin',
-    description: 'Connect to Bitcoin network'
+    description: 'Connect to Bitcoin network',
+    active: false
   },
   {
     id: 'xmr',
     name: 'Monero',
     icon: 'XMR',
     chain: 'Monero',
-    description: 'Connect to Monero network'
+    description: 'Connect to Monero network',
+    active: false
   }
 ];
 
@@ -67,17 +80,15 @@ export default function WalletSelector({ onWalletSelect, className }: WalletSele
 
       {isOpen && (
         <div className="wallet-dropdown">
-          <div className="wallet-dropdown-header">
-            <h4>Select Wallet</h4>
-            <p>Choose your preferred wallet to connect</p>
-          </div>
+            <p>preferred wallet to connect</p>
           
           <div className="wallet-options">
             {walletOptions.map((wallet) => (
               <button
                 key={wallet.id}
-                className="wallet-option"
-                onClick={() => handleWalletClick(wallet.id)}
+                className={`wallet-option ${wallet.active ? 'active' : 'inactive'}`}
+                onClick={() => wallet.active && handleWalletClick(wallet.id)}
+                disabled={!wallet.active}
               >
                 <div className="wallet-option-content">
                   <div className="wallet-option-header">
@@ -86,6 +97,11 @@ export default function WalletSelector({ onWalletSelect, className }: WalletSele
                       <span className="wallet-option-name">{wallet.name}</span>
                       <span className="wallet-option-chain">{wallet.chain}</span>
                     </div>
+                    {wallet.active ? (
+                      <span className="status-indicator active">●</span>
+                    ) : (
+                      <span className="status-indicator inactive">○</span>
+                    )}
                   </div>
                   <p className="wallet-option-description">{wallet.description}</p>
                 </div>

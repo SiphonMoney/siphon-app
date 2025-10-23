@@ -2,64 +2,27 @@
 
 import { useState, useEffect } from "react";
 import "./SwapInterface.css";
-import UnifiedBalanceDisplay from "./extensions/UnifiedBalanceDisplay";
-import SimpleSwap from "./SimpleSwap";
-import ProSwap from "./ProSwap";
+import SimpleSwapMode from "./SimpleSwapMode";
+import ProSwapMode from "./ProSwapMode";
 import BookOrder from "./BookOrder";
-import { isInitialized } from "../../lib/nexus";
 import { WalletInfo } from "../../lib/walletManager";
 
 export default function SwapInterface() {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isProMode, setIsProMode] = useState(false);
-  const [isBookOrderMode, setIsBookOrderMode] = useState(false);
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [mode, setMode] = useState<'swap' | 'pro' | 'darkpool'>('swap');
   
-  // Mock SDK state (all core references removed)
-  const [sdkInitialized, setSdkInitialized] = useState(false);
-  const [unifiedBalances, setUnifiedBalances] = useState<Array<{
-    symbol: string;
-    balance: string;
-    balanceInFiat?: number;
-    breakdown?: Array<{
-      balance: string;
-      balanceInFiat?: number;
-      chain: {
-        id: number;
-        logo: string;
-        name: string;
-      };
-      contractAddress?: `0x${string}`;
-      decimals?: number;
-      isNative?: boolean;
-    }>;
-    decimals?: number;
-    icon?: string;
-  }> | null>(null);
+  // Wallet state
   const [walletConnected, setWalletConnected] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
 
-  const handleModeSwitch = (mode: 'simple' | 'pro' | 'book') => {
-    if (mode === 'pro') {
-      setIsProMode(true);
-      setIsBookOrderMode(false);
-      setIsFullScreen(true);
-    } else if (mode === 'book') {
-      setIsProMode(false);
-      setIsBookOrderMode(true);
-      setIsFullScreen(true);
-      } else {
-      setIsProMode(false);
-      setIsBookOrderMode(false);
-      setIsFullScreen(false);
-    }
+  // Handler functions for child components
+  const handleWalletConnected = (wallet: WalletInfo) => {
+    setWalletConnected(true);
+    setConnectedWallet(wallet);
+    // Persist wallet connection
+    localStorage.setItem('siphon-connected-wallet', JSON.stringify(wallet));
   };
 
-  const handleExitFullScreen = () => {
-    setIsFullScreen(false);
-    setIsProMode(false);
-    setIsBookOrderMode(false);
-  };
 
   useEffect(() => {
     // Delay to ensure styles are loaded
@@ -67,69 +30,72 @@ export default function SwapInterface() {
       setIsLoaded(true);
     }, 100);
 
-    // Check if Mock SDK is already initialized
-    setSdkInitialized(isInitialized());
+    // Check for persisted wallet connection
+    const persistedWallet = localStorage.getItem('siphon-connected-wallet');
+    
+    if (persistedWallet) {
+      try {
+        const wallet = JSON.parse(persistedWallet);
+        setConnectedWallet(wallet);
+        setWalletConnected(true);
+      } catch (error) {
+        console.error('Failed to parse persisted wallet:', error);
+        localStorage.removeItem('siphon-connected-wallet');
+      }
+    }
 
     return () => clearTimeout(timer);
   }, []);
 
+
   return (
-    <div className={`siphon-container ${isFullScreen ? 'fullscreen' : ''}`}>
-      {/* Full-screen overlay */}
-      {isFullScreen && (
-        <div className="fullscreen-overlay">
-          <button className="exit-fullscreen" onClick={handleExitFullScreen}>
-            X
-          </button>
-        </div>
-      )}
+    <div className="siphon-container">
+      {/* Floating Mode Toggle */}
+      <div className="floating-mode-toggle">
+        <button 
+          className={`toggle-button ${mode === 'swap' ? 'active' : ''}`}
+          onClick={() => setMode('swap')}
+        >
+          Swap
+        </button>
+        <button 
+          className={`toggle-button ${mode === 'pro' ? 'active' : ''}`}
+          onClick={() => setMode('pro')}
+        >
+          Pro
+        </button>
+        <button 
+          className={`toggle-button ${mode === 'darkpool' ? 'active' : ''}`}
+          onClick={() => setMode('darkpool')}
+        >
+          Dark Pool
+        </button>
+      </div>
 
-      {/* Left Sidebar for Unified Balances - Only show when wallet is connected and not in full-screen */}
-      {connectedWallet && !isFullScreen && (
-        <div className="sidebar-left">
-          <UnifiedBalanceDisplay balances={unifiedBalances} isSimpleMode={!isProMode && !isBookOrderMode} />
-        </div>
-      )}
 
-      <div className={`siphon-window ${isLoaded ? 'loaded' : ''} ${isProMode ? 'pro-mode' : isBookOrderMode ? 'book-mode' : 'simple-mode'} ${isFullScreen ? 'fullscreen-mode' : ''}`}>
 
-        <div className="mode-toggle">
-          <button 
-            className={`toggle-button ${!isProMode && !isBookOrderMode ? 'active' : ''}`}
-            onClick={() => handleModeSwitch('simple')}
-          >
-            Simple
-          </button>
-          <button 
-            className={`toggle-button ${isProMode ? 'active' : ''}`}
-            onClick={() => handleModeSwitch('pro')}
-          >
-            Pro
-          </button>
-          <button 
-            className={`toggle-button ${isBookOrderMode ? 'active' : ''}`}
-            onClick={() => handleModeSwitch('book')}
-          >
-            Book Order
-          </button>
-        </div>
-
-        {!isProMode && !isBookOrderMode ? (
-          <SimpleSwap
+      <div className={`siphon-window ${isLoaded ? 'loaded' : ''} ${mode === 'pro' ? 'pro-mode' : mode === 'darkpool' ? 'darkpool-mode' : 'simple-mode'}`}>
+        {mode === 'swap' ? (
+          <SimpleSwapMode
             isLoaded={isLoaded}
-            sdkInitialized={sdkInitialized}
-            setSdkInitialized={setSdkInitialized}
-            unifiedBalances={unifiedBalances}
-            setUnifiedBalances={setUnifiedBalances}
-            setWalletConnected={setWalletConnected}
-            setConnectedWallet={setConnectedWallet}
+            walletConnected={walletConnected}
+            connectedWallet={connectedWallet}
+            onWalletConnected={handleWalletConnected}
           />
-        ) : isBookOrderMode ? (
-          <BookOrder isLoaded={isLoaded} />
+        ) : mode === 'pro' ? (
+          <ProSwapMode
+            isLoaded={isLoaded}
+          />
         ) : (
-          <ProSwap isLoaded={isLoaded} sdkInitialized={sdkInitialized} />
+          <BookOrder
+            isLoaded={isLoaded}
+            walletConnected={walletConnected}
+            connectedWallet={connectedWallet}
+            onWalletConnected={handleWalletConnected}
+          />
         )}
       </div>
+
     </div>
   );
 }
