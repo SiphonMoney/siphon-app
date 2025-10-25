@@ -171,15 +171,16 @@ export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) 
         <div className="chart-stats">
           <div className="stat">
             <span className="stat-label">24h High</span>
-            <span className="stat-value">{formatPrice(Math.max(...priceData.map(d => d.price)))}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">24h Low</span>
-            <span className="stat-value">{formatPrice(Math.min(...priceData.map(d => d.price)))}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">24h Volume</span>
-            <span className="stat-value">{formatVolume(priceData.reduce((sum, d) => sum + d.volume, 0))}</span>
+            <span className="stat-value" style={{ marginLeft: '0.5rem' }}
+            >{formatPrice(Math.max(...priceData.map(d => d.price)))}</span>
+            <span className="stat-label" style={{ marginLeft: '1rem' }}
+            >24h Low</span> 
+            <span className="stat-value" style={{ marginLeft: '1rem' }}
+            >{formatPrice(Math.min(...priceData.map(d => d.price)))}</span>
+            <span className="stat-label" style={{ marginLeft: '1rem' }}
+            >24h Volume</span>
+            <span className="stat-value" style={{ marginLeft: '0.5rem' }}
+            >{formatVolume(priceData.reduce((sum, d) => sum + d.volume, 0))}</span>
           </div>
         </div>
       </div>

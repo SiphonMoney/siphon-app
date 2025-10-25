@@ -1,3 +1,5 @@
+import Solflare from '@solflare-wallet/sdk';
+
 export interface WalletInfo {
   id: string;
   name: string;
@@ -14,6 +16,7 @@ export interface WalletConnectionResult {
 
 class WalletManager {
   private connectedWallets: Map<string, WalletInfo> = new Map();
+  private solflareWallet: Solflare | null = null;
 
   async connectMetaMask(): Promise<WalletConnectionResult> {
     try {
@@ -66,6 +69,43 @@ class WalletManager {
       return { success: true, wallet };
     } catch (error: unknown) {
       return { success: false, error: error instanceof Error ? error.message : 'Failed to connect Solana wallet' };
+    }
+  }
+
+  async connectSolflare(): Promise<WalletConnectionResult> {
+    try {
+      // Initialize Solflare wallet if not already done
+      if (!this.solflareWallet) {
+        this.solflareWallet = new Solflare();
+      }
+
+      console.log('Solflare wallet instance:', this.solflareWallet);
+
+      // Connect to Solflare wallet
+      await this.solflareWallet.connect();
+      
+      console.log('Solflare connected successfully');
+      console.log('Public key:', this.solflareWallet.publicKey);
+
+      if (!this.solflareWallet.publicKey) {
+        return { success: false, error: 'Failed to get public key from Solflare wallet' };
+      }
+
+      const address = this.solflareWallet.publicKey.toString();
+
+      const wallet: WalletInfo = {
+        id: 'solflare',
+        name: 'Solflare',
+        address,
+        chain: 'Solana',
+        connected: true
+      };
+
+      this.connectedWallets.set('solflare', wallet);
+      return { success: true, wallet };
+    } catch (error: unknown) {
+      console.error('Solflare connection error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to connect Solflare wallet' };
     }
   }
 
@@ -125,6 +165,8 @@ class WalletManager {
         return this.connectMetaMask();
       case 'solana':
         return this.connectSolana();
+      case 'solflare':
+        return this.connectSolflare();
       case 'bitcoin':
         return this.connectBitcoin();
       case 'xmr':
@@ -135,6 +177,9 @@ class WalletManager {
   }
 
   disconnectWallet(walletId: string): void {
+    if (walletId === 'solflare' && this.solflareWallet) {
+      this.solflareWallet.disconnect();
+    }
     this.connectedWallets.delete(walletId);
   }
 

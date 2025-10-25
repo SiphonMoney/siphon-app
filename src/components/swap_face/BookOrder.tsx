@@ -3,12 +3,14 @@
 import { useState } from "react";
 import "./ProSwapMode.css";
 import PriceChart from "./extensions/PriceChart";
+import { matchingEngineClient, OrderParams } from "../../lib/matchingEngine";
+import { WalletInfo } from "../../lib/walletManager";
 
 interface DarkPoolProps {
   isLoaded: boolean;
   walletConnected: boolean;
-  connectedWallet: unknown;
-  onWalletConnected: (wallet: unknown) => void;
+  connectedWallet: WalletInfo | null;
+  onWalletConnected: (wallet: WalletInfo) => void;
 }
 
 interface OrderBookEntry {
@@ -18,7 +20,10 @@ interface OrderBookEntry {
 }
 
 export default function BookOrder({
-  isLoaded
+  isLoaded,
+  walletConnected,
+  connectedWallet,
+  onWalletConnected
 }: DarkPoolProps) {
   const [selectedPair, setSelectedPair] = useState("SOL/USDC");
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
@@ -72,33 +77,67 @@ export default function BookOrder({
     { time: "14:25:44", type: "sell", amount: 1150.0, price: 0.1252, total: 143.98 }
   ];
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (!orderAmount || !orderPrice) {
       alert('Please enter both amount and price');
       return;
     }
 
-    const newOrder = {
-      price: parseFloat(orderPrice),
-      amount: parseFloat(orderAmount),
-      total: parseFloat(orderPrice) * parseFloat(orderAmount)
-    };
-
-    if (orderType === 'buy') {
-      setOrderBook(prev => ({
-        ...prev,
-        bids: [...prev.bids, newOrder].sort((a, b) => b.price - a.price)
-      }));
-    } else {
-      setOrderBook(prev => ({
-        ...prev,
-        asks: [...prev.asks, newOrder].sort((a, b) => a.price - b.price)
-      }));
+    if (!walletConnected || !connectedWallet) {
+      alert('Please connect your wallet first');
+      return;
     }
 
-    setOrderAmount("");
-    setOrderPrice("");
-    alert(`${orderType === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
+    if (selectedPair !== 'SOL/USDC') {
+      alert('Only SOL/USDC trading is currently supported');
+      return;
+    }
+
+    try {
+      // Prepare order parameters
+      const orderParams: OrderParams = {
+        amount: parseFloat(orderAmount),
+        price: parseFloat(orderPrice),
+        orderType,
+        orderId: Date.now() // Simple order ID generation
+      };
+
+      console.log('Submitting order to matching engine:', orderParams);
+
+      // Submit order to matching engine
+      const txSignature = await matchingEngineClient.submitOrder(
+        connectedWallet as any, // Cast to wallet adapter type
+        orderParams
+      );
+
+      console.log('Order submitted successfully:', txSignature);
+
+      // Update local order book for immediate feedback
+      const newOrder = {
+        price: parseFloat(orderPrice),
+        amount: parseFloat(orderAmount),
+        total: parseFloat(orderPrice) * parseFloat(orderAmount)
+      };
+
+      if (orderType === 'buy') {
+        setOrderBook(prev => ({
+          ...prev,
+          bids: [...prev.bids, newOrder].sort((a, b) => b.price - a.price)
+        }));
+      } else {
+        setOrderBook(prev => ({
+          ...prev,
+          asks: [...prev.asks, newOrder].sort((a, b) => a.price - b.price)
+        }));
+      }
+
+      setOrderAmount("");
+      setOrderPrice("");
+      alert(`${orderType === 'buy' ? 'Buy' : 'Sell'} order placed successfully! Transaction: ${txSignature.slice(0, 8)}...`);
+    } catch (error) {
+      console.error('Failed to place order:', error);
+      alert(`Failed to place order: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   return (
@@ -114,16 +153,20 @@ export default function BookOrder({
             SOL/USDC
           </button>
           <button 
-            className={`pair-button ${selectedPair === 'XMR/SOL' ? 'active' : ''}`}
+            className={`pair-button example-pool ${selectedPair === 'XMR/SOL' ? 'active' : ''}`}
             onClick={() => setSelectedPair('XMR/SOL')}
+            disabled
           >
             XMR/SOL
+            <span className="example-label">(Example)</span>
           </button>
           <button 
-            className={`pair-button ${selectedPair === 'ZEC/SOL' ? 'active' : ''}`}
+            className={`pair-button example-pool ${selectedPair === 'ZEC/SOL' ? 'active' : ''}`}
             onClick={() => setSelectedPair('ZEC/SOL')}
+            disabled
           >
             ZEC/SOL
+            <span className="example-label">(Example)</span>
           </button>
         </div>
       </div>
