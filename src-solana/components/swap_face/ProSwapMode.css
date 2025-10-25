@@ -1,5 +1,112 @@
 /* ProSwapMode.css */
 
+/* Dark Pool Container */
+.darkpool-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 2rem;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.darkpool-container.loaded {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Dark Pool Header */
+.darkpool-header {
+  margin-bottom: 2rem;
+}
+
+.darkpool-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+}
+
+/* Dark Pool Solflare Wallet Container - Top Right */
+.darkpool-solflare-wallet-container {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  z-index: 1001;
+  pointer-events: auto;
+}
+
+/* Trading Pair Selector */
+.trading-pair-selector {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.5rem;
+  backdrop-filter: blur(10px);
+}
+
+.pair-button {
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-source-code), monospace;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+
+.pair-button.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+}
+
+.pair-button:hover:not(.active):not(.example-pool) {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Example Pool Styling */
+.pair-button.example-pool {
+  opacity: 0.4;
+  cursor: not-allowed;
+  position: relative;
+}
+
+.pair-button.example-pool:hover {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.pair-button.example-pool.active {
+  opacity: 0.6;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.example-label {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: rgba(255, 193, 7, 0.9);
+  color: rgba(0, 0, 0, 0.8);
+  font-size: 8px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-family: var(--font-source-code), monospace;
+}
+
 /* Pro Mode Styles */
 .three-columns {
   display: grid;
