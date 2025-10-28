@@ -1450,7 +1450,43 @@
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 2rem;
-  height: calc(100vh - 200px);
+  height: 50%;
+  /* Remove fixed height - use content height */
+}
+
+/* Price Chart Styles */
+.price-chart .chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.price-chart .chart-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.price-chart .chart-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.price-chart .chart-header .price-info {
+  display: flex;
+  align-items: center;
+}
+
+.price-chart .current-price {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  font-family: var(--font-source-code), monospace;
 }
 
 /* Price Chart Historical Data Note */
@@ -1467,21 +1503,16 @@
 .chart-section {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  /* Remove height: 100% to use content height */
 }
 
 .order-form-section {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow-y: auto;
+  /* Remove height: 100% to use content height */
 }
 
-.order-form-content {
-  flex: 1;
-  overflow-y: auto;
-}
+/* .order-form-content styling removed - using content height */
 
 /* Liquidity Stats Panel (under chart on left) */
 .liquidity-stats-panel {
