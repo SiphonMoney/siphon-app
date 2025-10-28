@@ -31,7 +31,20 @@ export default function BookOrder({
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("");
   const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'>('1h');
-  const [bottomView, setBottomView] = useState<'orderbook' | 'recent'>('orderbook');
+  
+  // Liquidity management state
+  const [liquidityAction, setLiquidityAction] = useState<'add' | 'remove'>('add');
+  const [solAmount, setSolAmount] = useState("");
+  const [usdcAmount, setUsdcAmount] = useState("");
+  
+  // Mock user liquidity stats
+  const userLiquidityStats = {
+    totalLiquidity: 1250.5,
+    solDeposited: 850.0,
+    usdcDeposited: 110000.5,
+    earnedFees: 12.34,
+    share: 0.045 // 4.5% of total pool
+  };
 
   // Mock order book data - updated for privacy coins
   const [orderBook, setOrderBook] = useState({
@@ -315,85 +328,112 @@ export default function BookOrder({
         </div>
       </div>
 
-      {/* Bottom Row: Order Book / Recent Activities - Full Width */}
+      {/* Bottom Row: Liquidity Management */}
       <div className="darkpool-bottom-row">
-        <div className="orderbook-header">
-          <span className="orderbook-title">
-            {bottomView === 'orderbook' ? 'Order Book' : 'Recent Activity'}
-          </span>
-          <div className="view-selector">
-            <button 
-              className={`view-btn ${bottomView === 'orderbook' ? 'active' : ''}`}
-              onClick={() => setBottomView('orderbook')}
-            >
-              Order Book
-            </button>
-            <button 
-              className={`view-btn ${bottomView === 'recent' ? 'active' : ''}`}
-              onClick={() => setBottomView('recent')}
-            >
-              Recent Activity
-            </button>
+        <div className="liquidity-section">
+          <div className="liquidity-header">
+            <span className="liquidity-title">Manage Liquidity</span>
+            <div className="action-selector">
+              <button 
+                className={`action-btn ${liquidityAction === 'add' ? 'active' : ''}`}
+                onClick={() => setLiquidityAction('add')}
+              >
+                Add
+              </button>
+              <button 
+                className={`action-btn ${liquidityAction === 'remove' ? 'active' : ''}`}
+                onClick={() => setLiquidityAction('remove')}
+              >
+                Remove
+              </button>
+            </div>
           </div>
-        </div>
-        
-        <div className="orderbook-container">
-          {bottomView === 'orderbook' ? (
-            <div className="orderbook-grid">
-              {/* Asks (Sell Orders) */}
-              <div className="orderbook-side asks-side">
-                <div className="orderbook-header-row">
-                  <span>Price (SOL)</span>
-                  <span>Amount</span>
-                  <span>Total</span>
+          
+          <div className="liquidity-content">
+            {liquidityAction === 'add' ? (
+              <div className="add-liquidity">
+                <div className="form-group">
+                  <label>SOL Amount</label>
+                  <input
+                    type="number"
+                    placeholder="0.0"
+                    value={solAmount}
+                    onChange={(e) => setSolAmount(e.target.value)}
+                  />
                 </div>
-                {orderBook.asks.map((ask, index) => (
-                  <div key={index} className="orderbook-row ask-row">
-                    <span className="price">{ask.price.toFixed(4)}</span>
-                    <span className="amount">{ask.amount.toFixed(2)}</span>
-                    <span className="total">{ask.total.toFixed(2)}</span>
-                  </div>
-                ))}
+                <div className="form-group">
+                  <label>USDC Amount</label>
+                  <input
+                    type="number"
+                    placeholder="0.0"
+                    value={usdcAmount}
+                    onChange={(e) => setUsdcAmount(e.target.value)}
+                  />
+                </div>
+                <button 
+                  className="liquidity-button"
+                  disabled={!solAmount || !usdcAmount}
+                >
+                  Add Liquidity
+                </button>
               </div>
-
-              {/* Bids (Buy Orders) */}
-              <div className="orderbook-side bids-side">
-                <div className="orderbook-header-row">
-                  <span>Price (SOL)</span>
-                  <span>Amount</span>
-                  <span>Total</span>
+            ) : (
+              <div className="remove-liquidity">
+                <div className="form-group">
+                  <label>Remove Percentage</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    min="0"
+                    max="100"
+                  />
                 </div>
-                {orderBook.bids.map((bid, index) => (
-                  <div key={index} className="orderbook-row bid-row">
-                    <span className="price">{bid.price.toFixed(4)}</span>
-                    <span className="amount">{bid.amount.toFixed(2)}</span>
-                    <span className="total">{bid.total.toFixed(2)}</span>
+                <div className="removal-info">
+                  <div className="info-row">
+                    <span>SOL to receive:</span>
+                    <span>0.0</span>
                   </div>
-                ))}
+                  <div className="info-row">
+                    <span>USDC to receive:</span>
+                    <span>0.0</span>
+                  </div>
+                </div>
+                <button 
+                  className="liquidity-button"
+                  disabled={true}
+                >
+                  Remove Liquidity
+                </button>
+              </div>
+            )}
+          </div>
+          
+          {/* User Liquidity Stats */}
+          <div className="user-stats">
+            <h4>Your Liquidity Stats</h4>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <span className="stat-label">Total Liquidity</span>
+                <span className="stat-value">${userLiquidityStats.totalLiquidity.toFixed(2)}</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">SOL Deposited</span>
+                <span className="stat-value">{userLiquidityStats.solDeposited.toFixed(2)} SOL</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">USDC Deposited</span>
+                <span className="stat-value">${userLiquidityStats.usdcDeposited.toFixed(2)}</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Earned Fees</span>
+                <span className="stat-value">${userLiquidityStats.earnedFees.toFixed(2)}</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Pool Share</span>
+                <span className="stat-value">{(userLiquidityStats.share * 100).toFixed(2)}%</span>
               </div>
             </div>
-          ) : (
-            <div className="recent-activities">
-              <div className="activity-header-row">
-                <span>Time</span>
-                <span>Type</span>
-                <span>Amount</span>
-                <span>Price</span>
-                <span>Total</span>
-              </div>
-              {recentActivities.map((activity, index) => (
-                <div key={index} className={`activity-row ${activity.type}-row`}>
-                  <span className="time">{activity.time}</span>
-                  <span className={`type ${activity.type}`}>
-                    {activity.type.toUpperCase()}
-                  </span>
-                  <span className="amount">{activity.amount.toFixed(2)}</span>
-                  <span className="price">{activity.price.toFixed(4)}</span>
-                  <span className="total">{activity.total.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
