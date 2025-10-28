@@ -92,12 +92,18 @@ export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) 
         setPriceData(data);
         
         if (data.length > 0) {
+          // Take the most recent 24 hours (should be the last data points)
+          const startIndex = Math.max(0, data.length - 25); // Last 24 hours
           const latest = data[data.length - 1];
-          const earliest = data[0];
+          const earliest = data[startIndex];
+          
           setCurrentPrice(latest.price);
-          // Calculate 24h change from first to last data point
-          if (earliest.price > 0) {
-            setPriceChange(((latest.price - earliest.price) / earliest.price) * 100);
+          
+          // Calculate 24h change
+          if (earliest.price > 0 && latest.price > 0) {
+            const change = ((latest.price - earliest.price) / earliest.price) * 100;
+            setPriceChange(change);
+            console.log(`Price change: ${earliest.price} -> ${latest.price} = ${change.toFixed(2)}%`);
           } else {
             setPriceChange(0);
           }
