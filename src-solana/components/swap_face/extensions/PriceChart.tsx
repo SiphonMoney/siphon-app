@@ -155,9 +155,6 @@ export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) 
         </div>
         <div className="price-info">
           <span className="current-price">{formatPrice(currentPrice)}</span>
-          <span className={`price-change ${priceChange >= 0 ? 'positive' : 'negative'}`}>
-            {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
-          </span>
         </div>
       </div>
       
