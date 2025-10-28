@@ -223,6 +223,10 @@
   height: calc(95vh - 100px);
   max-width: 1800px;
   margin-top: 50px;
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 /* Simple mode sizing */

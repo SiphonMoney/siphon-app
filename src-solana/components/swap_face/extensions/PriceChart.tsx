@@ -158,32 +158,6 @@ export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) 
         </ResponsiveContainer>
       </div>
       
-      <div className="chart-footer">
-        <div className="timeframe-selector">
-          <button className={`timeframe-btn ${timeframe === '1m' ? 'active' : ''}`}>1m</button>
-          <button className={`timeframe-btn ${timeframe === '5m' ? 'active' : ''}`}>5m</button>
-          <button className={`timeframe-btn ${timeframe === '15m' ? 'active' : ''}`}>15m</button>
-          <button className={`timeframe-btn ${timeframe === '1h' ? 'active' : ''}`}>1h</button>
-          <button className={`timeframe-btn ${timeframe === '4h' ? 'active' : ''}`}>4h</button>
-          <button className={`timeframe-btn ${timeframe === '1d' ? 'active' : ''}`}>1d</button>
-        </div>
-        
-        <div className="chart-stats">
-          <div className="stat">
-            <span className="stat-label">24h High</span>
-            <span className="stat-value" style={{ marginLeft: '0.5rem' }}
-            >{formatPrice(Math.max(...priceData.map(d => d.price)))}</span>
-            <span className="stat-label" style={{ marginLeft: '1rem' }}
-            >24h Low</span> 
-            <span className="stat-value" style={{ marginLeft: '1rem' }}
-            >{formatPrice(Math.min(...priceData.map(d => d.price)))}</span>
-            <span className="stat-label" style={{ marginLeft: '1rem' }}
-            >24h Volume</span>
-            <span className="stat-value" style={{ marginLeft: '0.5rem' }}
-            >{formatVolume(priceData.reduce((sum, d) => sum + d.volume, 0))}</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
