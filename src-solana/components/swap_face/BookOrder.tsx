@@ -3,7 +3,7 @@
 import { useState } from "react";
 import "./ProSwapMode.css";
 import PriceChart from "./extensions/PriceChart";
-import SolflareConnectButton from "./extensions/SolflareConnectButton";
+import ConnectButton from "./extensions/ConnectButton";
 import { matchingEngineClient, OrderParams } from "../../lib/matchingEngine";
 import { WalletInfo } from "../../lib/walletManager";
 
@@ -188,8 +188,9 @@ export default function BookOrder({
           </div>
         </div>
         <div className="darkpool-header-right">
-          <SolflareConnectButton 
-            onWalletConnected={onWalletConnected}
+          <ConnectButton 
+            className="darkpool-connect-button"
+            onConnected={onWalletConnected}
           />
         </div>
       </div>
