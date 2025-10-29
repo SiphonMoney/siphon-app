@@ -17,15 +17,24 @@ export default function ConnectButton({ className, onConnected }: { className?: 
 
   const handleWalletSelect = async (walletId: string) => {
     try {
+      console.log(`Attempting to connect ${walletId} wallet...`);
       const result = await walletManager.connectWallet(walletId);
       if (result.success && result.wallet) {
+        console.log(`Successfully connected ${walletId} wallet:`, result.wallet);
         setConnectedWallet(result.wallet);
         onConnected?.(result.wallet);
       } else {
-        alert(`Failed to connect wallet: ${result.error}`);
+        console.error(`Failed to connect ${walletId} wallet:`, result.error);
+        // Show wallet-specific error message
+        const walletName = walletId === 'phantom' ? 'Phantom' : 
+                          walletId === 'solflare' ? 'Solflare' : 
+                          walletId === 'metamask' ? 'MetaMask' : walletId;
+        alert(`${walletName} connection failed: ${result.error}`);
       }
     } catch (error: unknown) {
-      alert(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`Connection error for ${walletId}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Connection error: ${errorMessage}`);
     }
   };
 
@@ -41,6 +50,8 @@ export default function ConnectButton({ className, onConnected }: { className?: 
           <span className="wallet-icon">
             {connectedWallet.id === 'metamask' ? 'MM' : 
              connectedWallet.id === 'solana' ? 'SOL' :
+             connectedWallet.id === 'phantom' ? 'PH' :
+             connectedWallet.id === 'solflare' ? 'SF' :
              connectedWallet.id === 'bitcoin' ? 'BTC' : 'XMR'}
           </span>
           <div className="wallet-details">

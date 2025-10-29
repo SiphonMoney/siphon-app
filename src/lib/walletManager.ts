@@ -72,6 +72,124 @@ class WalletManager {
     }
   }
 
+  async connectPhantom(): Promise<WalletConnectionResult> {
+    try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined') {
+        return { success: false, error: 'Phantom wallet can only be connected in a browser environment' };
+      }
+
+      // Wait a bit for window.solana to be available (in case extension is loading)
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Check if Phantom wallet is available - specifically check for Phantom
+      const windowWithSolana = window as Window & { 
+        solana?: { 
+          isPhantom?: boolean;
+          _phantom?: unknown; // Phantom-specific marker
+          isConnected?: boolean;
+          publicKey?: { toString: () => string };
+          connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString: () => string } }>; 
+          disconnect: () => Promise<void>;
+          on: (event: string, handler: () => void) => void;
+        } 
+      };
+      
+      const solana = windowWithSolana.solana;
+      
+      if (!solana) {
+        return { success: false, error: 'Phantom wallet not detected. Please install Phantom wallet extension from https://phantom.app' };
+      }
+
+      // Double-check it's actually Phantom (check both isPhantom and _phantom marker)
+      const isPhantom = solana.isPhantom === true || solana._phantom !== undefined;
+      
+      if (!isPhantom) {
+        return { success: false, error: 'Phantom wallet not detected. Another Solana wallet extension may be interfering. Please ensure Phantom is installed.' };
+      }
+
+      // Check if already connected
+      if (solana.isConnected && solana.publicKey) {
+        const address = solana.publicKey.toString();
+        const wallet: WalletInfo = {
+          id: 'phantom',
+          name: 'Phantom',
+          address,
+          chain: 'Solana',
+          connected: true
+        };
+        this.connectedWallets.set('phantom', wallet);
+        return { success: true, wallet };
+      }
+
+      // Connect to Phantom wallet with explicit error handling
+      let response: { publicKey: { toString: () => string } };
+      try {
+        // Ensure we're calling Phantom's connect, not another wallet's
+        if (!solana.connect || typeof solana.connect !== 'function') {
+          return { success: false, error: 'Phantom wallet connect method not available. Please refresh the page and try again.' };
+        }
+        
+        response = await solana.connect({ onlyIfTrusted: false });
+      } catch (connectError: unknown) {
+        // User may have rejected the connection
+        const errorMessage = connectError instanceof Error ? connectError.message : String(connectError);
+        console.error('Phantom connect() error:', errorMessage);
+        
+        // Check for common error patterns
+        if (errorMessage.includes('User rejected') || 
+            errorMessage.includes('User cancel') ||
+            errorMessage.includes('User cancelled') ||
+            errorMessage.includes('User declined')) {
+          return { success: false, error: 'Connection rejected. Please try again and approve the connection in Phantom.' };
+        }
+        
+        // If error mentions MetaMask, it's a conflict issue
+        if (errorMessage.toLowerCase().includes('metamask')) {
+          return { success: false, error: 'Wallet conflict detected. Please ensure only Phantom wallet is handling Solana connections, or try disabling MetaMask temporarily.' };
+        }
+        
+        // Re-throw to be caught by outer catch
+        throw new Error(`Phantom connection failed: ${errorMessage}`);
+      }
+
+      if (!response || !response.publicKey) {
+        return { success: false, error: 'Failed to get public key from Phantom wallet' };
+      }
+
+      const address = response.publicKey.toString();
+
+      const wallet: WalletInfo = {
+        id: 'phantom',
+        name: 'Phantom',
+        address,
+        chain: 'Solana',
+        connected: true
+      };
+
+      this.connectedWallets.set('phantom', wallet);
+      return { success: true, wallet };
+    } catch (error: unknown) {
+      console.error('Phantom connection error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Filter out MetaMask-related errors if they appear
+      if (errorMessage.toLowerCase().includes('metamask')) {
+        return { success: false, error: 'Unable to connect Phantom. MetaMask may be interfering. Try refreshing the page or disabling MetaMask temporarily.' };
+      }
+      
+      // Provide more helpful error messages
+      if (errorMessage.includes('User rejected') || 
+          errorMessage.includes('User cancel') ||
+          errorMessage.includes('User cancelled')) {
+        return { success: false, error: 'Connection was cancelled. Please try again and approve the connection in Phantom wallet.' };
+      }
+      
+      // Generic error with Phantom branding
+      return { success: false, error: `Phantom wallet connection failed. ${errorMessage}` };
+    }
+  }
+
   async connectSolflare(): Promise<WalletConnectionResult> {
     try {
       // Initialize Solflare wallet if not already done
@@ -165,6 +283,8 @@ class WalletManager {
         return this.connectMetaMask();
       case 'solana':
         return this.connectSolana();
+      case 'phantom':
+        return this.connectPhantom();
       case 'solflare':
         return this.connectSolflare();
       case 'bitcoin':
@@ -179,6 +299,14 @@ class WalletManager {
   disconnectWallet(walletId: string): void {
     if (walletId === 'solflare' && this.solflareWallet) {
       this.solflareWallet.disconnect();
+    } else if (walletId === 'phantom') {
+      // Disconnect Phantom wallet
+      const solana = (window as Window & { solana?: { disconnect: () => Promise<void> } })?.solana;
+      if (solana && solana.disconnect) {
+        solana.disconnect().catch((error) => {
+          console.error('Error disconnecting Phantom wallet:', error);
+        });
+      }
     }
     this.connectedWallets.delete(walletId);
   }
