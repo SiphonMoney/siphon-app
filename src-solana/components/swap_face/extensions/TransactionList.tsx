@@ -10,14 +10,14 @@ interface Transaction {
   total: number;
   timestamp: string;
   status: 'completed' | 'pending' | 'failed';
-  user: string;
 }
 
 interface TransactionListProps {
   poolPair: string;
+  maxItems?: number;
 }
 
-export default function TransactionList({ poolPair }: TransactionListProps) {
+export default function TransactionList({ poolPair, maxItems }: TransactionListProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
@@ -43,7 +43,6 @@ export default function TransactionList({ poolPair }: TransactionListProps) {
         total: Math.round(amount * price * 100) / 100,
         timestamp: timestamp.toISOString().slice(11, 19), // HH:MM:SS
         status: Math.random() > 0.1 ? 'completed' : 'pending',
-        user: `0x${Math.random().toString(16).substr(2, 8)}...${Math.random().toString(16).substr(2, 4)}`
       });
     }
     
@@ -51,16 +50,46 @@ export default function TransactionList({ poolPair }: TransactionListProps) {
   }, [poolPair]);
 
   useEffect(() => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setTransactions(generateMockTransactions());
-      setIsLoading(false);
-    }, 300);
-  }, [poolPair, generateMockTransactions]);
+    const load = () => {
+      setIsLoading(true);
+      // Load locally stored transactions first
+      let local: Transaction[] = [];
+      try {
+        const raw = localStorage.getItem('siphon-mock-transactions');
+        if (raw) local = JSON.parse(raw);
+      } catch {}
 
-  const filteredTransactions = transactions.filter(tx => 
-    filter === 'all' || tx.type === filter
-  );
+      // Filter by pair and sort latest first
+      const localForPair = local
+        .filter((t) => t && typeof t === 'object')
+        .filter((t) => (t as any).pair === poolPair)
+        .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+      // Merge with generated mocks to fill remaining slots
+      const mocks = generateMockTransactions();
+      const merged = [...localForPair, ...mocks].slice(0, maxItems ?? 9999);
+
+      setTransactions(merged);
+      setIsLoading(false);
+    };
+
+    load();
+
+    const onUpdate = () => load();
+    window.addEventListener('siphon-tx-updated', onUpdate);
+    return () => window.removeEventListener('siphon-tx-updated', onUpdate);
+  }, [poolPair, generateMockTransactions, maxItems]);
+
+  const filteredTransactions = transactions
+    .filter(tx => filter === 'all' || tx.type === filter)
+    .slice(0, maxItems ?? transactions.length);
+
+  // Emit current visible volume for this pair
+  useEffect(() => {
+    const volume = filteredTransactions.reduce((acc, t) => acc + (t.total || 0), 0);
+    const evt = new CustomEvent('siphon-tx-volume', { detail: { pair: poolPair, volume } });
+    window.dispatchEvent(evt);
+  }, [filteredTransactions, poolPair]);
 
   const formatPrice = (price: number) => {
     return `$${price.toFixed(2)}`;
@@ -126,7 +155,7 @@ export default function TransactionList({ poolPair }: TransactionListProps) {
           <span>Price</span>
           <span>Total</span>
           <span>Time</span>
-          <span>User</span>
+          <span>Counterparty</span>
         </div>
         
         <div className="table-body">
@@ -139,14 +168,10 @@ export default function TransactionList({ poolPair }: TransactionListProps) {
               <span className="tx-price">{formatPrice(tx.price)}</span>
               <span className="tx-total">{formatTotal(tx.total)}</span>
               <span className="tx-time">{tx.timestamp}</span>
-              <span className="tx-user">{tx.user}</span>
+              <span className="tx-user">anon</span>
             </div>
           ))}
         </div>
-      </div>
-      
-      <div className="list-footer">
-        <button className="load-more-btn">Load More Transactions</button>
       </div>
     </div>
   );

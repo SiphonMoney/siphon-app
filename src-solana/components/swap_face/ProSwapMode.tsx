@@ -27,20 +27,92 @@ export default function ProSwapMode({
   const [withdrawInstructions, setWithdrawInstructions] = useState([
     { chain: "SOL", token: "USDC", amount: "", address: "" }
   ]);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [depositInputs, setDepositInputs] = useState([
     { chain: "SOL", token: "SOL", amount: "" }
   ]);
 
+  // Toast notifications (top-right)
+  type ToastStatus = 'pending' | 'success' | 'failed';
+  interface ToastItem { id: number; title: string; message: string; status: ToastStatus }
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const pushToast = (title: string, message: string, status: ToastStatus = 'pending', ttlMs = 3500) => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const toast: ToastItem = { id, title, message, status };
+    setToasts((t) => [toast, ...t]);
+    // auto-complete pending -> success after short delay
+    if (status === 'pending') {
+      window.setTimeout(() => {
+        setToasts((curr) => curr.map((x) => x.id === id ? { ...x, status: 'success', message: 'Completed' } : x));
+      }, Math.min(ttlMs - 1000, 2500));
+    }
+    // auto-remove
+    window.setTimeout(() => {
+      setToasts((curr) => curr.filter((x) => x.id !== id));
+    }, ttlMs);
+  };
+
+  const pushProcessToast = (kind: 'deposit' | 'execution' | 'withdraw') => {
+    const sequences: Record<string, string[]> = {
+      deposit: [
+        'Generating zk-commitments...',
+        'Updating Merkle tree...',
+        'Publishing encrypted note...',
+        'Finalizing deposit receipt...'
+      ],
+      execution: [
+        'Building private order...',
+        'Generating proof...',
+        'Submitting to matching engine...',
+        'Aggregating in dark pool...'
+      ],
+      withdraw: [
+        'Constructing nullifier...',
+        'Verifying inclusion proof...',
+        'Crafting withdrawal note...',
+        'Broadcasting transaction...'
+      ],
+    };
+    const steps = sequences[kind];
+    const baseId = Date.now() + Math.floor(Math.random() * 1000);
+    // Create a single toast and update its message as we go
+    const make = (msg: string, status: ToastStatus = 'pending') => {
+      const item: ToastItem = { id: baseId, title: kind.charAt(0).toUpperCase() + kind.slice(1), message: msg, status };
+      setToasts((t) => {
+        const exists = t.some((x) => x.id === baseId);
+        return exists ? t.map((x) => (x.id === baseId ? item : x)) : [item, ...t];
+      });
+    };
+    // Progress through steps
+    steps.forEach((msg, idx) => {
+      window.setTimeout(() => make(msg, 'pending'), idx * 800);
+    });
+    // Mark success and remove
+    window.setTimeout(() => make('Completed', 'success'), steps.length * 800 + 300);
+    window.setTimeout(() => setToasts((curr) => curr.filter((x) => x.id !== baseId)), steps.length * 800 + 2000);
+  };
+
   const handleDeposit = () => {
     console.log(`Depositing to Siphon Vault`, depositInputs);
+    pushProcessToast('deposit');
+    setIsDepositing(true);
+    window.setTimeout(() => setIsDepositing(false), 3600);
   };
 
   const handleSwap = () => {
     console.log('Executing Pro Strategy', swaps);
+    pushProcessToast('execution');
+    setIsExecuting(true);
+    window.setTimeout(() => setIsExecuting(false), 3600);
   };
 
   const handleWithdraw = () => {
     console.log(`Withdrawing to addresses`, withdrawInstructions);
+    pushProcessToast('withdraw');
+    setIsWithdrawing(true);
+    window.setTimeout(() => setIsWithdrawing(false), 3600);
   };
 
   const addSwap = () => {
@@ -120,10 +192,15 @@ export default function ProSwapMode({
     return totals;
   };
 
+  const applyFee = (usd: number, feePct = 0.1) => {
+    const after = usd * (1 - feePct / 100);
+    return { after, label: `(-${feePct}%)` };
+  };
+
   const getUSDEquivalent = (token: string, amount: number) => {
     // Mock prices - in real app these would come from price feeds
     const prices: { [key: string]: number } = {
-      'SOL': 95,
+      'SOL': 192,
       'USDC': 1,
       'USDT': 1,
       'WBTC': 45000,
@@ -152,7 +229,12 @@ export default function ProSwapMode({
     swaps.forEach(swap => {
       const amount = parseFloat(swap.amount) || 0;
       if (amount > 0) {
-        totals[swap.to] = (totals[swap.to] || 0) + amount;
+        // Convert using mock prices (SOL=192, USDC=1, etc.)
+        const price: { [key: string]: number } = { SOL: 192, USDC: 1, USDT: 1, WBTC: 45000, XMR: 120 };
+        const pFrom = price[swap.from] ?? 0;
+        const pTo = price[swap.to] ?? 0;
+        const received = pFrom > 0 && pTo > 0 ? amount * (pFrom / pTo) : 0;
+        totals[swap.to] = (totals[swap.to] || 0) + received;
       }
     });
     
@@ -161,6 +243,17 @@ export default function ProSwapMode({
 
   return (
     <div className={`three-columns ${isLoaded ? 'loaded' : ''}`}>
+      {/* Toasts - top right */}
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map((t) => (
+            <div key={t.id} className={`toast ${t.status}`}>
+              <div className="toast-title">{t.title}</div>
+              <div className="toast-message">{t.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
       {/* Column 1: Deposit */}
       <div className="column">
         <div className="column-header">
@@ -255,15 +348,16 @@ export default function ProSwapMode({
                  const totalUSD = Object.entries(totals).reduce((sum, [token, amount]) => 
                    sum + getUSDEquivalent(token, amount), 0
                  );
+                 const { after: totalAfterFee, label: feeLabel } = applyFee(totalUSD, 0.1);
                  
                  if (totalUSD === 0) return 'No amount entered';
                  
                  const entries = Object.entries(totals).filter(([, amount]) => amount > 0);
                  if (entries.length === 1) {
                    const [token, amount] = entries[0];
-                   return `${token} ${amount.toFixed(4)} ($${totalUSD.toFixed(2)})`;
+                   return `${token} ${amount.toFixed(4)} ($${totalAfterFee.toFixed(2)} ${feeLabel})`;
                  } else {
-                   return `$${totalUSD.toFixed(2)} total`;
+                   return `$${totalAfterFee.toFixed(2)} total ${feeLabel}`;
                  }
                })()}
              </span>
@@ -273,8 +367,13 @@ export default function ProSwapMode({
         <button 
           className="action-button" 
           onClick={handleDeposit}
+          disabled={isDepositing}
         >
-          Deposit to Vault
+          {isDepositing ? (
+            <span className="loading-content"><span className="spinner"></span>Processing...</span>
+          ) : (
+            'Deposit to Vault'
+          )}
         </button>
       </div>
 
@@ -378,7 +477,15 @@ export default function ProSwapMode({
                   <input
                     type="number"
                     placeholder="0.0"
-                    value=""
+                    value={(() => {
+                      const price: { [key: string]: number } = { SOL: 192, USDC: 1, USDT: 1, WBTC: 45000, XMR: 120 };
+                      const amount = parseFloat(swap.amount) || 0;
+                      const pFrom = price[swap.from] ?? 0;
+                      const pTo = price[swap.to] ?? 0;
+                      if (!amount || !pFrom || !pTo) return "";
+                      const out = amount * (pFrom / pTo);
+                      return out.toFixed(4);
+                    })()}
                     readOnly
                     className="output-amount"
                   />
@@ -476,7 +583,18 @@ export default function ProSwapMode({
               <div className="swap-preview">
                 <div className="preview-row">
                   <span>Rate</span>
-                  <span>1 {swap.from} = 150 {swap.to}</span>
+                  <span>
+                    {(() => {
+                      const price: { [key: string]: number } = { SOL: 192, USDC: 1, USDT: 1, WBTC: 45000, XMR: 120 };
+                      const pFrom = price[swap.from] ?? 0;
+                      const pTo = price[swap.to] ?? 0;
+                      if (pFrom > 0 && pTo > 0) {
+                        const rate = pFrom / pTo;
+                        return `1 ${swap.from} = ${rate.toFixed(2)} ${swap.to}`;
+                      }
+                      return `1 ${swap.from} = - ${swap.to}`;
+                    })()}
+                  </span>
                 </div>
                 <div className="preview-row">
                   <span>Slippage</span>
@@ -517,15 +635,16 @@ export default function ProSwapMode({
                 const totalUSD = Object.entries(totals).reduce((sum, [token, amount]) => 
                   sum + getUSDEquivalent(token, amount), 0
                 );
+                const { after: totalAfterFee, label: feeLabel } = applyFee(totalUSD, 0.1);
                 
                 if (totalUSD === 0) return 'No amount entered';
                 
                 const entries = Object.entries(totals).filter(([, amount]) => amount > 0);
                 if (entries.length === 1) {
                   const [token, amount] = entries[0];
-                  return `${token} ${amount.toFixed(4)} ($${totalUSD.toFixed(2)})`;
+                  return `${token} ${amount.toFixed(4)} ($${totalAfterFee.toFixed(2)} ${feeLabel})`;
                 } else {
-                  return `$${totalUSD.toFixed(2)} total`;
+                  return `$${totalAfterFee.toFixed(2)} total ${feeLabel}`;
                 }
               })()}
             </span>
@@ -535,8 +654,13 @@ export default function ProSwapMode({
         <button 
           className="action-button" 
           onClick={handleSwap}
+          disabled={isExecuting}
         >
-          Execute Strategy
+          {isExecuting ? (
+            <span className="loading-content"><span className="spinner"></span>Executing...</span>
+          ) : (
+            'Execute Strategy'
+          )}
         </button>
       </div>
 
@@ -649,15 +773,16 @@ export default function ProSwapMode({
                 const totalUSD = Object.entries(totals).reduce((sum, [token, amount]) => 
                   sum + getUSDEquivalent(token, amount), 0
                 );
+                const { after: totalAfterFee, label: feeLabel } = applyFee(totalUSD, 0.1);
                 
                 if (totalUSD === 0) return 'No amount entered';
                 
                 const entries = Object.entries(totals).filter(([, amount]) => amount > 0);
                 if (entries.length === 1) {
                   const [token, amount] = entries[0];
-                  return `${token} ${amount.toFixed(4)} ($${totalUSD.toFixed(2)})`;
+                  return `${token} ${amount.toFixed(4)} ($${totalAfterFee.toFixed(2)} ${feeLabel})`;
                 } else {
-                  return `$${totalUSD.toFixed(2)} total`;
+                  return `$${totalAfterFee.toFixed(2)} total ${feeLabel}`;
                 }
               })()}
             </span>
@@ -667,8 +792,13 @@ export default function ProSwapMode({
         <button 
           className="action-button" 
           onClick={handleWithdraw}
+          disabled={isWithdrawing}
         >
-          Execute Withdrawals
+          {isWithdrawing ? (
+            <span className="loading-content"><span className="spinner"></span>Withdrawing...</span>
+          ) : (
+            'Execute Withdrawals'
+          )}
         </button>
       </div>
     </div>
