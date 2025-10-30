@@ -14,6 +14,10 @@ interface PriceData {
 interface PriceChartProps {
   pair: string;
   timeframe?: '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+  leftLabel?: string;
+  leftValue?: string;
+  forceMock?: boolean;
+  mockBasePrice?: number;
 }
 
 // Fetch real SOL/USDC price data from our API route
@@ -47,10 +51,10 @@ const fetchPriceData = async () => {
 };
 
 // Generate mock price data as fallback
-const generateMockData = (pair: string) => {
+const generateMockData = (pair: string, overrideBase?: number) => {
   const data: PriceData[] = [];
   const now = new Date();
-  const basePrice = pair.includes('SOL') ? 201 : pair.includes('ETH') ? 3000 : 45000;
+  const basePrice = overrideBase !== undefined ? overrideBase : (pair.includes('SOL') ? 201 : pair.includes('ETH') ? 3000 : 45000);
   
   // Generate data points for the last 24 hours
   for (let i = 24; i >= 0; i--) {
@@ -76,7 +80,7 @@ const generateMockData = (pair: string) => {
   return data;
 };
 
-export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) {
+export default function PriceChart({ pair, timeframe = '1h', leftLabel, leftValue, forceMock = false, mockBasePrice }: PriceChartProps) {
   const [priceData, setPriceData] = useState<PriceData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPrice, setCurrentPrice] = useState(0);
@@ -87,42 +91,51 @@ export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) 
     // Only fetch once on mount
     if (hasFetched.current) return;
     hasFetched.current = true;
-    
-    setIsLoading(true);
-    
-    // Fetch real price data
+
     const loadData = async () => {
+      setIsLoading(true);
       try {
-        const data = await fetchPriceData();
-        setPriceData(data);
-        
-        if (data.length > 0) {
-          // Take the most recent 24 hours (should be the last data points)
-          const startIndex = Math.max(0, data.length - 25); // Last 24 hours
+        if (forceMock) {
+          const data = generateMockData(pair, mockBasePrice);
+          setPriceData(data);
           const latest = data[data.length - 1];
-          const earliest = data[startIndex];
-          
+          const earliest = data[0];
           setCurrentPrice(latest.price);
-          
-          // Calculate 24h change
-          if (earliest.price > 0 && latest.price > 0) {
-            const change = ((latest.price - earliest.price) / earliest.price) * 100;
-            setPriceChange(change);
-            console.log(`Price change: ${earliest.price} -> ${latest.price} = ${change.toFixed(2)}%`);
-          } else {
-            setPriceChange(0);
+          const change = earliest.price > 0 ? ((latest.price - earliest.price) / earliest.price) * 100 : 0;
+          setPriceChange(change);
+        } else {
+          const data = await fetchPriceData();
+          setPriceData(data);
+          if (data.length > 0) {
+            const startIndex = Math.max(0, data.length - 25);
+            const latest = data[data.length - 1];
+            const earliest = data[startIndex];
+            setCurrentPrice(latest.price);
+            if (earliest.price > 0 && latest.price > 0) {
+              const change = ((latest.price - earliest.price) / earliest.price) * 100;
+              setPriceChange(change);
+            } else {
+              setPriceChange(0);
+            }
           }
         }
-        
         setIsLoading(false);
       } catch (error) {
         console.error('Failed to load price data:', error);
+        // Fallback to mock
+        const data = generateMockData(pair, mockBasePrice);
+        setPriceData(data);
+        const latest = data[data.length - 1];
+        const earliest = data[0];
+        setCurrentPrice(latest.price);
+        const change = earliest.price > 0 ? ((latest.price - earliest.price) / earliest.price) * 100 : 0;
+        setPriceChange(change);
         setIsLoading(false);
       }
     };
-    
+
     loadData();
-  }, []); // Empty dependency array - only run once
+  }, [forceMock, mockBasePrice, pair]);
 
   const formatPrice = (price: number) => {
     return `$${price.toFixed(2)}`;
@@ -159,6 +172,12 @@ export default function PriceChart({ pair, timeframe = '1h' }: PriceChartProps) 
           <span className="historical-data-note">historical price data</span>
         </div>
         <div className="price-info">
+            {leftLabel && leftValue && (
+              <span className="left-stat">
+                <span className="label">{leftLabel}:</span>
+                <span className="value">{leftValue}</span>
+              </span>
+            )}
           <span className="current-price">{formatPrice(currentPrice)}</span>
         </div>
       </div>
