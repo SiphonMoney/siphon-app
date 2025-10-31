@@ -3,9 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import "./ProSwapMode.css";
 import PriceChart from "./extensions/PriceChart";
-import TransactionList from "./extensions/TransactionList";
-import ConnectButton from "./extensions/ConnectButton";
-import { matchingEngineClient, OrderParams } from "../../lib/matchingEngine";
+import { OrderParams } from "../../lib/matchingEngine";
 import { WalletInfo } from "../../lib/walletManager";
 
 interface DarkPoolProps {
@@ -13,12 +11,6 @@ interface DarkPoolProps {
   walletConnected: boolean;
   connectedWallet: WalletInfo | null;
   onWalletConnected: (wallet: WalletInfo) => void;
-}
-
-interface OrderBookEntry {
-  price: number;
-  amount: number;
-  total: number;
 }
 
 export default function BookOrder({
@@ -32,7 +24,8 @@ export default function BookOrder({
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("192");
   const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'>('1h');
-  const [rightPanelView, setRightPanelView] = useState<'order' | 'liquidity'>('order');
+  const [rightPanelView, setRightPanelView] = useState<'order' | 'liquidity'>('liquidity');
+  const [chartView, setChartView] = useState<'price' | 'execution'>('price');
   const [isLoadingModalOpen, setIsLoadingModalOpen] = useState(false);
   const BASE_SOL_USD = 192;
   const [loadingLogs, setLoadingLogs] = useState<string[]>([]);
@@ -89,91 +82,6 @@ export default function BookOrder({
   const [liquidityAction, setLiquidityAction] = useState<'add' | 'remove'>('add');
   const [solAmount, setSolAmount] = useState("");
   const [usdcAmount, setUsdcAmount] = useState("");
-  
-  // Mock user liquidity stats
-  const userLiquidityStats = {
-    totalLiquidity: 1250.5,
-    solDeposited: 850.0,
-    usdcDeposited: 110000.5,
-    earnedFees: 12.34,
-    share: 0.045 // 4.5% of total pool
-  };
-
-  // Mock order book data - updated for privacy coins
-  const [orderBook, setOrderBook] = useState({
-    bids: [
-      { price: 0.126, amount: 1250.0, total: 157.5 },
-      { price: 0.1258, amount: 2100.0, total: 264.18 },
-      { price: 0.1256, amount: 850.0, total: 106.76 },
-      { price: 0.1254, amount: 3200.0, total: 401.28 },
-      { price: 0.1252, amount: 1500.0, total: 187.8 },
-      { price: 0.125, amount: 2800.0, total: 350.0 },
-      { price: 0.1248, amount: 1150.0, total: 143.52 },
-      { price: 0.1246, amount: 4500.0, total: 560.7 },
-    ] as OrderBookEntry[],
-    asks: [
-      { price: 0.1262, amount: 1800.0, total: 227.16 },
-      { price: 0.1264, amount: 2300.0, total: 290.72 },
-      { price: 0.1266, amount: 950.0, total: 120.27 },
-      { price: 0.1268, amount: 1400.0, total: 177.52 },
-      { price: 0.127, amount: 2600.0, total: 330.2 },
-      { price: 0.1272, amount: 1750.0, total: 222.6 },
-      { price: 0.1274, amount: 3200.0, total: 407.68 },
-      { price: 0.1276, amount: 900.0, total: 114.84 },
-    ] as OrderBookEntry[]
-  });
-
-  // Derived stats for darkpools (driven by TransactionList visible items)
-  const [totalVolume, setTotalVolume] = useState<number>(0);
-
-  const computeLocalVolume = (pair: string) => {
-    try {
-      const raw = localStorage.getItem('siphon-mock-transactions');
-      const arr = raw ? JSON.parse(raw) : [];
-      const sum = arr
-        .filter((t: any) => t && t.pair === pair)
-        .reduce((acc: number, t: any) => acc + (Number(t.total) || 0), 0);
-      return sum;
-    } catch {
-      return 0;
-    }
-  };
-
-  const formatCompactUsd = (value: number) => {
-    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-    if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
-    return `$${value.toFixed(2)}`;
-  };
-
-  // Listen for visible volume updates from TransactionList
-  useEffect(() => {
-    const onListVolume = (e: any) => {
-      if (e?.detail?.pair === selectedPair) {
-        setTotalVolume(Number(e.detail.volume || 0));
-      }
-    };
-    const onTxUpdate = () => setTotalVolume(computeLocalVolume(selectedPair));
-    window.addEventListener('siphon-tx-volume', onListVolume as EventListener);
-    window.addEventListener('siphon-tx-updated', onTxUpdate);
-    // initial
-    setTotalVolume(computeLocalVolume(selectedPair));
-    return () => {
-      window.removeEventListener('siphon-tx-volume', onListVolume as EventListener);
-      window.removeEventListener('siphon-tx-updated', onTxUpdate);
-    };
-  }, [selectedPair]);
-
-  // Mock recent activities data
-  const recentActivities = [
-    { time: "14:32:15", type: "buy", amount: 1250.0, price: 0.1268, total: 158.5 },
-    { time: "14:31:42", type: "sell", amount: 850.0, price: 0.1265, total: 107.525 },
-    { time: "14:30:18", type: "buy", amount: 2100.0, price: 0.1262, total: 265.02 },
-    { time: "14:29:55", type: "sell", amount: 950.0, price: 0.1260, total: 119.7 },
-    { time: "14:28:33", type: "buy", amount: 1800.0, price: 0.1258, total: 226.44 },
-    { time: "14:27:21", type: "sell", amount: 1400.0, price: 0.1256, total: 175.84 },
-    { time: "14:26:07", type: "buy", amount: 3200.0, price: 0.1254, total: 401.28 },
-    { time: "14:25:44", type: "sell", amount: 1150.0, price: 0.1252, total: 143.98 }
-  ];
 
   const handlePlaceOrder = async () => {
     if (isPlacingOrder) return;
@@ -230,25 +138,6 @@ export default function BookOrder({
         closeLoadingModal();
       }, 3800);
 
-      // Update local order book for immediate feedback
-      const newOrder = {
-        price: parseFloat(orderPrice),
-        amount: parseFloat(orderAmount),
-        total: parseFloat(orderPrice) * parseFloat(orderAmount)
-      };
-
-      if (orderType === 'buy') {
-        setOrderBook(prev => ({
-          ...prev,
-          bids: [...prev.bids, newOrder].sort((a, b) => b.price - a.price)
-        }));
-      } else {
-        setOrderBook(prev => ({
-          ...prev,
-          asks: [...prev.asks, newOrder].sort((a, b) => a.price - b.price)
-        }));
-      }
-
       setOrderAmount("");
       setOrderPrice("");
     } catch (error) {
@@ -290,71 +179,104 @@ export default function BookOrder({
             </button>
           </div>
         </div>
-        <div className="darkpool-header-right">
-          <ConnectButton 
-            className="darkpool-connect-button"
-            onConnected={onWalletConnected}
-          />
-        </div>
       </div>
 
       {/* Top Row: Chart (2/3) + Order Form (1/3) */}
       <div className="darkpool-top-row">
         {/* Chart Section - 2/3 width */}
         <div className="chart-section">
+          {/* Chart Type Toggle */}
+          <div className="chart-type-toggle">
+            <button 
+              className={`chart-type-btn ${chartView === 'price' ? 'active' : ''}`}
+              onClick={() => setChartView('price')}
+            >
+              Price Chart
+            </button>
+            <button 
+              className={`chart-type-btn ${chartView === 'execution' ? 'active' : ''}`}
+              onClick={() => setChartView('execution')}
+            >
+              Order Execution Prices
+            </button>
+          </div>
+
           <div className="chart-header">
-            <span className="chart-title">Price Chart</span>
+            <span className="chart-title">{chartView === 'price' ? 'Historical Price Data' : 'Order Execution Prices'}</span>
             <div className="timeframe-selector">
               <button 
                 className={`timeframe-btn ${timeframe === '1m' ? 'active' : ''}`}
                 onClick={() => setTimeframe('1m')}
+                disabled={chartView === 'execution'}
               >
                 1m
               </button>
               <button 
                 className={`timeframe-btn ${timeframe === '5m' ? 'active' : ''}`}
                 onClick={() => setTimeframe('5m')}
+                disabled={chartView === 'execution'}
               >
                 5m
               </button>
               <button 
                 className={`timeframe-btn ${timeframe === '15m' ? 'active' : ''}`}
                 onClick={() => setTimeframe('15m')}
+                disabled={chartView === 'execution'}
               >
                 15m
               </button>
               <button 
                 className={`timeframe-btn ${timeframe === '1h' ? 'active' : ''}`}
                 onClick={() => setTimeframe('1h')}
+                disabled={chartView === 'execution'}
               >
                 1h
               </button>
               <button 
                 className={`timeframe-btn ${timeframe === '4h' ? 'active' : ''}`}
                 onClick={() => setTimeframe('4h')}
+                disabled={chartView === 'execution'}
               >
                 4h
               </button>
               <button 
                 className={`timeframe-btn ${timeframe === '1d' ? 'active' : ''}`}
                 onClick={() => setTimeframe('1d')}
+                disabled={chartView === 'execution'}
               >
                 1d
               </button>
             </div>
           </div>
           
-          {/* Stats row removed; volume moved next to price in header */}
-          <div className="chart-container">
-            <PriceChart 
-              pair={selectedPair} 
-              timeframe={timeframe}
-              leftLabel="Total Volume"
-              leftValue={formatCompactUsd(totalVolume)}
-              forceMock={true}
-              mockBasePrice={192}
-            />
-          </div>
+          {chartView === 'price' ? (
+            <div className="chart-container">
+              <PriceChart 
+                pair={selectedPair} 
+                timeframe={timeframe}
+                forceMock={true}
+                mockBasePrice={192}
+              />
+            </div>
+          ) : (
+            <div className="chart-container chart-coming-soon">
+              <div className="chart-blur-overlay">
+                <PriceChart 
+                  pair={selectedPair} 
+                  timeframe={timeframe}
+                  forceMock={true}
+                  mockBasePrice={192}
+                />
+              </div>
+              <div className="coming-soon-overlay">
+                <div className="coming-soon-content">
+                  <span className="coming-soon-icon">🚧</span>
+                  <h3>Coming Soon</h3>
+                  <p>Order execution price tracking will be available soon</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Order Form + Liquidity Section - 1/3 width */}
@@ -362,16 +284,16 @@ export default function BookOrder({
           <div className="order-form-header">
             <div className="view-toggle">
               <span 
-                className={`view-toggle-text ${rightPanelView === 'order' ? 'active' : ''}`}
-                onClick={() => setRightPanelView('order')}
-              >
-                Place Order
-              </span>
-              <span 
                 className={`view-toggle-text ${rightPanelView === 'liquidity' ? 'active' : ''}`}
                 onClick={() => setRightPanelView('liquidity')}
               >
                 Manage Liquidity
+              </span>
+              <span 
+                className={`view-toggle-text ${rightPanelView === 'order' ? 'active' : ''}`}
+                onClick={() => setRightPanelView('order')}
+              >
+                Place Order
               </span>
             </div>
           </div>
@@ -535,61 +457,6 @@ export default function BookOrder({
           </div>
           </div>
           )}
-        </div>
-      </div>
-
-      {/* Bottom Row: Order Book + Recent Transactions */}
-      <div className="darkpool-bottom-row">
-        <div className="orderbook-section">
-          <div className="orderbook-header">
-            <span className="orderbook-title">Order Book</span>
-            <span className="pair-label">{selectedPair}</span>
-          </div>
-          <div className="orderbook-tables">
-            <div className="asks-table">
-              <div className="table-header">
-                <span>Price</span>
-                <span>Amount</span>
-                <span>Total</span>
-              </div>
-              <div className="table-body">
-                {[...orderBook.asks]
-                  .sort((a, b) => a.price - b.price)
-                  .slice(0, 3)
-                  .map((ask, idx) => (
-                    <div key={`ask-${idx}`} className="table-row ask">
-                      <span className="cell price">{ask.price.toFixed(4)}</span>
-                      <span className="cell amount">{ask.amount.toFixed(2)}</span>
-                      <span className="cell total">{ask.total.toFixed(2)}</span>
-                    </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bids-table">
-              <div className="table-header">
-                <span>Price</span>
-                <span>Amount</span>
-                <span>Total</span>
-              </div>
-              <div className="table-body">
-                {[...orderBook.bids]
-                  .sort((a, b) => b.price - a.price)
-                  .slice(0, 3)
-                  .map((bid, idx) => (
-                    <div key={`bid-${idx}`} className="table-row bid">
-                      <span className="cell price">{bid.price.toFixed(4)}</span>
-                      <span className="cell amount">{bid.amount.toFixed(2)}</span>
-                      <span className="cell total">{bid.total.toFixed(2)}</span>
-                    </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="transactions-section">
-          <TransactionList poolPair={selectedPair} maxItems={3} />
         </div>
       </div>
 
