@@ -287,7 +287,7 @@ export default function BookOrder({
                 className={`view-toggle-text ${rightPanelView === 'liquidity' ? 'active' : ''}`}
                 onClick={() => setRightPanelView('liquidity')}
               >
-                Manage Liquidity
+                Manage Funds
               </span>
               <span 
                 className={`view-toggle-text ${rightPanelView === 'order' ? 'active' : ''}`}
