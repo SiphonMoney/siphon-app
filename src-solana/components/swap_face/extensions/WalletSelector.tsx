@@ -13,14 +13,6 @@ interface WalletOption {
 
 const walletOptions: WalletOption[] = [
   {
-    id: 'solflare',
-    name: 'Solflare',
-    icon: 'SOL',
-    chain: 'Solana',
-    description: 'Connect to Solana blockchain',
-    active: true
-  },
-  {
     id: 'phantom',
     name: 'Phantom',
     icon: 'PH',
@@ -29,28 +21,12 @@ const walletOptions: WalletOption[] = [
     active: true
   },
   {
-    id: 'metamask',
-    name: 'MetaMask',
-    icon: 'MM',
-    chain: 'EVM',
-    description: 'Connect to Ethereum, Polygon, Arbitrum, and other EVM chains',
-    active: false
-  },
-  {
-    id: 'bitcoin',
-    name: 'Xverse',
-    icon: 'BTC',
-    chain: 'Bitcoin',
-    description: 'Connect to Bitcoin network',
-    active: false
-  },
-  {
-    id: 'xmr',
-    name: 'Monero',
-    icon: 'XMR',
-    chain: 'Monero',
-    description: 'Connect to Monero network',
-    active: false
+    id: 'solflare',
+    name: 'Solflare',
+    icon: 'SF',
+    chain: 'Solana',
+    description: 'Connect to Solana blockchain',
+    active: true
   }
 ];
 
