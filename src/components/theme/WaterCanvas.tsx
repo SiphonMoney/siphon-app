@@ -123,7 +123,7 @@ export default function SoftHorizonCanvas() {
           const opacity = Math.max(0.1, Math.min(0.2, baseOpacity + opacityVariation));
           
           // Grey color instead of white
-          const greyValue = 180; // Medium grey
+          const greyValue = 50; // Medium grey
           ctx.fillStyle = `rgba(${greyValue}, ${greyValue}, ${greyValue}, ${opacity})`;
           ctx.fillText(char, col * asciiSpacing, row * asciiSpacing + asciiFontSize);
         }
