@@ -1,8 +1,22 @@
-import SwapInterface from "@/components/swap_face/SwapInterface";
-import Nav from "@/components/theme/Nav";
-import styles from "../hero.module.css";
+"use client";
 
-export default function DappPage() {
+import { useState } from "react";
+import ProSwapMode from "@/components/swap_face/ProSwapMode";
+import Nav from "@/components/theme/Nav";
+import DAppNav from "@/components/swap_face/DAppNav";
+import { WalletInfo } from "@/lib/walletManager";
+import styles from "../../hero.module.css";
+
+export default function ProPage() {
+  const [_walletConnected, setWalletConnected] = useState(false);
+  const [_connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
+
+  const handleWalletConnected = (wallet: WalletInfo) => {
+    setWalletConnected(true);
+    setConnectedWallet(wallet);
+    localStorage.setItem('siphon-connected-wallet', JSON.stringify(wallet));
+  };
+
   return (
     <div style={{ 
       minHeight: '100vh', 
@@ -10,6 +24,7 @@ export default function DappPage() {
       position: 'relative'
     }}>
       <Nav />
+      <DAppNav onWalletConnected={handleWalletConnected} />
       
       {/* Hero text, logo and subtitle - behind everything */}
       <div className={styles.heroContainer} style={{ zIndex: 1 }}>
@@ -71,7 +86,7 @@ export default function DappPage() {
           maxWidth: '1200px',
           pointerEvents: 'auto'
         }}>
-          <SwapInterface />
+          <ProSwapMode />
         </div>
       </div>
     </div>

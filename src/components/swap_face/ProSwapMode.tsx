@@ -4,11 +4,11 @@ import { useState } from "react";
 import "./ProSwapMode.css";
 
 interface ProSwapModeProps {
-  isLoaded: boolean;
+  isLoaded?: boolean;
 }
 
 export default function ProSwapMode({
-  isLoaded
+  isLoaded = true
 }: ProSwapModeProps) {
   const [swaps, setSwaps] = useState([{ 
     strategyType: "swap",

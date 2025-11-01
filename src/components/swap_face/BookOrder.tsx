@@ -1,23 +1,27 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import "./ProSwapMode.css";
 import PriceChart from "./extensions/PriceChart";
 import { OrderParams } from "../../lib/matchingEngine";
 import { WalletInfo } from "../../lib/walletManager";
 
 interface DarkPoolProps {
-  isLoaded: boolean;
-  walletConnected: boolean;
-  connectedWallet: WalletInfo | null;
-  onWalletConnected: (wallet: WalletInfo) => void;
+  isLoaded?: boolean;
+  walletConnected?: boolean;
+  connectedWallet?: WalletInfo | null;
+  onWalletConnected?: (wallet: WalletInfo) => void;
+}
+
+interface LocalTransaction {
+  id: string;
+  status: string;
 }
 
 export default function BookOrder({
-  isLoaded,
-  walletConnected,
-  connectedWallet,
-  onWalletConnected
+  isLoaded = true,
+  walletConnected = false,
+  connectedWallet = null
 }: DarkPoolProps) {
   const [selectedPair, setSelectedPair] = useState("SOL/USDC");
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
@@ -49,8 +53,8 @@ export default function BookOrder({
     try {
       const key = 'siphon-mock-transactions';
       const raw = localStorage.getItem(key);
-      const arr = raw ? JSON.parse(raw) : [];
-      const next = arr.map((t: any) => t.id === id ? { ...t, status } : t);
+      const arr: LocalTransaction[] = raw ? JSON.parse(raw) : [];
+      const next = arr.map((t) => t.id === id ? { ...t, status } : t);
       localStorage.setItem(key, JSON.stringify(next));
       window.dispatchEvent(new Event('siphon-tx-updated'));
     } catch {}
@@ -300,15 +304,15 @@ export default function BookOrder({
           
           {rightPanelView === 'order' ? (
           <div className="order-form-content">
-            <div className="order-type-selector">
+            <div className="action-selector-inline">
               <button 
-                className={`order-type-button ${orderType === 'buy' ? 'active' : ''}`}
+                className={`action-btn ${orderType === 'buy' ? 'active' : ''}`}
                 onClick={() => setOrderType('buy')}
               >
                 Buy
               </button>
               <button 
-                className={`order-type-button ${orderType === 'sell' ? 'active' : ''}`}
+                className={`action-btn ${orderType === 'sell' ? 'active' : ''}`}
                 onClick={() => setOrderType('sell')}
               >
                 Sell

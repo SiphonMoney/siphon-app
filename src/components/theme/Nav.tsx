@@ -22,10 +22,8 @@ export default function Nav() {
 
       {isHomePage && (
         <div className="nav-items">
-          <p>docs</p>
-          <p>about</p>
-          
-          <Link href="/dapp" className="nav-link">dapp</Link>
+          <Link href="/about" className="nav-link">about</Link>
+          <Link href="/dapp/darkpool" className="nav-link">dapp</Link>
         </div>
       )}
     </nav>

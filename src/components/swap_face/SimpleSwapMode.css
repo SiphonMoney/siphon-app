@@ -836,38 +836,6 @@
   padding: 1.25rem;
 }
 
-/* Order Type Selector Styles */
-.order-type-selector {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.order-type-button {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.02);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.order-type-button:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.order-type-button.active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: rgba(255, 255, 255, 1);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
-}
 
 /* Book Mode Styles - inherits from simple-mode styles */
 
