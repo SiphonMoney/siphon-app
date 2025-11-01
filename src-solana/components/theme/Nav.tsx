@@ -1,6 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function Nav() {
+  const pathname = usePathname();
+  const isHomePage = pathname === "/";
+
   return (
     <nav>
       <div className="logo">
@@ -14,12 +20,14 @@ export default function Nav() {
         </Link>
       </div>
 
-      <div className="nav-items">
-        <p>docs</p>
-        <p>about</p>
-        
-        <Link href="/dapp" className="nav-link">dapp</Link>
-      </div>
+      {isHomePage && (
+        <div className="nav-items">
+          <p>docs</p>
+          <p>about</p>
+          
+          <Link href="/dapp" className="nav-link">dapp</Link>
+        </div>
+      )}
     </nav>
   );
 }
