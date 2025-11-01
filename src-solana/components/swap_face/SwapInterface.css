@@ -28,7 +28,7 @@
   padding: 0.5rem;
   gap: 0.5rem;
   backdrop-filter: none;
-  z-index: 1000;
+  z-index: 1200;
   pointer-events: auto;
   box-shadow: none;
 }
@@ -38,7 +38,7 @@
   position: fixed;
   top: 2rem;
   right: 2rem;
-  z-index: 1000;
+  z-index: 1200;
   pointer-events: auto;
 }
 
@@ -479,6 +479,10 @@
   border: none;
   backdrop-filter: none;
   box-shadow: none;
+}
+
+.floating-mode-toggle a {
+  text-decoration: none;
 }
 
 .toggle-button {

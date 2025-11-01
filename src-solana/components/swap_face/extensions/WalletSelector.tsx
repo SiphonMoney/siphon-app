@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface WalletOption {
   id: string;
@@ -37,14 +37,32 @@ interface WalletSelectorProps {
 
 export default function WalletSelector({ onWalletSelect, className }: WalletSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const walletSelectorRef = useRef<HTMLDivElement>(null);
 
   const handleWalletClick = async (walletId: string) => {
     setIsOpen(false);
     onWalletSelect(walletId);
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (walletSelectorRef.current && !walletSelectorRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
   return (
-    <div className={`wallet-selector ${className}`}>
+    <div ref={walletSelectorRef} className={`wallet-selector ${className}`}>
       <button 
         className="wallet-selector-trigger"
         onClick={() => setIsOpen(!isOpen)}
