@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import BookOrder from "@/components/swap_face/BookOrder";
 import Nav from "@/components/theme/Nav";
 import DAppNav from "@/components/swap_face/DAppNav";
-import { WalletInfo } from "@/lib/walletManager";
+import DarkPoolInterface from "@/components/darkpool/DarkPoolInterface";
+import { WalletInfo, walletManager } from "@/lib/walletManager";
 import styles from "../../hero.module.css";
 
 export default function DarkPoolPage() {
@@ -15,6 +15,15 @@ export default function DarkPoolPage() {
     setWalletConnected(true);
     setConnectedWallet(wallet);
     localStorage.setItem('siphon-connected-wallet', JSON.stringify(wallet));
+  };
+
+  const handleDisconnect = () => {
+    if (connectedWallet) {
+      walletManager.disconnectWallet(connectedWallet.id);
+    }
+    setWalletConnected(false);
+    setConnectedWallet(null);
+    localStorage.removeItem('siphon-connected-wallet');
   };
 
   useEffect(() => {
@@ -97,13 +106,18 @@ export default function DarkPoolPage() {
         <div style={{
           width: '95vw',
           height: '85vh',
-          maxWidth: '1200px',
-          pointerEvents: 'auto'
+          maxWidth: '1400px',
+          pointerEvents: 'auto',
+          background: 'linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 100%)',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+          overflow: 'hidden'
         }}>
-          <BookOrder 
-            walletConnected={walletConnected}
-            connectedWallet={connectedWallet}
-            onWalletConnected={handleWalletConnected}
+          <DarkPoolInterface
+            walletAddress={connectedWallet?.address || null}
+            walletName={connectedWallet?.name}
+            onDisconnect={handleDisconnect}
           />
         </div>
       </div>
