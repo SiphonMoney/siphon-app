@@ -1,3 +1,5 @@
+"use client";
+
 import Nav from "@/components/theme/Nav";
 import AppFooter from "@/components/theme/AppFooter";
 import WaterCanvas from "@/components/theme/WaterCanvas";
@@ -71,86 +73,300 @@ export default function AboutPage() {
             lineHeight: '1.8',
             color: 'rgba(255, 255, 255, 0.85)'
           }}>
+            <p style={{ marginBottom: '1rem', fontSize: '18px', color: '#51cf66' }}>
+              <strong>Trade in the Shadows, Verify in the Light</strong>
+            </p>
             <p style={{ marginBottom: '1.5rem' }}>
-              Siphon Protocol is a privacy-first decentralized exchange designed for traders who value discretion and security above all else.
+              Siphon is the first truly private DEX where you can see your balances but others cannot. 
+              Built with Multi-Party Computation (MPC) on Solana, we solve the fundamental privacy paradox: 
+              traditional DEXs are completely transparent, while privacy mixers are completely opaque.
             </p>
             
             <h2 style={{
               fontSize: '24px',
               fontWeight: '600',
-              marginTop: '2rem',
+              marginTop: '2.5rem',
               marginBottom: '1rem',
               textTransform: 'uppercase',
-              letterSpacing: '1px'
+              letterSpacing: '1px',
+              color: '#667eea'
             }}>
-              Our Mission
+              The Innovation
             </h2>
             <p style={{ marginBottom: '1.5rem' }}>
-              To provide institutional-grade trading infrastructure with zero-knowledge privacy guarantees, enabling users to trade without revealing their positions, strategies, or identity.
+              We created <strong>user-decryptable encrypted balances</strong>. Your balances are encrypted on-chain 
+              using x25519 key exchange between your private key and the MPC&apos;s public key. Only you can decrypt 
+              your balance, while the MPC can validate operations without revealing data to anyone else.
+            </p>
+            
+            <div style={{
+              padding: '1.25rem',
+              background: 'rgba(102, 126, 234, 0.1)',
+              borderRadius: '8px',
+              border: '1px solid rgba(102, 126, 234, 0.3)',
+              marginBottom: '1.5rem'
+            }}>
+              <p style={{ margin: 0, fontSize: '14px', fontStyle: 'italic' }}>
+                <strong>Example:</strong> You deposit 100 SOL. It&apos;s encrypted on-chain with RescueCipher. 
+                You can instantly decrypt and see "100 SOL" in your UI. Other users? They see encrypted bytes. 
+                MPC can verify you have sufficient balance for trades without revealing the amount.
+              </p>
+            </div>
+            
+            <h2 style={{
+              fontSize: '24px',
+              fontWeight: '600',
+              marginTop: '2.5rem',
+              marginBottom: '1rem',
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              color: '#667eea'
+            }}>
+              Dark Pool Trading
+            </h2>
+            <p style={{ marginBottom: '1.5rem' }}>
+              Execute large orders without moving the market. Our dark pool matches orders privately using MPC, 
+              ensuring that order sizes, prices, and counterparties remain confidential until execution. 
+              Perfect for institutional traders, whales, and anyone who values privacy.
             </p>
             
             <h2 style={{
               fontSize: '24px',
               fontWeight: '600',
-              marginTop: '2rem',
+              marginTop: '2.5rem',
               marginBottom: '1rem',
               textTransform: 'uppercase',
-              letterSpacing: '1px'
+              letterSpacing: '1px',
+              color: '#667eea'
             }}>
               Key Features
             </h2>
             <ul style={{ 
               marginBottom: '1.5rem',
-              paddingLeft: '1.5rem',
+              paddingLeft: '0',
               listStyle: 'none'
             }}>
-              <li style={{ marginBottom: '0.75rem' }}>
-                <span style={{ color: '#51cf66', marginRight: '0.5rem' }}>▸</span>
-                Dark Pool Trading - Execute large orders without market impact
+              <li style={{ marginBottom: '1rem', paddingLeft: '1.5rem', position: 'relative' }}>
+                <span style={{ 
+                  position: 'absolute',
+                  left: 0,
+                  color: '#51cf66', 
+                  fontSize: '20px'
+                }}>🔒</span>
+                <strong>Encrypted Balances</strong><br/>
+                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  See your balances, nobody else can. Powered by x25519 + RescueCipher encryption.
+                </span>
               </li>
-              <li style={{ marginBottom: '0.75rem' }}>
-                <span style={{ color: '#51cf66', marginRight: '0.5rem' }}>▸</span>
-                Privacy-Preserving Order Matching - Your trades remain confidential
+              <li style={{ marginBottom: '1rem', paddingLeft: '1.5rem', position: 'relative' }}>
+                <span style={{ 
+                  position: 'absolute',
+                  left: 0,
+                  color: '#51cf66', 
+                  fontSize: '20px'
+                }}>🤐</span>
+                <strong>Private Order Matching</strong><br/>
+                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  Orders encrypted end-to-end. MPC matches orders without revealing details to anyone.
+                </span>
               </li>
-              <li style={{ marginBottom: '0.75rem' }}>
-                <span style={{ color: '#51cf66', marginRight: '0.5rem' }}>▸</span>
-                Multi-Chain Liquidity Aggregation - Access deep liquidity across chains
+              <li style={{ marginBottom: '1rem', paddingLeft: '1.5rem', position: 'relative' }}>
+                <span style={{ 
+                  position: 'absolute',
+                  left: 0,
+                  color: '#51cf66', 
+                  fontSize: '20px'
+                }}>⚡</span>
+                <strong>Solana Speed</strong><br/>
+                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  5-10 second MPC computations. Instant UI updates after decryption. No compromises.
+                </span>
               </li>
-              <li style={{ marginBottom: '0.75rem' }}>
-                <span style={{ color: '#51cf66', marginRight: '0.5rem' }}>▸</span>
-                Zero-Knowledge Proof Verification - Trustless and transparent
+              <li style={{ marginBottom: '1rem', paddingLeft: '1.5rem', position: 'relative' }}>
+                <span style={{ 
+                  position: 'absolute',
+                  left: 0,
+                  color: '#51cf66', 
+                  fontSize: '20px'
+                }}>🛡️</span>
+                <strong>Self-Custodial</strong><br/>
+                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  Your keys, your funds. We never hold custody. MPC only validates operations.
+                </span>
+              </li>
+              <li style={{ marginBottom: '1rem', paddingLeft: '1.5rem', position: 'relative' }}>
+                <span style={{ 
+                  position: 'absolute',
+                  left: 0,
+                  color: '#51cf66', 
+                  fontSize: '20px'
+                }}>🔍</span>
+                <strong>Verifiable Privacy</strong><br/>
+                <span style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  All operations are cryptographically provable. Privacy without sacrificing verifiability.
+                </span>
               </li>
             </ul>
             
             <h2 style={{
               fontSize: '24px',
               fontWeight: '600',
-              marginTop: '2rem',
+              marginTop: '2.5rem',
               marginBottom: '1rem',
               textTransform: 'uppercase',
-              letterSpacing: '1px'
+              letterSpacing: '1px',
+              color: '#667eea'
             }}>
-              Technology
+              How It Works
             </h2>
-            <p style={{ marginBottom: '1.5rem' }}>
-              Built on cutting-edge cryptographic protocols and powered by Solana's high-performance blockchain, Siphon combines the speed of centralized exchanges with the security and transparency of decentralized systems.
-            </p>
-            
-            <div style={{
-              marginTop: '2.5rem',
+            <div style={{ 
+              marginBottom: '1.5rem',
               padding: '1.5rem',
-              background: 'rgba(255, 255, 255, 0.05)',
+              background: 'rgba(0, 0, 0, 0.3)',
               borderRadius: '8px',
               border: '1px solid rgba(255, 255, 255, 0.1)'
             }}>
-              <p style={{ 
-                margin: 0,
-                fontSize: '14px',
-                color: 'rgba(255, 255, 255, 0.7)',
-                textAlign: 'center'
+              <ol style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                <li style={{ marginBottom: '0.75rem' }}>
+                  <strong>Initialize:</strong> Generate your x25519 keypair, encrypted with wallet signature in localStorage
+                </li>
+                <li style={{ marginBottom: '0.75rem' }}>
+                  <strong>Deposit:</strong> Transfer tokens to vault → MPC encrypts your balance → You decrypt and see it
+                </li>
+                <li style={{ marginBottom: '0.75rem' }}>
+                  <strong>Trade:</strong> Submit encrypted orders → MPC matches privately → Settlement on-chain
+                </li>
+                <li style={{ marginBottom: '0.75rem' }}>
+                  <strong>Withdraw:</strong> MPC verifies encrypted balance → Backend executes transfer → Tokens to wallet
+                </li>
+              </ol>
+            </div>
+            
+            <h2 style={{
+              fontSize: '24px',
+              fontWeight: '600',
+              marginTop: '2.5rem',
+              marginBottom: '1rem',
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              color: '#667eea'
+            }}>
+              Built With
+            </h2>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: '1rem',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{
+                padding: '1rem',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
               }}>
-                Trade without a trace. Your privacy is our protocol.
+                <div style={{ fontSize: '24px', marginBottom: '0.5rem' }}>⚡</div>
+                <strong>Solana</strong><br/>
+                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                  High-performance L1
+                </span>
+              </div>
+              <div style={{
+                padding: '1rem',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <div style={{ fontSize: '24px', marginBottom: '0.5rem' }}>🔐</div>
+                <strong>Arcium MPC</strong><br/>
+                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                  Confidential compute
+                </span>
+              </div>
+              <div style={{
+                padding: '1rem',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <div style={{ fontSize: '24px', marginBottom: '0.5rem' }}>🔑</div>
+                <strong>x25519</strong><br/>
+                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                  Key exchange
+                </span>
+              </div>
+              <div style={{
+                padding: '1rem',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <div style={{ fontSize: '24px', marginBottom: '0.5rem' }}>🔒</div>
+                <strong>Rescue</strong><br/>
+                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)' }}>
+                  Hash & cipher
+                </span>
+              </div>
+            </div>
+            
+            <div style={{
+              marginTop: '2.5rem',
+              padding: '2rem',
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15))',
+              borderRadius: '12px',
+              border: '1px solid rgba(102, 126, 234, 0.3)',
+              textAlign: 'center'
+            }}>
+              <p style={{ 
+                margin: '0 0 1rem 0',
+                fontSize: '20px',
+                fontWeight: '600',
+                color: '#ffffff'
+              }}>
+                Ready to Trade Privately?
               </p>
+              <p style={{ 
+                margin: '0 0 1.5rem 0',
+                fontSize: '14px',
+                color: 'rgba(255, 255, 255, 0.8)'
+              }}>
+                Connect your wallet and start trading without revealing your positions.
+              </p>
+              <a 
+                href="/dapp/darkpool" 
+                style={{
+                  display: 'inline-block',
+                  padding: '12px 32px',
+                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  color: 'white',
+                  textDecoration: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  fontSize: '16px',
+                  transition: 'transform 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                Launch Dark Pool →
+              </a>
+            </div>
+            
+            <div style={{
+              marginTop: '2rem',
+              padding: '1rem',
+              background: 'rgba(255, 255, 255, 0.03)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              fontSize: '12px',
+              color: 'rgba(255, 255, 255, 0.5)',
+              textAlign: 'center'
+            }}>
+              {/* <strong>Tagline:</strong> Trade without a trace. Your privacy is our protocol. */}
             </div>
           </div>
         </div>
