@@ -8,8 +8,8 @@ import { WalletInfo } from "@/lib/walletManager";
 import styles from "../../hero.module.css";
 
 export default function ProPage() {
-  const [_walletConnected, setWalletConnected] = useState(false);
-  const [_connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
+  const [, setWalletConnected] = useState(false);
+  const [, setConnectedWallet] = useState<WalletInfo | null>(null);
 
   const handleWalletConnected = (wallet: WalletInfo) => {
     setWalletConnected(true);

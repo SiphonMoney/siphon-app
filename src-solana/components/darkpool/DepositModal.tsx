@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from 'react';
-import { LAMPORTS_PER_SOL, USDC_DECIMALS } from '@/lib/constants';
+import { USDC_DECIMALS } from '@/lib/constants';
 import './darkpool.css';
 
 interface DepositModalProps {
@@ -25,7 +25,6 @@ export default function DepositModal({
   const [progress, setProgress] = useState<string>('');
 
   const tokenName = tokenType === 'base' ? 'SOL' : 'USDC';
-  const decimals = tokenType === 'base' ? 9 : USDC_DECIMALS;
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {

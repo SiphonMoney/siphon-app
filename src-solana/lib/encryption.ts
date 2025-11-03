@@ -82,8 +82,8 @@ export async function getOrCreateUserKeys(walletAddress: string, signMessage: (m
 export async function decryptBalance(
   encryptedBalances: number[][], // 4 chunks of 32 bytes
   nonce: bigint,
-  userPrivateKey: Uint8Array,
-  mxePublicKey: Uint8Array
+  _userPrivateKey: Uint8Array,
+  _mxePublicKey: Uint8Array
 ): Promise<EncryptedBalance> {
   // TODO: Implement actual decryption using RescueCipher
   // const sharedSecret = x25519.getSharedSecret(userPrivateKey, mxePublicKey);
@@ -116,8 +116,8 @@ export async function encryptOrderData(
     amount: number;
     price: number;
   },
-  userPrivateKey: Uint8Array,
-  mxePublicKey: Uint8Array
+  _userPrivateKey: Uint8Array,
+  _mxePublicKey: Uint8Array
 ): Promise<{ encrypted: number[][]; nonce: bigint }> {
   // TODO: Implement actual encryption using RescueCipher
   // const sharedSecret = x25519.getSharedSecret(userPrivateKey, mxePublicKey);
@@ -144,8 +144,8 @@ export async function encryptOrderData(
 export async function decryptOrderData(
   encryptedData: number[][], // 5 chunks
   nonce: bigint,
-  userPrivateKey: Uint8Array,
-  mxePublicKey: Uint8Array
+  _userPrivateKey: Uint8Array,
+  _mxePublicKey: Uint8Array
 ): Promise<{
   orderType: number;
   amount: number;

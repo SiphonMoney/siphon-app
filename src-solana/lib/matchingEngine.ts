@@ -29,7 +29,7 @@ export class MatchingEngineClient {
   }
 
   // Initialize the program (placeholder)
-  async initializeProgram(_wallet: unknown): Promise<void> {
+  async initializeProgram(): Promise<void> {
     try {
       console.log('Matching engine program initialized');
     } catch (error) {
@@ -40,7 +40,6 @@ export class MatchingEngineClient {
 
   // Submit an order to the matching engine
   async submitOrder(
-    _wallet: unknown,
     orderParams: OrderParams
   ): Promise<string> {
     try {
@@ -71,11 +70,7 @@ export class MatchingEngineClient {
   }
 
   // Check if user has sufficient balance
-  async checkUserBalance(
-    _userPubkey: string,
-    _mint: string,
-    _requiredAmount: number
-  ): Promise<boolean> {
+  async checkUserBalance(): Promise<boolean> {
     try {
       // TODO: Implement balance checking
       // This would involve checking the user's vault balance
@@ -87,10 +82,7 @@ export class MatchingEngineClient {
   }
 
   // Initialize user vault if it doesn't exist
-  async initializeUserVault(
-    _wallet: unknown,
-    _mint: string
-  ): Promise<string> {
+  async initializeUserVault(): Promise<string> {
     try {
       // TODO: Implement vault initialization
       // This would call the initialize_user_vault instruction

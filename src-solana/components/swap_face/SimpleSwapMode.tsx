@@ -94,13 +94,16 @@ export default function SimpleSwapMode({
     try {
       const amountLamports = Math.round(parseFloat(swapAmount) * LAMPORTS_PER_SOL);
       const toPubkey = new PublicKey(withdrawAddress);
-      let connection = await getWorkingMainnetConnection();
+      const connection = await getWorkingMainnetConnection();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       console.log('Using RPC endpoint:', (connection as any)._rpcEndpoint || 'custom');
       setLoadingLogs((l) => [...l, "Connected to RPC endpoint."]);
       setActiveLogIndex((i) => i + 1);
 
       // Try injected providers: prefer Solflare if present, otherwise Phantom
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const anyWindow = window as unknown as { solana?: any; solflare?: any };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const provider = anyWindow.solflare?.isSolflare ? anyWindow.solflare : (anyWindow.solana?.isPhantom ? anyWindow.solana : anyWindow.solana);
       if (!provider) {
         throw new Error('No Solana provider found. Please connect Phantom or Solflare.');
@@ -112,8 +115,7 @@ export default function SimpleSwapMode({
       }
       const fromPubkey = new PublicKey(provider.publicKey.toString());
 
-      let blockhash: string;
-      ({ blockhash } = await connection.getLatestBlockhash('finalized'));
+      const { blockhash } = await connection.getLatestBlockhash('finalized');
       setLoadingLogs((l) => [...l, "Fetched recent blockhash."]);
       setActiveLogIndex((i) => i + 1);
 
@@ -125,6 +127,7 @@ export default function SimpleSwapMode({
       setLoadingLogs((l) => [...l, "Confirming transaction..."]);
       setActiveLogIndex((i) => i + 1);
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sim = await (connection as any).simulateTransaction(tx, { sigVerify: false, commitment: 'processed' });
         if (sim?.value?.err) {
           setLoadingLogs((l) => [...l, `Confirmation failed: ${JSON.stringify(sim.value.err)}`]);
@@ -133,7 +136,7 @@ export default function SimpleSwapMode({
         }
         setLoadingLogs((l) => [...l, "Confirmation passed. Awaiting wallet approval..."]);
         setActiveLogIndex((i) => i + 1);
-      } catch (e) {
+      } catch {
         // If simulate endpoint blocks or fails, continue but warn in logs
         setLoadingLogs((l) => [...l, "Confirmation could not run (RPC). Continuing to wallet approval..."]);
         setActiveLogIndex((i) => i + 1);

@@ -108,7 +108,7 @@ export default function AboutPage() {
             }}>
               <p style={{ margin: 0, fontSize: '14px', fontStyle: 'italic' }}>
                 <strong>Example:</strong> You deposit 100 SOL. It&apos;s encrypted on-chain with RescueCipher. 
-                You can instantly decrypt and see "100 SOL" in your UI. Other users? They see encrypted bytes. 
+                You can instantly decrypt and see &quot;100 SOL&quot; in your UI. Other users? They see encrypted bytes. 
                 MPC can verify you have sufficient balance for trades without revealing the amount.
               </p>
             </div>

@@ -1,7 +1,7 @@
 // DarkPoolInterface.tsx - Main interface for dark pool trading
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useUserLedger } from '@/hooks/useUserLedger';
 import InitializeLedger from './InitializeLedger';
 import BalanceDisplay from './BalanceDisplay';
@@ -70,7 +70,7 @@ export default function DarkPoolInterface({
               <span className="step-number">1</span>
               <div className="step-content">
                 <h4>Connect Wallet</h4>
-                <p>Click "Connect Wallet" in the top navigation</p>
+                <p>Click &quot;Connect Wallet&quot; in the top navigation</p>
               </div>
             </div>
             <div className="step">

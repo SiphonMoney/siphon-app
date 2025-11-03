@@ -2,7 +2,6 @@
 "use client";
 
 import { useState } from 'react';
-import { randomBytes } from '@/lib/encryption';
 import './darkpool.css';
 
 interface InitializeLedgerProps {
