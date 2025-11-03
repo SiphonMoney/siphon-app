@@ -34,7 +34,9 @@ export default function DarkPoolPage() {
       try {
         // Check if wallet is actually connected in the browser
         if (typeof window !== 'undefined') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const solana = (window as any).solana;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const solflare = (window as any).solflare;
           
           // Check Phantom or Solflare

@@ -1,10 +1,10 @@
 // BalanceDisplay.tsx - Display encrypted balance with client-side decryption
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useBalance } from '@/hooks/useBalance';
 import { getOrCreateUserKeys } from '@/lib/encryption';
-import { LAMPORTS_PER_SOL, USDC_DECIMALS } from '@/lib/constants';
+import { USDC_DECIMALS } from '@/lib/constants';
 import './darkpool.css';
 
 interface BalanceDisplayProps {
@@ -21,7 +21,7 @@ export default function BalanceDisplay({
   const { balance, loading, error, refreshBalance } = useBalance(walletAddress);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     try {
       // Get user's encryption keys
       const { privateKey } = await getOrCreateUserKeys(walletAddress, signMessage);
@@ -34,11 +34,11 @@ export default function BalanceDisplay({
     } catch (err) {
       console.error('Failed to refresh balance:', err);
     }
-  };
+  }, [walletAddress, signMessage, refreshBalance, onRefresh]);
 
   useEffect(() => {
     handleRefresh();
-  }, [walletAddress]);
+  }, [handleRefresh]);
 
   const formatBalance = (amount: bigint, decimals: number = 9): string => {
     return (Number(amount) / Math.pow(10, decimals)).toFixed(4);

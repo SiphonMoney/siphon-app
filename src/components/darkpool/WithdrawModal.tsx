@@ -1,8 +1,8 @@
 // WithdrawModal.tsx - Modal for withdrawing tokens from dark pool (two-step process)
 "use client";
 
-import { useState, useEffect } from 'react';
-import { BACKEND_URL, LAMPORTS_PER_SOL, USDC_DECIMALS } from '@/lib/constants';
+import { useState } from 'react';
+import { BACKEND_URL, USDC_DECIMALS } from '@/lib/constants';
 import './darkpool.css';
 
 interface WithdrawModalProps {
@@ -15,7 +15,7 @@ type TokenType = 'base' | 'quote';
 type WithdrawStatus = 'idle' | 'verifying' | 'waiting_backend' | 'executing' | 'complete' | 'failed';
 
 export default function WithdrawModal({ 
-  walletAddress, 
+  walletAddress: _walletAddress, 
   onClose, 
   onSuccess 
 }: WithdrawModalProps) {
@@ -26,7 +26,6 @@ export default function WithdrawModal({
   const [error, setError] = useState<string | null>(null);
 
   const tokenName = tokenType === 'base' ? 'SOL' : 'USDC';
-  const decimals = tokenType === 'base' ? 9 : USDC_DECIMALS;
 
   const handleWithdraw = async () => {
     if (!amount || parseFloat(amount) <= 0) {

@@ -38,7 +38,7 @@ export default function ProSwapMode({
   type ToastStatus = 'pending' | 'success' | 'failed';
   interface ToastItem { id: number; title: string; message: string; status: ToastStatus }
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const pushToast = (title: string, message: string, status: ToastStatus = 'pending', ttlMs = 3500) => {
+  const _pushToast = (title: string, message: string, status: ToastStatus = 'pending', ttlMs = 3500) => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const toast: ToastItem = { id, title, message, status };
     setToasts((t) => [toast, ...t]);

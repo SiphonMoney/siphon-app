@@ -32,10 +32,10 @@ const fetchPriceData = async () => {
     
     const data = await response.json();
     
-    // Convert to our format and ensure chronological order
-    const sortedPrices = [...data.prices].sort((a: [number, number], b: [number, number]) => a[0] - b[0]);
-    
-    return sortedPrices.map((point: [number, number], index: number) => {
+      // Convert to our format and ensure chronological order
+      const sortedPrices = [...data.prices].sort((a: [number, number], b: [number, number]) => a[0] - b[0]);
+      
+      return sortedPrices.map((point: [number, number]) => {
       const date = new Date(point[0]);
       return {
         time: date.toISOString().slice(11, 16), // HH:MM format
@@ -80,11 +80,10 @@ const generateMockData = (pair: string, overrideBase?: number) => {
   return data;
 };
 
-export default function PriceChart({ pair, timeframe = '1h', leftLabel, leftValue, forceMock = false, mockBasePrice }: PriceChartProps) {
+export default function PriceChart({ pair, forceMock = false, mockBasePrice }: PriceChartProps) {
   const [priceData, setPriceData] = useState<PriceData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPrice, setCurrentPrice] = useState(0);
-  const [priceChange, setPriceChange] = useState(0);
   const hasFetched = useRef(false);
 
   useEffect(() => {
@@ -99,24 +98,13 @@ export default function PriceChart({ pair, timeframe = '1h', leftLabel, leftValu
           const data = generateMockData(pair, mockBasePrice);
           setPriceData(data);
           const latest = data[data.length - 1];
-          const earliest = data[0];
           setCurrentPrice(latest.price);
-          const change = earliest.price > 0 ? ((latest.price - earliest.price) / earliest.price) * 100 : 0;
-          setPriceChange(change);
         } else {
           const data = await fetchPriceData();
           setPriceData(data);
           if (data.length > 0) {
-            const startIndex = Math.max(0, data.length - 25);
             const latest = data[data.length - 1];
-            const earliest = data[startIndex];
             setCurrentPrice(latest.price);
-            if (earliest.price > 0 && latest.price > 0) {
-              const change = ((latest.price - earliest.price) / earliest.price) * 100;
-              setPriceChange(change);
-            } else {
-              setPriceChange(0);
-            }
           }
         }
         setIsLoading(false);
@@ -126,10 +114,7 @@ export default function PriceChart({ pair, timeframe = '1h', leftLabel, leftValu
         const data = generateMockData(pair, mockBasePrice);
         setPriceData(data);
         const latest = data[data.length - 1];
-        const earliest = data[0];
         setCurrentPrice(latest.price);
-        const change = earliest.price > 0 ? ((latest.price - earliest.price) / earliest.price) * 100 : 0;
-        setPriceChange(change);
         setIsLoading(false);
       }
     };
