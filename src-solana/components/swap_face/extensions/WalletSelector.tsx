@@ -17,7 +17,7 @@ const walletOptions: WalletOption[] = [
     name: 'Phantom',
     icon: 'PH',
     chain: 'Solana',
-    description: 'Connect to Solana blockchain',
+    description: '',
     active: true
   },
   {
@@ -25,7 +25,7 @@ const walletOptions: WalletOption[] = [
     name: 'Solflare',
     icon: 'SF',
     chain: 'Solana',
-    description: 'Connect to Solana blockchain',
+    description: '',
     active: true
   }
 ];
@@ -67,7 +67,7 @@ export default function WalletSelector({ onWalletSelect, className }: WalletSele
         className="wallet-selector-trigger"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className="wallet-icon">🔗</span>
+        <span className="wallet-icon"></span>
         <span className="wallet-text">Connect Wallet</span>
         <span className="dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
       </button>
