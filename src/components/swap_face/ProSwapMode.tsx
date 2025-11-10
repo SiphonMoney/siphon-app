@@ -1,15 +1,125 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, addEdge, useNodesState, useEdgesState, Connection, Node, Edge, Handle, Position } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import "./ProSwapMode.css";
 
 interface ProSwapModeProps {
   isLoaded?: boolean;
+  isDemoMode?: boolean;
 }
 
 export default function ProSwapMode({
-  isLoaded = true
+  isLoaded = true,
+  isDemoMode = false
 }: ProSwapModeProps) {
+  const [viewMode, setViewMode] = useState<'input' | 'blueprint'>('input');
+  const [showSubmenu, setShowSubmenu] = useState<{ type: 'deposit' | 'withdraw' | 'swap'; x: number; y: number } | null>(null);
+  
+  // React Flow state
+  const initialNodes: Node[] = [];
+  
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  
+  const onConnect = useCallback(
+    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges]
+  );
+  
+  const chains = ['Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
+  const dexes = ['Raydium', 'Jupiter', 'Orca', 'Serum', 'Meteora'];
+  
+  const submenuRef = useRef<HTMLDivElement>(null);
+  
+  const onAddNode = useCallback((type: 'deposit' | 'withdraw' | 'swap', chainOrDex?: string) => {
+    let label = '';
+    if (type === 'swap') {
+      label = chainOrDex 
+        ? `Swap on ${chainOrDex}`
+        : 'Swap';
+    } else {
+      label = chainOrDex 
+        ? `${type.charAt(0).toUpperCase() + type.slice(1)} from ${chainOrDex}`
+        : type.charAt(0).toUpperCase() + type.slice(1);
+    }
+    
+    const newNode: Node = {
+      id: `${type}-${chainOrDex || 'default'}-${Date.now()}`,
+      type: 'custom',
+      position: { 
+        x: Math.random() * 400 + 100, 
+        y: Math.random() * 300 + 200 
+      },
+      data: { 
+        label,
+        type,
+        chain: type !== 'swap' ? (chainOrDex || null) : null,
+        dex: type === 'swap' ? (chainOrDex || null) : null
+      },
+      style: {
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        color: 'white',
+        borderRadius: '8px',
+        padding: '1rem',
+        minWidth: '120px',
+        textAlign: 'center',
+        fontFamily: 'var(--font-source-code), monospace',
+        fontSize: '13px',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left
+    };
+    
+    setNodes((nds) => [...nds, newNode]);
+    setShowSubmenu(null);
+  }, [setNodes]);
+  
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (submenuRef.current && event.target instanceof Element && !submenuRef.current.contains(event.target)) {
+        setShowSubmenu(null);
+      }
+    };
+    
+    if (showSubmenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSubmenu]);
+  
+  const onActionClick = useCallback((type: 'deposit' | 'withdraw' | 'swap', event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const blueprintView = event.currentTarget.closest('.blueprint-view');
+    if (blueprintView) {
+      const viewRect = blueprintView.getBoundingClientRect();
+      setShowSubmenu({
+        type,
+        x: rect.left - viewRect.left,
+        y: rect.top - viewRect.top + rect.height + 4
+      });
+    }
+  }, []);
+  
+  const onDeleteNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+    setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+  }, [setNodes, setEdges]);
+  
+  const onExecuteStrategy = useCallback(() => {
+    console.log('Executing strategy with nodes:', nodes);
+    // TODO: Implement strategy execution logic
+  }, [nodes]);
+  
+  const onRestart = useCallback(() => {
+    setNodes([]);
+    setEdges([]);
+  }, [setNodes, setEdges]);
   const [swaps, setSwaps] = useState([{ 
     strategyType: "swap",
     from: "SOL", 
@@ -228,9 +338,28 @@ export default function ProSwapMode({
 
   return (
     <div className="pro-mode-wrapper">
+      {/* Mode Selector */}
+      <div className="pro-mode-selector">
+        <div className="mode-selector-container">
+          <button
+            className={`mode-selector-btn ${viewMode === 'input' ? 'active' : ''}`}
+            onClick={() => setViewMode('input')}
+          >
+            Input
+          </button>
+          <button
+            className={`mode-selector-btn ${viewMode === 'blueprint' ? 'active' : ''}`}
+            onClick={() => setViewMode('blueprint')}
+          >
+            Blueprint
+          </button>
+        </div>
+      </div>
+
       {/* Blurred Content */}
-      <div className="pro-mode-blur-overlay">
-        <div className={`three-columns ${isLoaded ? 'loaded' : ''}`}>
+      <div className={isDemoMode ? "pro-mode-content" : "pro-mode-blur-overlay"}>
+        {viewMode === 'input' ? (
+          <div className={`pro-mode-three-columns ${isLoaded ? 'loaded' : ''}`}>
       {/* Toasts - top right */}
       {toasts.length > 0 && (
         <div className="toast-container">
@@ -243,10 +372,10 @@ export default function ProSwapMode({
         </div>
       )}
       {/* Column 1: Deposit */}
-      <div className="column">
-        <div className="column-header">
-          <div className="step-number">1</div>
-          <h3 className="step-title" data-tooltip="Deposit your tokens to the Siphon Vault. Your funds are encrypted and anonymized using zero-knowledge proofs, making your transaction history completely private. Choose your blockchain network, select the token you want to deposit, enter the amount, and review the transaction details before proceeding.">Deposit</h3>
+      <div className="pro-mode-column">
+        <div className="pro-mode-column-header">
+          <div className="pro-mode-step-number">1</div>
+          <h3 className="pro-mode-step-title" data-tooltip="Deposit your tokens to the Siphon Vault. Your funds are encrypted and anonymized using zero-knowledge proofs, making your transaction history completely private. Choose your blockchain network, select the token you want to deposit, enter the amount, and review the transaction details before proceeding.">Deposit</h3>
         </div>
         
         <div className="deposit-section">
@@ -366,10 +495,10 @@ export default function ProSwapMode({
       </div>
 
       {/* Column 2: Strategy */}
-      <div className="column">
-        <div className="column-header">
-          <div className="step-number">2</div>
-          <h3 className="step-title" data-tooltip="Create complex trading strategies with multiple swaps. Each swap is executed privately within the vault using homomorphic encryption, ensuring your trading patterns remain completely anonymous. Build sophisticated trading strategies by adding multiple swaps. Each swap can convert different amounts of tokens, allowing for complex multi-step trading operations.">Strategy</h3>
+      <div className="pro-mode-column">
+        <div className="pro-mode-column-header">
+          <div className="pro-mode-step-number">2</div>
+          <h3 className="pro-mode-step-title" data-tooltip="Create complex trading strategies with multiple swaps. Each swap is executed privately within the vault using homomorphic encryption, ensuring your trading patterns remain completely anonymous. Build sophisticated trading strategies by adding multiple swaps. Each swap can convert different amounts of tokens, allowing for complex multi-step trading operations.">Strategy</h3>
         </div>
         
         <div className="column-content">
@@ -653,10 +782,10 @@ export default function ProSwapMode({
       </div>
 
       {/* Column 3: Withdraw */}
-      <div className="column">
-        <div className="column-header">
-          <div className="step-number">3</div>
-          <h3 className="step-title" data-tooltip="Withdraw your tokens to any wallet address. The withdrawal process uses advanced privacy techniques to break the transaction trail, ensuring your funds cannot be traced back to their original source. Configure multiple withdrawal outputs to different wallet addresses. Specify the exact amount and token for each output, enabling complex distribution strategies.">Withdraw</h3>
+      <div className="pro-mode-column">
+        <div className="pro-mode-column-header">
+          <div className="pro-mode-step-number">3</div>
+          <h3 className="pro-mode-step-title" data-tooltip="Withdraw your tokens to any wallet address. The withdrawal process uses advanced privacy techniques to break the transaction trail, ensuring your funds cannot be traced back to their original source. Configure multiple withdrawal outputs to different wallet addresses. Specify the exact amount and token for each output, enabling complex distribution strategies.">Withdraw</h3>
         </div>
         
         <div className="column-content">
@@ -790,22 +919,119 @@ export default function ProSwapMode({
         </button>
       </div>
     </div>
+        ) : (
+          <div className={`blueprint-view ${isLoaded ? 'loaded' : ''}`}>
+            <ReactFlowProvider>
+              <div className="blueprint-top-bar">
+                <div className="blueprint-actions">
+                  <span className="blueprint-actions-label">Add:</span>
+                  <button 
+                    className="blueprint-action-btn"
+                    onClick={(e) => onActionClick('deposit', e)}
+                  >
+                    Deposit
+                  </button>
+                  <button 
+                    className="blueprint-action-btn"
+                    onClick={(e) => onActionClick('swap', e)}
+                  >
+                    Swap
+                  </button>
+                  <button 
+                    className="blueprint-action-btn"
+                    onClick={(e) => onActionClick('withdraw', e)}
+                  >
+                    Withdraw
+                  </button>
+                </div>
+                <div className="blueprint-actions-right">
+                  <button 
+                    className="blueprint-restart-btn"
+                    onClick={onRestart}
+                    disabled={nodes.length === 0}
+                    title="Clear canvas"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                      <path d="M21 3v5h-5" />
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                      <path d="M3 21v-5h5" />
+                    </svg>
+                  </button>
+                  <button 
+                    className="blueprint-execute-btn"
+                    onClick={onExecuteStrategy}
+                    disabled={nodes.length === 0}
+                  >
+                    Execute Strategy
+                  </button>
+                </div>
+              </div>
+              
+              {showSubmenu && (
+                <div 
+                  ref={submenuRef}
+                  className="blueprint-submenu"
+                  style={{
+                    left: `${showSubmenu.x}px`,
+                    top: `${showSubmenu.y}px`
+                  }}
+                >
+                  <div className="blueprint-submenu-header">
+                    {showSubmenu.type === 'deposit' 
+                      ? 'Deposit from:' 
+                      : showSubmenu.type === 'withdraw'
+                      ? 'Withdraw to:'
+                      : 'Swap on:'}
+                  </div>
+                  {(showSubmenu.type === 'swap' ? dexes : chains).map((item) => (
+                    <button
+                      key={item}
+                      className="blueprint-submenu-item"
+                      onClick={() => onAddNode(showSubmenu.type, item)}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onNodesDelete={(nodesToDelete) => {
+                  nodesToDelete.forEach((node) => onDeleteNode(node.id));
+                }}
+                nodeTypes={{
+                  custom: ({ data }) => (
+                    <div style={{ position: 'relative', padding: '0.5rem' }}>
+                      <Handle type="target" position={Position.Left} style={{ background: 'rgba(255, 255, 255, 0.3)' }} />
+                      <div>{data.label}</div>
+                      <Handle type="source" position={Position.Right} style={{ background: 'rgba(255, 255, 255, 0.3)' }} />
+                    </div>
+                  )
+                }}
+                defaultEdgeOptions={{
+                  style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 },
+                  type: 'smoothstep'
+                }}
+                fitView
+                proOptions={{ hideAttribution: true }}
+                deleteKeyCode="Delete"
+              >
+                <Background />
+                <Controls />
+                <MiniMap />
+              </ReactFlow>
+            </ReactFlowProvider>
+          </div>
+        )}
       </div>
 
-      {/* Coming Soon Overlay */}
-      <div className="pro-mode-coming-soon-overlay">
-        <div className="pro-mode-coming-soon-content">
-          <span className="coming-soon-icon">⚡</span>
-          <h3>Pro Mode Coming Soon</h3>
-          <p>Advanced multi-chain swap aggregation with privacy-preserving order batching</p>
-          <div className="pro-mode-features">
-            <div className="feature-item">✓ Multi-step swap strategies</div>
-            <div className="feature-item">✓ Cross-chain liquidity routing</div>
-            <div className="feature-item">✓ Encrypted batch execution</div>
-            <div className="feature-item">✓ Zero-knowledge proof verification</div>
-          </div>
-        </div>
-      </div>
+
     </div>
   );
 }

@@ -65,34 +65,7 @@ export default function DarkPoolInterface({
     return (
       <div className="darkpool-interface">
         <div className="welcome-screen">
-          <div className="welcome-header">
-            <h1>Dark Pools</h1>
-            <div className="privacy-badge">
-              <p>Confidential, institutional, liquidity pools for large trades without market impact.</p>
-            </div>            
-            <div className="features-preview">
-              <div className="feature-item">
-                <div className="feature-content">
-                  <h4>Encrypted Balances</h4>
-                  <p>Your balances are encrypted on-chain using MPC</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <div className="feature-content">
-                  <h4>Private Trading</h4>
-                  <p>Orders matched privately without revealing details</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <div className="feature-content">
-                  <h4>Fast Settlement</h4>
-                  <p>Orders settle within seconds on Solana</p>
-                </div>
-              </div>
-            </div>
 
-    
-          </div>
 
           <div className="connect-button-wrapper">
             <ConnectButton 
