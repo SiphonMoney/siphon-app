@@ -208,7 +208,7 @@ export default function DarkPoolPage() {
                     whiteSpace: 'nowrap',
                     flex: '0 0 50%'
                   }}>
-                    ✅ TESTNET READY - DARKPOOL IS NOW AVAILABLE ON TESTNET FOR TESTING ⚠️
+                    ⚠️ SWITCH YOUR WALLET TO DEVNET BEFORE CONNECTING - SET YOUR WALLET NETWORK TO DEVNET IN WALLET SETTINGS ⚠️
                   </div>
                   <div style={{
                     fontFamily: 'var(--font-source-code), monospace',
@@ -220,7 +220,7 @@ export default function DarkPoolPage() {
                     whiteSpace: 'nowrap',
                     flex: '0 0 50%'
                   }}>
-                    ✅ TESTNET READY - DARKPOOL IS NOW AVAILABLE ON TESTNET FOR TESTING ⚠️
+                    ⚠️ SWITCH YOUR WALLET TO DEVNET BEFORE CONNECTING - SET YOUR WALLET NETWORK TO DEVNET IN WALLET SETTINGS ⚠️
                   </div>
                 </div>
               </div>
@@ -575,34 +575,7 @@ export default function DarkPoolPage() {
                         e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.4)';
                       }}
                     >
-                      Launch Testnet
-                    </button>
-                    <button
-                      onClick={handleDemoClick}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        borderRadius: '8px',
-                        padding: '0.875rem 2.5rem',
-                        color: 'white',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        fontFamily: 'var(--font-source-code), monospace'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                      }}
-                    >
-                      Demo
+                      launch on testnet
                     </button>
                   </div>
                 </div>
