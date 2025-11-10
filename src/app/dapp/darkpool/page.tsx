@@ -539,34 +539,7 @@ export default function DarkPoolPage() {
                         fontFamily: 'var(--font-source-code), monospace'
                       }}>Orders are batched and matched efficiently, reducing slippage and improving execution quality.</p>
                     </div>
-                    <div style={{
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '10px',
-                      padding: '1.25rem',
-                      transition: 'all 0.3s ease'
-                    }}>
-                      <div style={{
-                        fontSize: '24px',
-                        marginBottom: '0.75rem',
-                        filter: 'brightness(0) invert(1)'
-                      }}>⚡</div>
-                      <h4 style={{
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        color: 'rgba(255, 255, 255, 0.95)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        marginBottom: '0.5rem',
-                        fontFamily: 'var(--font-source-code), monospace'
-                      }}>Encrypted Execution</h4>
-                      <p style={{
-                        fontSize: '11px',
-                        color: 'rgba(255, 255, 255, 0.7)',
-                        lineHeight: '1.5',
-                        fontFamily: 'var(--font-source-code), monospace'
-                      }}>All order data is encrypted using homomorphic encryption before matching and execution.</p>
-                    </div>
+                   
                   </div>
 
                   {/* Action Buttons */}
