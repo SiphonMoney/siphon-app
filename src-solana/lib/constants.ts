@@ -1,5 +1,6 @@
 // constants.ts - Environment and configuration constants
 import { PublicKey } from '@solana/web3.js';
+import { BN } from '@coral-xyz/anchor';
 
 // Environment variables
 export const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com';
@@ -14,6 +15,9 @@ export const USDC_MINT_DEVNET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 // Constants
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 export const USDC_DECIMALS = 6;
+
+// Scale factor for 2 decimal places (per new_inmp.md)
+export const SCALE_FACTOR = 100;
 
 // MXE Account PDA derivation
 export function getMXEAccAddress(programId: PublicKey): PublicKey {
@@ -34,18 +38,42 @@ export function getUserLedgerAddress(userPubkey: PublicKey, programId: PublicKey
 }
 
 // Order Account PDA derivation
-export function getOrderAccountAddress(orderId: bigint, userPubkey: PublicKey, programId: PublicKey): PublicKey {
-  const orderIdBuffer = Buffer.alloc(8);
-  orderIdBuffer.writeBigUInt64LE(orderId);
-  
+// NOTE: Per new_inmp.md, order account only uses orderId, NOT user pubkey
+export function getOrderAccountAddress(orderId: BN, programId: PublicKey): PublicKey {
   const [orderPDA] = PublicKey.findProgramAddressSync(
     [
       Buffer.from('order'),
-      orderIdBuffer,
-      userPubkey.toBuffer(),
+      orderId.toArrayLike(Buffer, 'le', 8),
     ],
     programId
   );
   return orderPDA;
+}
+
+// Orderbook State PDA derivation
+export function getOrderbookAddress(programId: PublicKey): PublicKey {
+  const [orderbookPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from('order_book_state')],
+    programId
+  );
+  return orderbookPDA;
+}
+
+// Vault PDA derivation
+export function getVaultAddress(mint: PublicKey, programId: PublicKey): PublicKey {
+  const [vaultPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from('vault'), mint.toBuffer()],
+    programId
+  );
+  return vaultPDA;
+}
+
+// Vault Authority PDA derivation
+export function getVaultAuthorityAddress(programId: PublicKey): PublicKey {
+  const [vaultAuthorityPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from('vault_authority')],
+    programId
+  );
+  return vaultAuthorityPDA;
 }
 
