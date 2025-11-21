@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@arcium-hq/client": "^0.1.0",
     "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.9",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/web3.js": "^1.98.4",
     "@solflare-wallet/sdk": "^1.4.2",

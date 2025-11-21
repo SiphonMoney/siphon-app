@@ -9,6 +9,73 @@
  * import { x25519, RescueCipher } from '@arcium-hq/client';
  */
 
+// Try to import from @arcium-hq/client
+/* eslint-disable @typescript-eslint/no-var-requires */
+let arciumClient: Record<string, unknown> | null = null;
+try {
+  if (typeof require !== 'undefined') {
+    arciumClient = require('@arcium-hq/client') as Record<string, unknown>;
+  }
+} catch {
+  console.warn('⚠️  @arcium-hq/client not installed, using placeholder encryption');
+  arciumClient = null;
+}
+/* eslint-enable @typescript-eslint/no-var-requires */
+
+// ===== x25519 Key Exchange Interface =====
+
+export const x25519 = arciumClient?.x25519 || {
+  utils: {
+    randomSecretKey: (): Uint8Array => {
+      return crypto.getRandomValues(new Uint8Array(32));
+    }
+  },
+  getPublicKey: (_privateKey: Uint8Array): Uint8Array => {
+    console.warn('⚠️  Using placeholder x25519.getPublicKey');
+    // This is NOT real x25519 curve multiplication - placeholder only
+    return crypto.getRandomValues(new Uint8Array(32));
+  },
+  getSharedSecret: (_privateKey: Uint8Array, _publicKey: Uint8Array): Uint8Array => {
+    console.warn('⚠️  Using placeholder x25519.getSharedSecret');
+    // This is NOT real x25519 ECDH - placeholder only
+    return crypto.getRandomValues(new Uint8Array(32));
+  }
+};
+
+// ===== RescueCipher Interface =====
+
+export class RescueCipher {
+  private sharedSecret: Uint8Array;
+  
+  constructor(sharedSecret: Uint8Array) {
+    this.sharedSecret = sharedSecret;
+  }
+  
+  encrypt(data: bigint[], nonce: Uint8Array): Uint8Array[] {
+    if (arciumClient?.RescueCipher) {
+      const cipher = new (arciumClient.RescueCipher as any)(this.sharedSecret);
+      return cipher.encrypt(data, nonce);
+    }
+    
+    console.warn('⚠️  Using placeholder RescueCipher.encrypt');
+    // Placeholder: Return mock encrypted data (32 bytes per field)
+    return data.map(() => crypto.getRandomValues(new Uint8Array(32)));
+  }
+  
+  decrypt(ciphertext: number[][] | Uint8Array[], nonce: Uint8Array): bigint[] {
+    if (arciumClient?.RescueCipher) {
+      const cipher = new (arciumClient.RescueCipher as any)(this.sharedSecret);
+      return cipher.decrypt(ciphertext, nonce);
+    }
+    
+    console.warn('⚠️  Using placeholder RescueCipher.decrypt');
+    // Placeholder: Return mock decrypted data
+    return ciphertext.map(() => BigInt(0));
+  }
+}
+
+export { RescueCipher as RescueCipherType };
+
 export interface UserKeys {
   privateKey: Uint8Array;
   publicKey: Uint8Array;
