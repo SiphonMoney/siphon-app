@@ -439,7 +439,8 @@ export async function createMatchingEngineClient(
   const wallet = { publicKey: userKeypair.publicKey, signTransaction: async (tx: Transaction) => tx, signAllTransactions: async (txs: Transaction[]) => txs };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const provider = new AnchorProvider(connection, wallet as any, { commitment: 'confirmed' });
-  const program = new Program(programIdl, PROGRAM_ID, provider);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const program = new Program(programIdl as any, PROGRAM_ID, provider as any);
 
   return new MatchingEngineClient(program, provider, userPrivateKey, userPublicKey);
 }
