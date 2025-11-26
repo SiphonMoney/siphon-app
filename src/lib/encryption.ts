@@ -22,7 +22,15 @@ try {
 
 // ===== x25519 Key Exchange Interface =====
 
-export const x25519 = arciumClient?.x25519 || {
+interface X25519Interface {
+  utils: {
+    randomSecretKey: () => Uint8Array;
+  };
+  getPublicKey: (privateKey: Uint8Array) => Uint8Array;
+  getSharedSecret: (privateKey: Uint8Array, publicKey: Uint8Array) => Uint8Array;
+}
+
+const placeholderX25519: X25519Interface = {
   utils: {
     randomSecretKey: (): Uint8Array => {
       return crypto.getRandomValues(new Uint8Array(32));
@@ -44,6 +52,10 @@ export const x25519 = arciumClient?.x25519 || {
     return crypto.getRandomValues(new Uint8Array(32));
   }
 };
+
+export const x25519: X25519Interface = (arciumClient?.x25519 && typeof arciumClient.x25519 === 'object' && arciumClient.x25519 !== null
+  ? (arciumClient.x25519 as X25519Interface)
+  : placeholderX25519);
 
 // ===== RescueCipher Interface =====
 
