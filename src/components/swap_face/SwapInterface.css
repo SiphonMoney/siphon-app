@@ -811,16 +811,19 @@
 
   /* Adjust wallet connector position and make smaller */
   .top-right-wallet-connector {
-    top: 0.5rem;
-    right: 0.5rem;
+    top: 0.5rem !important;
+    right: 0.5rem !important;
+    position: fixed !important;
+    z-index: 1200 !important;
   }
 
   .top-connect-button .wallet-selector-trigger,
   .top-connect-button .connected-wallet-button {
-    min-width: 80px;
-    height: 28px;
-    padding: 0.2rem 0.4rem;
-    font-size: 8px;
+    min-width: 80px !important;
+    height: 28px !important;
+    padding: 0.2rem 0.4rem !important;
+    font-size: 8px !important;
+    box-sizing: border-box !important;
   }
 
   /* Adjust container sizes for mobile */
@@ -856,16 +859,19 @@
   }
 
   .top-right-wallet-connector {
-    top: 0.4rem;
-    right: 0.4rem;
+    top: 0.4rem !important;
+    right: 0.4rem !important;
+    position: fixed !important;
+    z-index: 1200 !important;
   }
 
   .top-connect-button .wallet-selector-trigger,
   .top-connect-button .connected-wallet-button {
-    min-width: 70px;
-    height: 24px;
-    padding: 0.15rem 0.3rem;
-    font-size: 7px;
+    min-width: 70px !important;
+    height: 24px !important;
+    padding: 0.15rem 0.3rem !important;
+    font-size: 7px !important;
+    box-sizing: border-box !important;
   }
 
   .siphon-window.pro-mode,
@@ -953,6 +959,15 @@
     visibility: visible !important;
     opacity: 1 !important;
   }
+  
+  /* Darkpool action button - full width on mobile */
+  .darkpool-action-buttons {
+    flex-direction: column !important;
+  }
+  
+  .darkpool-action-buttons button {
+    width: 100% !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1001,5 +1016,14 @@
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
+  }
+  
+  /* Darkpool action button - full width on mobile */
+  .darkpool-action-buttons {
+    flex-direction: column !important;
+  }
+  
+  .darkpool-action-buttons button {
+    width: 100% !important;
   }
 }

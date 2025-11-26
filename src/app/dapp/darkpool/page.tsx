@@ -27,7 +27,6 @@ export default function DarkPoolPage() {
   const [walletConnected, setWalletConnected] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
   const [isCheckingWallet, setIsCheckingWallet] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const handleWalletConnected = (wallet: WalletInfo) => {
     console.log('Wallet connected:', wallet);
@@ -45,9 +44,6 @@ export default function DarkPoolPage() {
     localStorage.removeItem('siphon-connected-wallet');
   };
 
-  const handleDemoClick = () => {
-    setIsDemoMode(true);
-  };
 
   useEffect(() => {
     // Check for actual wallet connection, not just localStorage
@@ -177,7 +173,7 @@ export default function DarkPoolPage() {
           position: 'relative'
         }}>
           {/* Marquee Disclaimer */}
-          {!isDemoMode && (
+          {(
             <>
               <style>{marqueeKeyframes}</style>
               <style>{`
@@ -242,13 +238,12 @@ export default function DarkPoolPage() {
           
           {/* Blurred content */}
           <div style={{
-            filter: isDemoMode ? 'none' : 'blur(3px)',
-            pointerEvents: isDemoMode ? 'auto' : 'none',
+            filter: 'blur(3px)',
+            pointerEvents: 'none',
             width: '100%',
             height: '100%',
-            opacity: isDemoMode ? 1 : 0,
-            transition: isDemoMode ? 'opacity 0.4s ease-in, filter 0.4s ease-in' : 'none',
-            animation: isDemoMode ? undefined : 'fadeIn 0.8s ease-in 0.1s forwards',
+            opacity: 0,
+            animation: 'fadeIn 0.8s ease-in 0.1s forwards',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
@@ -300,7 +295,7 @@ export default function DarkPoolPage() {
           </div>
           
           {/* Presentation Module Overlay */}
-          {!isDemoMode && (
+          {(
             <div className="dapp-presentation-overlay" style={{
               position: 'absolute',
               top: 0,
@@ -612,7 +607,7 @@ export default function DarkPoolPage() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div style={{
+                  <div className="darkpool-action-buttons" style={{
                     display: 'flex',
                     gap: '1rem',
                     marginTop: 'auto',
@@ -620,26 +615,10 @@ export default function DarkPoolPage() {
                     borderTop: '1px solid rgba(255, 255, 255, 0.1)'
                   }}>
                     <button
-                      disabled
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '8px',
-                        padding: '0.875rem 2.5rem',
-                        color: 'rgba(255, 255, 255, 0.4)',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: 'not-allowed',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        fontFamily: 'var(--font-source-code), monospace',
-                        opacity: 0.5
+                      onClick={() => {
+                        // Handle launch action
+                        console.log('Launch darkpool');
                       }}
-                    >
-                      Launch
-                    </button>
-                    <button
-                      onClick={handleDemoClick}
                       style={{
                         background: 'rgba(255, 255, 255, 0.1)',
                         border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -652,7 +631,8 @@ export default function DarkPoolPage() {
                         transition: 'all 0.3s ease',
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px',
-                        fontFamily: 'var(--font-source-code), monospace'
+                        fontFamily: 'var(--font-source-code), monospace',
+                        width: 'auto'
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
@@ -663,7 +643,7 @@ export default function DarkPoolPage() {
                         e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                       }}
                     >
-                      Demo
+                      Launch
                     </button>
                   </div>
                 </div>
