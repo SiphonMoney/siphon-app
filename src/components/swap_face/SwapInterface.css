@@ -791,3 +791,189 @@
   color: rgba(255, 255, 255, 0.8);
   font-family: var(--font-source-code), monospace;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  /* Make mode toggle smaller and positioned lower */
+  .floating-mode-toggle {
+    top: 3rem;
+    left: 50%;
+    transform: translateX(-50%);
+    gap: 0.25rem;
+    padding: 0.25rem;
+  }
+
+  .toggle-button {
+    padding: 0.5rem 0.75rem;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+  }
+
+  /* Adjust wallet connector position and make smaller */
+  .top-right-wallet-connector {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+
+  .top-connect-button .wallet-selector-trigger,
+  .top-connect-button .connected-wallet-button {
+    min-width: 80px;
+    height: 28px;
+    padding: 0.2rem 0.4rem;
+    font-size: 8px;
+  }
+
+  /* Adjust container sizes for mobile */
+  .siphon-container {
+    padding: 1rem;
+  }
+
+  .siphon-window.pro-mode,
+  .siphon-window.darkpool-mode {
+    width: 100vw;
+    height: calc(100vh - 100px);
+    margin-top: 100px;
+  }
+
+  /* Hide absolute balance sidebar on mobile */
+  .absolute-balance-sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Even smaller on very small screens */
+  .floating-mode-toggle {
+    top: 4rem;
+    gap: 0.2rem;
+    padding: 0.2rem;
+  }
+
+  .toggle-button {
+    padding: 0.4rem 0.6rem;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+  }
+
+  .top-right-wallet-connector {
+    top: 0.4rem;
+    right: 0.4rem;
+  }
+
+  .top-connect-button .wallet-selector-trigger,
+  .top-connect-button .connected-wallet-button {
+    min-width: 70px;
+    height: 24px;
+    padding: 0.15rem 0.3rem;
+    font-size: 7px;
+  }
+
+  .siphon-window.pro-mode,
+  .siphon-window.darkpool-mode {
+    width: 100vw;
+    height: calc(100vh - 90px);
+    margin-top: 90px;
+  }
+}
+
+/* DApp Page Mobile Styles */
+@media (max-width: 768px) {
+  .dapp-sidebar {
+    display: none !important;
+  }
+  
+  .dapp-main-content {
+    padding: 1.5rem !important;
+  }
+  
+  .dapp-container {
+    width: 100vw !important;
+    height: calc(100vh - 100px) !important;
+    margin-top: 100px !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  /* Marquee positioned over content */
+  .dapp-marquee {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    z-index: 3000 !important;
+    height: auto !important;
+  }
+  
+  .dapp-container {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .dapp-presentation-overlay {
+    padding-top: 50px !important;
+    margin-top: 0 !important;
+  }
+  
+  .dapp-presentation-box {
+    width: 95% !important;
+    max-width: 100vw !important;
+    height: calc(100% - 50px) !important;
+    margin-top: 0 !important;
+    overflow-x: hidden !important;
+  }
+  
+  .dapp-main-content {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    width: 100% !important;
+  }
+  
+  /* Feature cards as rows on mobile */
+  .dapp-feature-cards {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dapp-container {
+    height: calc(100vh - 90px) !important;
+    margin-top: 90px !important;
+  }
+  
+  .dapp-marquee {
+    top: 0 !important;
+  }
+  
+  .dapp-presentation-overlay {
+    padding-top: 35px !important;
+    margin-top: 0 !important;
+  }
+  
+  .dapp-presentation-box {
+    width: 98% !important;
+    max-width: 100vw !important;
+    height: calc(100% - 40px) !important;
+    margin-top: 0 !important;
+    overflow-x: hidden !important;
+  }
+  
+  .dapp-main-content {
+    padding: 1rem !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    width: 100% !important;
+  }
+  
+  .dapp-feature-cards {
+    gap: 0.5rem !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}

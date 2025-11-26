@@ -1481,6 +1481,7 @@
     flex-direction: column;
     gap: 12px;
     padding: 16px;
+    margin-top: 0;
   }
 
   .header-right {
@@ -1493,11 +1494,11 @@
   }
 
   .action-buttons {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .info-section {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .orders-table {
@@ -1547,7 +1548,7 @@
   }
 
   .features-preview {
-    flex-direction: column;
+    grid-template-columns: 1fr !important;
     gap: 16px;
   }
 }

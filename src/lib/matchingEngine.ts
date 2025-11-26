@@ -28,7 +28,13 @@ import {
   getMXEPublicKeyWithRetry,
 } from './arciumHelpers';
 import { x25519, RescueCipher } from './encryption';
-import { awaitEvent, awaitOrderCheckResult, extractBalanceNonce } from './eventListeners';
+import { 
+  awaitEvent, 
+  awaitOrderCheckResult, 
+  extractBalanceNonce,
+  UserLedgerDepositedEvent,
+  UserLedgerWithdrawVerifiedSuccessEvent
+} from './eventListeners';
 import { randomBytes } from 'crypto';
 
 // Types for matching engine integration
@@ -160,7 +166,7 @@ export class MatchingEngineClient {
       const vaultAuthorityPDA = getVaultAuthorityAddress(PROGRAM_ID);
       const userTokenAccount = await getAssociatedTokenAddress(mint, user.publicKey);
 
-      const eventPromise = awaitEvent(this.program, 'userLedgerDepositedEvent');
+      const eventPromise = awaitEvent<UserLedgerDepositedEvent>(this.program, 'userLedgerDepositedEvent');
 
       const tx = await this.program.methods
         .depositToLedger(
@@ -360,7 +366,7 @@ export class MatchingEngineClient {
       const vaultPDA = getVaultAddress(mint, PROGRAM_ID);
       const vaultAuthorityPDA = getVaultAuthorityAddress(PROGRAM_ID);
 
-      const resultPromise = awaitEvent(this.program, 'userLedgerWithdrawVerifiedSuccessEvent');
+      const resultPromise = awaitEvent<UserLedgerWithdrawVerifiedSuccessEvent>(this.program, 'userLedgerWithdrawVerifiedSuccessEvent');
 
       const tx = await this.program.methods
         .withdrawFromLedgerVerify(

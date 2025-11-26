@@ -6,6 +6,7 @@ import Nav from "@/components/theme/Nav";
 import DAppNav from "@/components/swap_face/DAppNav";
 import { WalletInfo } from "@/lib/walletManager";
 import styles from "../../hero.module.css";
+import "@/components/swap_face/SwapInterface.css";
 
 const marqueeKeyframes = `
   @keyframes marquee {
@@ -100,7 +101,7 @@ export default function ProPage() {
         justifyContent: 'center',
         pointerEvents: 'none'
       }}>
-        <div style={{
+        <div className="dapp-container" style={{
           width: '98vw',
           height: '90vh',
           maxWidth: 'none',
@@ -111,7 +112,19 @@ export default function ProPage() {
           {!isDemoMode && (
             <>
               <style>{marqueeKeyframes}</style>
-              <div style={{
+              <style>{`
+                @media (max-width: 768px) {
+                  .dapp-marquee {
+                    top: 13px !important;
+                  }
+                }
+                @media (max-width: 480px) {
+                  .dapp-marquee {
+                    top: 13px !important;
+                  }
+                }
+              `}</style>
+              <div className="dapp-marquee" style={{
                 position: 'absolute',
                 top: '60px',
                 left: 0,
@@ -166,15 +179,18 @@ export default function ProPage() {
             width: '100%',
             height: '100%',
             opacity: isDemoMode ? 1 : 0,
-            transition: 'opacity 0.4s ease-in, filter 0.4s ease-in',
-            animation: isDemoMode ? undefined : 'fadeIn 0.8s ease-in 0.1s forwards'
+            transition: isDemoMode ? 'opacity 0.4s ease-in, filter 0.4s ease-in' : 'none',
+            animation: isDemoMode ? undefined : 'fadeIn 0.8s ease-in 0.1s forwards',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}>
             <ProSwapMode isDemoMode={isDemoMode} />
           </div>
           
           {/* Presentation Module Overlay */}
           {!isDemoMode && (
-          <div style={{
+          <div className="dapp-presentation-overlay" style={{
             position: 'absolute',
             top: 0,
             left: 0,
@@ -190,7 +206,7 @@ export default function ProPage() {
             opacity: 0,
             animation: 'fadeIn 0.8s ease-in 0.3s forwards'
             }}>
-              <div style={{
+              <div className="dapp-presentation-box" style={{
                 background: 'rgba(0, 0, 0, 0.95)',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
                 borderRadius: '16px',
@@ -205,8 +221,8 @@ export default function ProPage() {
                 transform: 'translateY(20px)',
                 animation: 'fadeInUp 0.6s ease-out 0.5s forwards'
               }}>
-                {/* Sidebar */}
-                <div style={{
+                {/* Sidebar - Hidden on mobile */}
+                <div className="dapp-sidebar" style={{
                   width: '240px',
                   background: 'rgba(255, 255, 255, 0.02)',
                   borderRight: '1px solid rgba(255, 255, 255, 0.1)',
@@ -330,7 +346,7 @@ export default function ProPage() {
                 </div>
 
                 {/* Main Content */}
-                <div style={{
+                <div className="dapp-main-content" style={{
                   flex: 1,
                   padding: '2.5rem 3rem',
                   display: 'flex',
@@ -365,7 +381,7 @@ export default function ProPage() {
                   </div>
 
                   {/* Feature Cards */}
-                  <div style={{
+                  <div className="dapp-feature-cards" style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr 1fr 1fr 1fr',
                     gap: '1rem',
@@ -504,7 +520,7 @@ export default function ProPage() {
                     }}>
                       How It Works
                     </h3>
-                    <div style={{
+                    <div className="dapp-feature-cards" style={{
                       display: 'grid',
                       gridTemplateColumns: '1fr 1fr 1fr 1fr',
                       gap: '1.5rem'
