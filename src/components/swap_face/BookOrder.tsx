@@ -110,7 +110,7 @@ export default function BookOrder({
       const orderParams: OrderParams = {
         amount: parseFloat(orderAmount),
         price: parseFloat(orderPrice),
-        orderType,
+        orderType: orderType === 'buy' ? 0 : 1, // Convert 'buy'/'sell' to 0/1
         orderId: Date.now() // Simple order ID generation
       };
 
