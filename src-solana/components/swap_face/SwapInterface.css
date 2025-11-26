@@ -928,7 +928,10 @@
   .dapp-main-content {
     max-width: 100% !important;
     overflow-x: hidden !important;
+    overflow-y: auto !important;
     width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
   
   /* Feature cards as rows on mobile */
@@ -937,9 +940,18 @@
     grid-template-columns: 1fr !important;
     gap: 0.75rem !important;
     max-width: 100% !important;
-    overflow-x: hidden !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
     width: 100% !important;
     margin-bottom: 1.5rem !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  .dapp-feature-cards > div {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 }
 
@@ -974,8 +986,20 @@
   }
   
   .dapp-feature-cards {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
     gap: 0.5rem !important;
     max-width: 100% !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
     width: 100% !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  .dapp-feature-cards > div {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 }
