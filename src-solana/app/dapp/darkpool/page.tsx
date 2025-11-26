@@ -27,6 +27,7 @@ export default function DarkPoolPage() {
   const [walletConnected, setWalletConnected] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
   const [isCheckingWallet, setIsCheckingWallet] = useState(true);
+  const [isLaunched, setIsLaunched] = useState(false);
 
   const handleWalletConnected = (wallet: WalletInfo) => {
     console.log('Wallet connected:', wallet);
@@ -173,7 +174,7 @@ export default function DarkPoolPage() {
           position: 'relative'
         }}>
           {/* Marquee Disclaimer */}
-          {(
+          {!isLaunched && (
             <>
               <style>{marqueeKeyframes}</style>
               <style>{`
@@ -238,12 +239,13 @@ export default function DarkPoolPage() {
           
           {/* Blurred content */}
           <div style={{
-            filter: 'blur(3px)',
-            pointerEvents: 'none',
+            filter: isLaunched ? 'none' : 'blur(3px)',
+            pointerEvents: isLaunched ? 'auto' : 'none',
             width: '100%',
             height: '100%',
-            opacity: 0,
-            animation: 'fadeIn 0.8s ease-in 0.1s forwards',
+            opacity: isLaunched ? 1 : 0,
+            transition: isLaunched ? 'opacity 0.4s ease-in, filter 0.4s ease-in' : 'none',
+            animation: isLaunched ? undefined : 'fadeIn 0.8s ease-in 0.1s forwards',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
@@ -295,7 +297,7 @@ export default function DarkPoolPage() {
           </div>
           
           {/* Presentation Module Overlay */}
-          {(
+          {!isLaunched && (
             <div className="dapp-presentation-overlay" style={{
               position: 'absolute',
               top: 0,
@@ -616,8 +618,7 @@ export default function DarkPoolPage() {
                   }}>
                     <button
                       onClick={() => {
-                        // Handle launch action
-                        console.log('Launch darkpool');
+                        setIsLaunched(true);
                       }}
                       style={{
                         background: 'rgba(255, 255, 255, 0.1)',
