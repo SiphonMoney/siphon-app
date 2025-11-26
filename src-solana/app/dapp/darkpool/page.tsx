@@ -6,6 +6,7 @@ import DAppNav from "@/components/swap_face/DAppNav";
 import DarkPoolInterface from "@/components/darkpool/DarkPoolInterface";
 import { WalletInfo, walletManager } from "@/lib/walletManager";
 import styles from "../../hero.module.css";
+import "@/components/swap_face/SwapInterface.css";
 
 const marqueeKeyframes = `
   @keyframes marquee {
@@ -149,7 +150,7 @@ export default function DarkPoolPage() {
           left: 0,
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0, 0, 0, 0.97)',
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
           zIndex: 2,
           pointerEvents: 'none'
         }}
@@ -168,25 +169,37 @@ export default function DarkPoolPage() {
         justifyContent: 'center',
         pointerEvents: 'none'
       }}>
-        <div style={{
+        <div className="dapp-container" style={{
           width: '98vw',
           height: '90vh',
           maxWidth: 'none',
           pointerEvents: 'auto',
           position: 'relative'
         }}>
-          {/* Marquee Disclaimer - Blue */}
+          {/* Marquee Disclaimer */}
           {!isDemoMode && (
             <>
               <style>{marqueeKeyframes}</style>
-              <div style={{
+              <style>{`
+                @media (max-width: 768px) {
+                  .dapp-marquee {
+                    top: 13px !important;
+                  }
+                }
+                @media (max-width: 480px) {
+                  .dapp-marquee {
+                    top: 13px !important;
+                  }
+                }
+              `}</style>
+              <div className="dapp-marquee" style={{
                 position: 'absolute',
                 top: '60px',
                 left: 0,
                 right: 0,
                 zIndex: 3000,
-                background: 'rgba(59, 130, 246, 0.15)',
-                borderBottom: '1px solid rgba(59, 130, 246, 0.3)',
+                background: 'rgba(33, 150, 243, 0.15)',
+                borderBottom: '1px solid rgba(33, 150, 243, 0.3)',
                 padding: '0.5rem 0',
                 overflow: 'hidden',
                 whiteSpace: 'nowrap',
@@ -201,26 +214,26 @@ export default function DarkPoolPage() {
                   <div style={{
                     fontFamily: 'var(--font-source-code), monospace',
                     fontSize: '11px',
-                    color: 'rgba(59, 130, 246, 0.9)',
+                    color: 'rgba(33, 150, 243, 0.9)',
                     textTransform: 'uppercase',
                     letterSpacing: '1px',
                     fontWeight: '600',
                     whiteSpace: 'nowrap',
                     flex: '0 0 50%'
                   }}>
-                    ⚠️ SWITCH YOUR WALLET TO DEVNET BEFORE CONNECTING - SET YOUR WALLET NETWORK TO DEVNET IN WALLET SETTINGS ⚠️
+                    🔵 AVAILABLE IN TESTNET - NEXT STAGE: MAINNET LAUNCH COMING SOON 🔵
                   </div>
                   <div style={{
                     fontFamily: 'var(--font-source-code), monospace',
                     fontSize: '11px',
-                    color: 'rgba(59, 130, 246, 0.9)',
+                    color: 'rgba(33, 150, 243, 0.9)',
                     textTransform: 'uppercase',
                     letterSpacing: '1px',
                     fontWeight: '600',
                     whiteSpace: 'nowrap',
                     flex: '0 0 50%'
                   }}>
-                    ⚠️ SWITCH YOUR WALLET TO DEVNET BEFORE CONNECTING - SET YOUR WALLET NETWORK TO DEVNET IN WALLET SETTINGS ⚠️
+                    🔵 AVAILABLE IN TESTNET - NEXT STAGE: MAINNET LAUNCH COMING SOON 🔵
                   </div>
                 </div>
               </div>
@@ -240,60 +253,55 @@ export default function DarkPoolPage() {
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <div 
-              key={`darkpool-${isDemoMode}`}
-              style={{
-                opacity: isDemoMode ? 1 : 0,
-                transition: isDemoMode ? 'opacity 0.5s ease-in 0.1s' : 'none',
-                animation: isDemoMode ? undefined : 'fadeIn 0.6s ease-in 0.3s forwards',
-                width: '100%',
-                height: '100%'
-              }}
-            >
-              {isCheckingWallet ? (
+            {isCheckingWallet ? (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'rgba(255, 255, 255, 0.9)'
+            }}>
+              <div style={{ 
+                textAlign: 'center',
+                fontFamily: 'var(--font-source-code), monospace'
+              }}>
                 <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'rgba(255, 255, 255, 0.9)'
-                }}>
-                  <div style={{ 
-                    textAlign: 'center',
-                    fontFamily: 'var(--font-source-code), monospace'
-                  }}>
-                    <div style={{
-                      border: '2px solid rgba(255, 255, 255, 0.1)',
-                      borderTop: '2px solid rgba(255, 255, 255, 0.6)',
-                      borderRadius: '50%',
-                      width: '40px',
-                      height: '40px',
-                      animation: 'spin 1s linear infinite',
-                      margin: '0 auto 16px'
-                    }} />
-                    <p style={{
-                      fontSize: '14px',
-                      letterSpacing: '0.5px',
-                      textTransform: 'uppercase',
-                      color: 'rgba(255, 255, 255, 0.7)'
-                    }}>Checking wallet connection...</p>
-                  </div>
-                </div>
-              ) : (
+                  border: '2px solid rgba(255, 255, 255, 0.1)',
+                  borderTop: '2px solid rgba(255, 255, 255, 0.6)',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  animation: 'spin 1s linear infinite',
+                  margin: '0 auto 16px'
+                }} />
+                <p style={{
+                  fontSize: '14px',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                  color: 'rgba(255, 255, 255, 0.7)'
+                }}>Checking wallet connection...</p>
+              </div>
+            </div>
+            ) : (
+              <div style={{
+                width: '100%',
+                height: '100%',
+                paddingTop: '40px'
+              }}>
                 <DarkPoolInterface
                   walletAddress={walletAddress}
                   walletName={connectedWallet?.name}
                   onDisconnect={handleDisconnect}
                   onWalletConnected={handleWalletConnected}
                 />
-              )}
-            </div>
+              </div>
+            )}
           </div>
           
           {/* Presentation Module Overlay */}
           {!isDemoMode && (
-            <div style={{
+            <div className="dapp-presentation-overlay" style={{
               position: 'absolute',
               top: 0,
               left: 0,
@@ -309,7 +317,7 @@ export default function DarkPoolPage() {
               opacity: 0,
               animation: 'fadeIn 0.8s ease-in 0.3s forwards'
             }}>
-              <div style={{
+              <div className="dapp-presentation-box" style={{
                 background: 'rgba(0, 0, 0, 0.95)',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
                 borderRadius: '16px',
@@ -324,8 +332,8 @@ export default function DarkPoolPage() {
                 transform: 'translateY(20px)',
                 animation: 'fadeInUp 0.6s ease-out 0.5s forwards'
               }}>
-                {/* Sidebar */}
-                <div style={{
+                {/* Sidebar - Hidden on mobile */}
+                <div className="dapp-sidebar" style={{
                   width: '240px',
                   background: 'rgba(255, 255, 255, 0.02)',
                   borderRight: '1px solid rgba(255, 255, 255, 0.1)',
@@ -364,12 +372,11 @@ export default function DarkPoolPage() {
                       letterSpacing: '0.3px',
                       maxWidth: '200px'
                     }}>
-                                  Confidential, institutional, liquidity pools for large trades without market impact.
-
+                      Private order matching with encrypted balances and MPC-based settlement
                     </p>
                   </div>
 
-                  {/* Pools Summary */}
+                  {/* Chains & Protocols Summary */}
                   <div style={{
                     marginTop: 'auto',
                     paddingTop: '2rem',
@@ -384,28 +391,63 @@ export default function DarkPoolPage() {
                       fontFamily: 'var(--font-source-code), monospace',
                       marginBottom: '1rem'
                     }}>
-                      Available Pools
+                      Supported Networks
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.4rem',
+                      marginBottom: '1.5rem'
+                    }}>
+                      {['Solana', 'Ethereum', 'BASE'].map((chain) => {
+                        const isHighlighted = chain === 'Solana';
+                        return (
+                          <div key={chain} style={{
+                            background: isHighlighted ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                            border: isHighlighted ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.05)',
+                            borderRadius: '4px',
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '9px',
+                            color: isHighlighted ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)',
+                            fontFamily: 'var(--font-source-code), monospace',
+                            fontWeight: '500',
+                            opacity: isHighlighted ? 1 : 0.5
+                          }}>
+                            {chain}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: 'rgba(255, 255, 255, 0.95)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      fontFamily: 'var(--font-source-code), monospace',
+                      marginBottom: '1rem'
+                    }}>
+                      Features
                     </div>
                     <div style={{
                       display: 'flex',
                       flexWrap: 'wrap',
                       gap: '0.4rem'
                     }}>
-                      {['SOL/USDC', 'SOL/USDT', 'SOL/ZEC', 'SOL/XMR', 'SOL/ETH', 'SOL/BTC'].map((pool) => {
-                        const isActive = pool === 'SOL/USDC';
+                      {['MPC Encryption', 'Private Matching', 'On-Chain Settlement'].map((feature) => {
                         return (
-                          <div key={pool} style={{
-                            background: isActive ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                            border: isActive ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.05)',
+                          <div key={feature} style={{
+                            background: 'rgba(255, 255, 255, 0.02)',
+                            border: '1px solid rgba(255, 255, 255, 0.05)',
                             borderRadius: '4px',
                             padding: '0.25rem 0.5rem',
                             fontSize: '9px',
-                            color: isActive ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)',
+                            color: 'rgba(255, 255, 255, 0.5)',
                             fontFamily: 'var(--font-source-code), monospace',
                             fontWeight: '500',
-                            opacity: isActive ? 1 : 0.5
+                            opacity: 0.5
                           }}>
-                            {pool}
+                            {feature}
                           </div>
                         );
                       })}
@@ -414,7 +456,7 @@ export default function DarkPoolPage() {
                 </div>
 
                 {/* Main Content */}
-                <div style={{
+                <div className="dapp-main-content" style={{
                   flex: 1,
                   padding: '2.5rem 3rem',
                   display: 'flex',
@@ -444,12 +486,12 @@ export default function DarkPoolPage() {
                       letterSpacing: '0.3px',
                       maxWidth: '700px'
                     }}>
-                      Trade large orders privately through encrypted order batching. Your transactions are matched anonymously using Arcium MPC computation, ensuring complete privacy and preventing front-running.
+                      Trade with complete privacy through encrypted balances and private order matching. Your orders are matched using Multi-Party Computation (MPC) without revealing your trading intentions or balances.
                     </p>
                   </div>
 
                   {/* Feature Cards */}
-                  <div style={{
+                  <div className="dapp-feature-cards" style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr 1fr 1fr 1fr',
                     gap: '1rem',
@@ -475,13 +517,69 @@ export default function DarkPoolPage() {
                         letterSpacing: '0.5px',
                         marginBottom: '0.5rem',
                         fontFamily: 'var(--font-source-code), monospace'
-                      }}>Arcium MPC</h4>
+                      }}>Encrypted Balances</h4>
                       <p style={{
                         fontSize: '11px',
                         color: 'rgba(255, 255, 255, 0.7)',
                         lineHeight: '1.5',
                         fontFamily: 'var(--font-source-code), monospace'
-                      }}>Orders are matched using Arcium Multi-Party Computation, ensuring complete anonymity and privacy.</p>
+                      }}>Your balances are encrypted on-chain using MPC, ensuring complete privacy even from the protocol itself.</p>
+                    </div>
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <div style={{
+                        fontSize: '24px',
+                        marginBottom: '0.75rem',
+                        filter: 'brightness(0) invert(1)'
+                      }}>🎯</div>
+                      <h4 style={{
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: 'rgba(255, 255, 255, 0.95)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        marginBottom: '0.5rem',
+                        fontFamily: 'var(--font-source-code), monospace'
+                      }}>Private Matching</h4>
+                      <p style={{
+                        fontSize: '11px',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        lineHeight: '1.5',
+                        fontFamily: 'var(--font-source-code), monospace'
+                      }}>Orders are matched privately using MPC without revealing your trading intentions or order details.</p>
+                    </div>
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <div style={{
+                        fontSize: '24px',
+                        marginBottom: '0.75rem',
+                        filter: 'brightness(0) invert(1)'
+                      }}>⚡</div>
+                      <h4 style={{
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: 'rgba(255, 255, 255, 0.95)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        marginBottom: '0.5rem',
+                        fontFamily: 'var(--font-source-code), monospace'
+                      }}>Fast Settlement</h4>
+                      <p style={{
+                        fontSize: '11px',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        lineHeight: '1.5',
+                        fontFamily: 'var(--font-source-code), monospace'
+                      }}>Orders settle within seconds using Solana's high-speed blockchain for instant execution.</p>
                     </div>
                     <div style={{
                       background: 'rgba(255, 255, 255, 0.03)',
@@ -503,43 +601,14 @@ export default function DarkPoolPage() {
                         letterSpacing: '0.5px',
                         marginBottom: '0.5rem',
                         fontFamily: 'var(--font-source-code), monospace'
-                      }}>No Front-Running</h4>
+                      }}>Zero Leakage</h4>
                       <p style={{
                         fontSize: '11px',
                         color: 'rgba(255, 255, 255, 0.7)',
                         lineHeight: '1.5',
                         fontFamily: 'var(--font-source-code), monospace'
-                      }}>Private order matching prevents front-running and market manipulation by keeping orders hidden.</p>
+                      }}>No front-running, no MEV, no information leakage. Your trades remain completely private.</p>
                     </div>
-                    <div style={{
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '10px',
-                      padding: '1.25rem',
-                      transition: 'all 0.3s ease'
-                    }}>
-                      <div style={{
-                        fontSize: '24px',
-                        marginBottom: '0.75rem',
-                        filter: 'brightness(0) invert(1)'
-                      }}>📊</div>
-                      <h4 style={{
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        color: 'rgba(255, 255, 255, 0.95)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        marginBottom: '0.5rem',
-                        fontFamily: 'var(--font-source-code), monospace'
-                      }}>Batch Matching</h4>
-                      <p style={{
-                        fontSize: '11px',
-                        color: 'rgba(255, 255, 255, 0.7)',
-                        lineHeight: '1.5',
-                        fontFamily: 'var(--font-source-code), monospace'
-                      }}>Orders are batched and matched efficiently, reducing slippage and improving execution quality.</p>
-                    </div>
-                   
                   </div>
 
                   {/* Action Buttons */}
@@ -551,13 +620,32 @@ export default function DarkPoolPage() {
                     borderTop: '1px solid rgba(255, 255, 255, 0.1)'
                   }}>
                     <button
-                      onClick={handleDemoClick}
+                      disabled
                       style={{
-                        background: 'rgba(59, 130, 246, 0.2)',
-                        border: '1px solid rgba(59, 130, 246, 0.4)',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
                         borderRadius: '8px',
                         padding: '0.875rem 2.5rem',
-                        color: 'rgba(59, 130, 246, 1)',
+                        color: 'rgba(255, 255, 255, 0.4)',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'not-allowed',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        fontFamily: 'var(--font-source-code), monospace',
+                        opacity: 0.5
+                      }}
+                    >
+                      Launch
+                    </button>
+                    <button
+                      onClick={handleDemoClick}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: '8px',
+                        padding: '0.875rem 2.5rem',
+                        color: 'white',
                         fontSize: '13px',
                         fontWeight: '600',
                         cursor: 'pointer',
@@ -567,15 +655,15 @@ export default function DarkPoolPage() {
                         fontFamily: 'var(--font-source-code), monospace'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
-                        e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.6)';
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
-                        e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                       }}
                     >
-                      launch on testnet
+                      Demo
                     </button>
                   </div>
                 </div>

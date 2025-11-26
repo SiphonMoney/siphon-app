@@ -138,7 +138,7 @@ export default function DarkPoolInterface({
       )}
       
       {/* Header */}
-      <div className="darkpool-main-header" style={{ marginTop: DEMO_MODE ? '35px' : '0' }}>
+      <div className="darkpool-main-header" style={{ marginTop: DEMO_MODE ? '35px' : '40px' }}>
         <div className="header-left">
           <h2>Dark Pool</h2>
         </div>
