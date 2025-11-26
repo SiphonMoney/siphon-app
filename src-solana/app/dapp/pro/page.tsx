@@ -522,7 +522,7 @@ export default function ProPage() {
                     </h3>
                     <div className="dapp-feature-cards" style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 1fr 1fr 1fr',
+                      gridTemplateColumns: '1fr 1fr 1fr',
                       gap: '1.5rem'
                     }}>
                       <div style={{
@@ -546,13 +546,13 @@ export default function ProPage() {
                           letterSpacing: '0.3px',
                           fontFamily: 'var(--font-source-code), monospace',
                           marginBottom: '0.25rem'
-                        }}>Design</div>
+                        }}>Setup</div>
                         <div style={{
                           fontSize: '11px',
                           color: 'rgba(255, 255, 255, 0.7)',
                           lineHeight: '1.4',
                           fontFamily: 'var(--font-source-code), monospace'
-                        }}>Build your strategy using the visual node editor</div>
+                        }}>Build your strategy using the visual node editor and configure parameters, chains, and execution conditions</div>
                       </div>
                       <div style={{
                         display: 'flex',
@@ -567,35 +567,6 @@ export default function ProPage() {
                           fontFamily: 'var(--font-source-code), monospace',
                           marginBottom: '0.25rem'
                         }}>02</div>
-                        <div style={{
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: 'rgba(255, 255, 255, 0.95)',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.3px',
-                          fontFamily: 'var(--font-source-code), monospace',
-                          marginBottom: '0.25rem'
-                        }}>Configure</div>
-                        <div style={{
-                          fontSize: '11px',
-                          color: 'rgba(255, 255, 255, 0.7)',
-                          lineHeight: '1.4',
-                          fontFamily: 'var(--font-source-code), monospace'
-                        }}>Set parameters, chains, and execution conditions</div>
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        gap: '0.5rem'
-                      }}>
-                        <div style={{
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          color: 'rgba(255, 255, 255, 0.5)',
-                          fontFamily: 'var(--font-source-code), monospace',
-                          marginBottom: '0.25rem'
-                        }}>03</div>
                         <div style={{
                           fontSize: '12px',
                           fontWeight: '600',
@@ -624,7 +595,7 @@ export default function ProPage() {
                           color: 'rgba(255, 255, 255, 0.5)',
                           fontFamily: 'var(--font-source-code), monospace',
                           marginBottom: '0.25rem'
-                        }}>04</div>
+                        }}>03</div>
                         <div style={{
                           fontSize: '12px',
                           fontWeight: '600',

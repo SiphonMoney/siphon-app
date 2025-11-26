@@ -440,7 +440,7 @@ export async function createMatchingEngineClient(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const provider = new AnchorProvider(connection, wallet as any, { commitment: 'confirmed' });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const program = new Program(programIdl as any, PROGRAM_ID, provider as any);
+  const program = new Program(programIdl as any, provider);
 
   return new MatchingEngineClient(program, provider, userPrivateKey, userPublicKey);
 }
