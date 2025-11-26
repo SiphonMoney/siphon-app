@@ -1,7 +1,7 @@
 // arciumHelpers.ts - Arcium MPC integration utilities
 // Based on new_inmp.md specification
 
-import { PublicKey, Connection } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { AnchorProvider } from '@coral-xyz/anchor';
 import { BN } from '@coral-xyz/anchor';
 
@@ -11,17 +11,15 @@ import { BN } from '@coral-xyz/anchor';
  */
 
 // Try to import from @arcium-hq/client, fallback to placeholders
-/* eslint-disable @typescript-eslint/no-var-requires */
 let arciumClient: Record<string, unknown> | null = null;
 try {
-  if (typeof require !== 'undefined') {
-    arciumClient = require('@arcium-hq/client') as Record<string, unknown>;
-  }
+  // Use require for compatibility (needed for @arcium-hq/client package)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  arciumClient = require('@arcium-hq/client') as Record<string, unknown>;
 } catch {
   console.warn('⚠️  @arcium-hq/client not installed, using placeholder implementations');
   arciumClient = null;
 }
-/* eslint-enable @typescript-eslint/no-var-requires */
 
 // ===== MPC Account Derivations =====
 
@@ -191,7 +189,7 @@ export async function awaitComputationFinalization(
         console.log('✅ Computation finalized');
         return;
       }
-    } catch (error) {
+    } catch {
       // Continue polling
     }
     await new Promise(resolve => setTimeout(resolve, 1000));

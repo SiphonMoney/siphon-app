@@ -247,7 +247,7 @@ export class MatchingEngineClient {
       const userLedgerPDA = getUserLedgerAddress(user.publicKey, PROGRAM_ID);
       const clusterAccount = getClusterAccAddress(this.clusterOffset);
 
-      const checkTx = await this.program.methods
+      await this.program.methods
         .submitOrderCheck(
           Array.from(ciphertext[0]),
           Array.from(ciphertext[1]),
@@ -426,10 +426,12 @@ export async function createMatchingEngineClient(
   userKeypair: Keypair,
   userPrivateKey: Uint8Array,
   userPublicKey: Uint8Array,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   programIdl: any
 ): Promise<MatchingEngineClient> {
   const connection = new Connection(SOLANA_RPC, 'confirmed');
   const wallet = { publicKey: userKeypair.publicKey, signTransaction: async (tx: Transaction) => tx, signAllTransactions: async (txs: Transaction[]) => txs };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const provider = new AnchorProvider(connection, wallet as any, { commitment: 'confirmed' });
   const program = new Program(programIdl, PROGRAM_ID, provider);
 
