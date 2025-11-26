@@ -933,11 +933,13 @@
   
   /* Feature cards as rows on mobile */
   .dapp-feature-cards {
+    display: grid !important;
     grid-template-columns: 1fr !important;
     gap: 0.75rem !important;
     max-width: 100% !important;
     overflow-x: hidden !important;
     width: 100% !important;
+    margin-bottom: 1.5rem !important;
   }
 }
 

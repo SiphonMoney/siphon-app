@@ -579,7 +579,7 @@ export default function DarkPoolPage() {
                         color: 'rgba(255, 255, 255, 0.7)',
                         lineHeight: '1.5',
                         fontFamily: 'var(--font-source-code), monospace'
-                      }}>Orders settle within seconds using Solana's high-speed blockchain for instant execution.</p>
+                      }}>Orders settle within seconds using Solana&apos;s high-speed blockchain for instant execution.</p>
                     </div>
                     <div style={{
                       background: 'rgba(255, 255, 255, 0.03)',
