@@ -249,6 +249,7 @@ export function extractBalanceNonce(event: UserLedgerDepositedEvent | UserLedger
  * Helper to check if event indicates success
  */
 export function isSuccessEvent(event: DarkPoolEvent): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return 'success' in event ? (event as any).success === true : !('timestamp' in event && Object.keys(event).length <= 3);
 }
 

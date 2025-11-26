@@ -10,17 +10,15 @@
  */
 
 // Try to import from @arcium-hq/client
-/* eslint-disable @typescript-eslint/no-var-requires */
 let arciumClient: Record<string, unknown> | null = null;
 try {
-  if (typeof require !== 'undefined') {
-    arciumClient = require('@arcium-hq/client') as Record<string, unknown>;
-  }
+  // Use require for compatibility (needed for @arcium-hq/client package)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  arciumClient = require('@arcium-hq/client') as Record<string, unknown>;
 } catch {
   console.warn('⚠️  @arcium-hq/client not installed, using placeholder encryption');
   arciumClient = null;
 }
-/* eslint-enable @typescript-eslint/no-var-requires */
 
 // ===== x25519 Key Exchange Interface =====
 
@@ -30,14 +28,19 @@ export const x25519 = arciumClient?.x25519 || {
       return crypto.getRandomValues(new Uint8Array(32));
     }
   },
-  getPublicKey: (_privateKey: Uint8Array): Uint8Array => {
+  getPublicKey: (privateKey: Uint8Array): Uint8Array => {
     console.warn('⚠️  Using placeholder x25519.getPublicKey');
     // This is NOT real x25519 curve multiplication - placeholder only
+    // Use privateKey to avoid unused variable warning (even though it's a placeholder)
+    void privateKey;
     return crypto.getRandomValues(new Uint8Array(32));
   },
-  getSharedSecret: (_privateKey: Uint8Array, _publicKey: Uint8Array): Uint8Array => {
+  getSharedSecret: (privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array => {
     console.warn('⚠️  Using placeholder x25519.getSharedSecret');
     // This is NOT real x25519 ECDH - placeholder only
+    // Use parameters to avoid unused variable warnings (even though it's a placeholder)
+    void privateKey;
+    void publicKey;
     return crypto.getRandomValues(new Uint8Array(32));
   }
 };
@@ -53,6 +56,7 @@ export class RescueCipher {
   
   encrypt(data: bigint[], nonce: Uint8Array): Uint8Array[] {
     if (arciumClient?.RescueCipher) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cipher = new (arciumClient.RescueCipher as any)(this.sharedSecret);
       return cipher.encrypt(data, nonce);
     }
@@ -64,6 +68,7 @@ export class RescueCipher {
   
   decrypt(ciphertext: number[][] | Uint8Array[], nonce: Uint8Array): bigint[] {
     if (arciumClient?.RescueCipher) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cipher = new (arciumClient.RescueCipher as any)(this.sharedSecret);
       return cipher.decrypt(ciphertext, nonce);
     }
