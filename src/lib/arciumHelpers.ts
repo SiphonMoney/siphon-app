@@ -24,8 +24,8 @@ try {
 // ===== MPC Account Derivations =====
 
 export function getMXEAccAddress(programId: PublicKey): PublicKey {
-  if (arciumClient?.getMXEAccAddress) {
-    return arciumClient.getMXEAccAddress(programId);
+  if (arciumClient?.getMXEAccAddress && typeof arciumClient.getMXEAccAddress === 'function') {
+    return (arciumClient.getMXEAccAddress as (programId: PublicKey) => PublicKey)(programId);
   }
   // Placeholder implementation
   const [mxePDA] = PublicKey.findProgramAddressSync(
@@ -36,8 +36,8 @@ export function getMXEAccAddress(programId: PublicKey): PublicKey {
 }
 
 export function getMempoolAccAddress(programId: PublicKey): PublicKey {
-  if (arciumClient?.getMempoolAccAddress) {
-    return arciumClient.getMempoolAccAddress(programId);
+  if (arciumClient?.getMempoolAccAddress && typeof arciumClient.getMempoolAccAddress === 'function') {
+    return (arciumClient.getMempoolAccAddress as (programId: PublicKey) => PublicKey)(programId);
   }
   // Placeholder implementation
   const [mempoolPDA] = PublicKey.findProgramAddressSync(
@@ -48,8 +48,8 @@ export function getMempoolAccAddress(programId: PublicKey): PublicKey {
 }
 
 export function getExecutingPoolAccAddress(programId: PublicKey): PublicKey {
-  if (arciumClient?.getExecutingPoolAccAddress) {
-    return arciumClient.getExecutingPoolAccAddress(programId);
+  if (arciumClient?.getExecutingPoolAccAddress && typeof arciumClient.getExecutingPoolAccAddress === 'function') {
+    return (arciumClient.getExecutingPoolAccAddress as (programId: PublicKey) => PublicKey)(programId);
   }
   // Placeholder implementation
   const [executingPoolPDA] = PublicKey.findProgramAddressSync(
@@ -60,8 +60,8 @@ export function getExecutingPoolAccAddress(programId: PublicKey): PublicKey {
 }
 
 export function getComputationAccAddress(programId: PublicKey, offset: BN): PublicKey {
-  if (arciumClient?.getComputationAccAddress) {
-    return arciumClient.getComputationAccAddress(programId, offset);
+  if (arciumClient?.getComputationAccAddress && typeof arciumClient.getComputationAccAddress === 'function') {
+    return (arciumClient.getComputationAccAddress as (programId: PublicKey, offset: BN) => PublicKey)(programId, offset);
   }
   // Placeholder implementation
   const [computationPDA] = PublicKey.findProgramAddressSync(
@@ -72,8 +72,8 @@ export function getComputationAccAddress(programId: PublicKey, offset: BN): Publ
 }
 
 export function getCompDefAccAddress(programId: PublicKey, offset: number): PublicKey {
-  if (arciumClient?.getCompDefAccAddress) {
-    return arciumClient.getCompDefAccAddress(programId, offset);
+  if (arciumClient?.getCompDefAccAddress && typeof arciumClient.getCompDefAccAddress === 'function') {
+    return (arciumClient.getCompDefAccAddress as (programId: PublicKey, offset: number) => PublicKey)(programId, offset);
   }
   // Placeholder implementation
   const offsetBuffer = Buffer.alloc(4);
@@ -86,8 +86,8 @@ export function getCompDefAccAddress(programId: PublicKey, offset: number): Publ
 }
 
 export function getClusterAccAddress(clusterOffset: number): PublicKey {
-  if (arciumClient?.getClusterAccAddress) {
-    return arciumClient.getClusterAccAddress(clusterOffset);
+  if (arciumClient?.getClusterAccAddress && typeof arciumClient.getClusterAccAddress === 'function') {
+    return (arciumClient.getClusterAccAddress as (clusterOffset: number) => PublicKey)(clusterOffset);
   }
   // Placeholder implementation - this will need the actual Arcium program ID
   const ARCIUM_PROGRAM_ID = new PublicKey('Arc1umProgramId11111111111111111111111111111');
@@ -101,8 +101,8 @@ export function getClusterAccAddress(clusterOffset: number): PublicKey {
 }
 
 export function getArciumProgramId(): PublicKey {
-  if (arciumClient?.getArciumProgramId) {
-    return arciumClient.getArciumProgramId();
+  if (arciumClient?.getArciumProgramId && typeof arciumClient.getArciumProgramId === 'function') {
+    return (arciumClient.getArciumProgramId as () => PublicKey)();
   }
   // Placeholder - replace with actual Arcium program ID
   return new PublicKey('Arc1umProgramId11111111111111111111111111111');
@@ -111,8 +111,8 @@ export function getArciumProgramId(): PublicKey {
 // ===== Computation Definition Offsets =====
 
 export function getCompDefAccOffset(computationType: string): Uint8Array {
-  if (arciumClient?.getCompDefAccOffset) {
-    return arciumClient.getCompDefAccOffset(computationType);
+  if (arciumClient?.getCompDefAccOffset && typeof arciumClient.getCompDefAccOffset === 'function') {
+    return (arciumClient.getCompDefAccOffset as (computationType: string) => Uint8Array)(computationType);
   }
   
   // Placeholder implementation - these should be actual offsets from the program
@@ -134,8 +134,8 @@ export function getCompDefAccOffset(computationType: string): Uint8Array {
 // ===== MPC Utilities =====
 
 export async function getMXEPublicKey(provider: AnchorProvider, programId: PublicKey): Promise<Uint8Array> {
-  if (arciumClient?.getMXEPublicKey) {
-    return arciumClient.getMXEPublicKey(provider, programId);
+  if (arciumClient?.getMXEPublicKey && typeof arciumClient.getMXEPublicKey === 'function') {
+    return (arciumClient.getMXEPublicKey as (provider: AnchorProvider, programId: PublicKey) => Promise<Uint8Array>)(provider, programId);
   }
   
   // Placeholder implementation
@@ -149,8 +149,8 @@ export async function getMXEPublicKeyWithRetry(
   maxRetries: number = 10,
   retryDelayMs: number = 500
 ): Promise<Uint8Array> {
-  if (arciumClient?.getMXEPublicKeyWithRetry) {
-    return arciumClient.getMXEPublicKeyWithRetry(provider, programId, maxRetries, retryDelayMs);
+  if (arciumClient?.getMXEPublicKeyWithRetry && typeof arciumClient.getMXEPublicKeyWithRetry === 'function') {
+    return (arciumClient.getMXEPublicKeyWithRetry as (provider: AnchorProvider, programId: PublicKey, maxRetries: number, retryDelayMs: number) => Promise<Uint8Array>)(provider, programId, maxRetries, retryDelayMs);
   }
   
   // Placeholder with retry logic
@@ -172,8 +172,8 @@ export async function awaitComputationFinalization(
   programId: PublicKey,
   commitment: 'processed' | 'confirmed' | 'finalized' = 'confirmed'
 ): Promise<void> {
-  if (arciumClient?.awaitComputationFinalization) {
-    return arciumClient.awaitComputationFinalization(provider, computationOffset, programId, commitment);
+  if (arciumClient?.awaitComputationFinalization && typeof arciumClient.awaitComputationFinalization === 'function') {
+    return (arciumClient.awaitComputationFinalization as (provider: AnchorProvider, computationOffset: BN, programId: PublicKey, commitment: 'processed' | 'confirmed' | 'finalized') => Promise<void>)(provider, computationOffset, programId, commitment);
   }
   
   // Placeholder implementation - poll for computation account
@@ -199,8 +199,8 @@ export async function awaitComputationFinalization(
 }
 
 export function getArciumEnv(): string {
-  if (arciumClient?.getArciumEnv) {
-    return arciumClient.getArciumEnv();
+  if (arciumClient?.getArciumEnv && typeof arciumClient.getArciumEnv === 'function') {
+    return (arciumClient.getArciumEnv as () => string)();
   }
   return process.env.NEXT_PUBLIC_ARCIUM_ENV || 'devnet';
 }
@@ -208,8 +208,8 @@ export function getArciumEnv(): string {
 // ===== Serialization Utilities =====
 
 export function serializeLE(value: BN | bigint): Uint8Array {
-  if (arciumClient?.serializeLE) {
-    return arciumClient.serializeLE(value);
+  if (arciumClient?.serializeLE && typeof arciumClient.serializeLE === 'function') {
+    return (arciumClient.serializeLE as (value: BN | bigint) => Uint8Array)(value);
   }
   
   const bn = value instanceof BN ? value : new BN(value.toString());
@@ -217,8 +217,8 @@ export function serializeLE(value: BN | bigint): Uint8Array {
 }
 
 export function deserializeLE(bytes: Uint8Array): bigint {
-  if (arciumClient?.deserializeLE) {
-    return arciumClient.deserializeLE(bytes);
+  if (arciumClient?.deserializeLE && typeof arciumClient.deserializeLE === 'function') {
+    return (arciumClient.deserializeLE as (bytes: Uint8Array) => bigint)(bytes);
   }
   
   const buffer = bytes.slice(0, 16); // Support up to 16 bytes
