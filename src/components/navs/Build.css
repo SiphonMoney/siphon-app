@@ -1,0 +1,1615 @@
+/* Blueprint View */
+.blueprint-view {
+  width: calc(100% - 3rem);
+  height: calc(100% - 80px);
+  max-width: 100%;
+  max-height: 100%;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin: 2rem 1.5rem 1.5rem 1.5rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* Desktop only classes */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+/* Ensure mobile-only is visible on mobile */
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block !important;
+  }
+  
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+
+.blueprint-view .react-flow {
+  width: 100%;
+  height: 100%;
+  pointer-events: auto !important;
+}
+
+.blueprint-view .react-flow__pane {
+  pointer-events: auto !important;
+  cursor: grab;
+}
+
+.blueprint-view .react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.blueprint-view .react-flow__viewport {
+  pointer-events: auto !important;
+}
+
+.blueprint-view .react-flow__node {
+  pointer-events: auto !important;
+  cursor: move;
+}
+
+.blueprint-view .react-flow__handle {
+  pointer-events: auto !important;
+}
+
+/* React Flow Controls Styling */
+.blueprint-view .react-flow__controls {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 6px !important;
+}
+
+.blueprint-view .react-flow__controls-button {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  fill: rgba(255, 255, 255, 0.9) !important;
+}
+
+.blueprint-view .react-flow__controls-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* React Flow MiniMap Styling */
+.blueprint-view .react-flow__minimap {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 6px !important;
+  width: 120px !important;
+  height: 80px !important;
+}
+
+.blueprint-view .react-flow__minimap-mask {
+  fill: rgba(255, 255, 255, 0.1) !important;
+}
+
+.blueprint-view .react-flow__minimap-node {
+  fill: rgba(255, 255, 255, 0.2) !important;
+  stroke: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Hide React Flow Attribution */
+.blueprint-view .react-flow__attribution {
+  display: none !important;
+}
+
+.blueprint-top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1rem 1.5rem;
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.blueprint-top-bar * {
+  pointer-events: auto;
+}
+
+.blueprint-top-bar button,
+.blueprint-top-bar .blueprint-icon-btn,
+.blueprint-top-bar .blueprint-action-btn {
+  pointer-events: auto !important;
+  z-index: 11;
+}
+
+.blueprint-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.blueprint-actions-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-source-code), monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.blueprint-action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 90px;
+}
+
+.blueprint-icon-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.5rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.blueprint-icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.blueprint-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.blueprint-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.blueprint-file-name {
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-source-code), monospace;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.blueprint-icon-btn.save-success {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: rgba(34, 197, 94, 1);
+  animation: saveSuccessPulse 0.5s ease-out;
+}
+
+.blueprint-icon-btn.save-success .checkmark-icon {
+  animation: checkmarkDraw 0.4s ease-out 0.1s both;
+}
+
+@keyframes saveSuccessPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes checkmarkDraw {
+  0% {
+    stroke-dasharray: 0, 20;
+    stroke-dashoffset: 20;
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dasharray: 20, 0;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.blueprint-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.blueprint-actions-right {
+  display: none;
+}
+
+.blueprint-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.blueprint-actions-buttons {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  visibility: visible !important;
+}
+
+.blueprint-actions-label {
+  display: block !important;
+  visibility: visible !important;
+}
+
+.blueprint-restart-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.5rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.blueprint-restart-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.blueprint-restart-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.blueprint-restart-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.blueprint-execute-btn {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: rgba(34, 197, 94, 0.9);
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.blueprint-execute-btn:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.3);
+  border-color: rgba(34, 197, 94, 0.6);
+  color: rgba(34, 197, 94, 1);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+}
+
+.blueprint-execute-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.blueprint-submenu {
+  position: absolute;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.5rem;
+  width: 140px;
+  margin-top: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.blueprint-submenu-header {
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 0.25rem;
+}
+
+.blueprint-submenu-item {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--font-source-code), monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.blueprint-submenu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+
+
+/* Custom Node Styles */
+.blueprint-custom-node {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-width: 200px;
+  font-family: var(--font-source-code), monospace;
+}
+
+.blueprint-custom-node.strategy-node {
+  background: rgba(255, 193, 7, 0.2) !important;
+  border: 1px solid rgba(255, 193, 7, 0.5) !important;
+}
+
+.node-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.node-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.node-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.node-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.node-select,
+.node-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 0.375rem 0.5rem;
+  color: white;
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+
+.node-select option {
+  background: rgba(0, 0, 0, 0.95);
+  color: white;
+}
+
+.node-select:focus,
+.node-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.node-input.readonly {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: default;
+}
+
+.node-input.wallet-input {
+  width: 100%;
+}
+
+.node-select {
+  min-width: 70px;
+  max-width: 80px;
+  flex-shrink: 0;
+}
+
+.node-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+}
+
+.blueprint-view.loaded {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Run Mode Styles */
+.run-mode-view {
+  width: calc(100% - 3rem);
+  height: calc(100% - 80px);
+  max-width: 1200px;
+  margin: 2rem auto 0 auto;
+  padding: 2rem 0;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.run-mode-view.loaded {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.run-mode-header {
+  margin-bottom: 2.5rem;
+}
+
+.run-mode-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+}
+
+.run-mode-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.run-mode-favorites-toggle {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.run-mode-favorites-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 193, 7, 0.8);
+}
+
+.run-mode-favorites-toggle.active {
+  background: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.4);
+  color: rgba(255, 193, 7, 1);
+}
+
+.run-mode-favorites-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.run-mode-view-toggle {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.25rem;
+}
+
+.view-toggle-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.view-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.view-toggle-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.view-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.run-mode-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-family: var(--font-source-code), monospace;
+  margin: 0 0 0.75rem 0;
+}
+
+.run-mode-subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-source-code), monospace;
+  margin: 0;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.run-mode-list {
+  padding: 0 1rem;
+}
+
+.run-mode-list.cards-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.run-mode-list.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.run-mode-empty {
+  text-align: center;
+  padding: 6rem 2rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-source-code), monospace;
+  grid-column: 1 / -1;
+}
+
+.run-mode-empty-icon {
+  font-size: 48px;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.run-mode-empty-title {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.run-mode-empty-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  margin: 0;
+}
+
+.run-mode-strategy-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.run-mode-strategy-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.run-mode-strategy-card.running {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.05);
+  position: relative;
+}
+
+.strategy-running-indicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 4px;
+  font-size: 9px;
+  color: rgba(34, 197, 94, 1);
+  font-family: var(--font-source-code), monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 5;
+}
+
+.strategy-running-indicator .status-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 1);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.strategy-edit-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.strategy-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.strategy-edit-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.run-mode-strategy-card.list-item {
+  padding: 1.25rem 1.5rem;
+  border-radius: 8px;
+  flex-direction: row;
+  gap: 1.5rem;
+}
+
+.run-mode-strategy-card.list-item .strategy-card-main {
+  align-items: center;
+  flex: 1;
+  gap: 1.5rem;
+}
+
+.run-mode-strategy-card.list-item .strategy-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.run-mode-strategy-card.list-item .strategy-card-header-row {
+  margin-bottom: 0.5rem;
+}
+
+.run-mode-strategy-card.list-item .strategy-card-description {
+  margin-bottom: 0.5rem;
+  font-size: 12px;
+}
+
+.run-mode-strategy-card.list-item .strategy-card-meta {
+  margin-top: 0.25rem;
+}
+
+.run-mode-strategy-card.list-item .strategy-card-action {
+  flex-shrink: 0;
+}
+
+.run-mode-strategy-card.list-item .strategy-card-footer {
+  display: none;
+}
+
+.strategy-card-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.strategy-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.strategy-card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.strategy-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.strategy-loop-toggle {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.strategy-loop-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.strategy-loop-toggle.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: rgba(59, 130, 246, 1);
+}
+
+.strategy-loop-toggle.active:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.strategy-loop-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.strategy-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-source-code), monospace;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.strategy-status-badge {
+  display: none;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 1);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.2);
+  }
+}
+
+.strategy-card-description {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-source-code), monospace;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+  letter-spacing: 0.3px;
+}
+
+.strategy-card-meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.strategy-meta-item {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-source-code), monospace;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.strategy-meta-item.loop-indicator {
+  color: rgba(59, 130, 246, 0.8);
+}
+
+.strategy-meta-item.loop-indicator svg {
+  width: 10px;
+  height: 10px;
+}
+
+.strategy-card-action {
+  flex-shrink: 0;
+}
+
+.strategy-play-btn,
+.strategy-stop-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid;
+  padding: 0;
+}
+
+.strategy-play-btn {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.strategy-play-btn:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: rgba(34, 197, 94, 1);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.3);
+  transform: scale(1.05);
+}
+
+.strategy-stop-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: rgba(239, 68, 68, 0.9);
+}
+
+.strategy-stop-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: rgba(239, 68, 68, 1);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+  transform: scale(1.05);
+}
+
+.strategy-play-btn svg,
+.strategy-stop-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.strategy-status-badge span:not(.status-dot) {
+  line-height: 1;
+}
+
+.strategy-card-footer {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.strategy-footer-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.strategy-footer-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-source-code), monospace;
+  font-weight: 500;
+}
+
+.strategy-footer-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(34, 197, 94, 1);
+  font-family: var(--font-source-code), monospace;
+}
+
+/* Saved Scenes Styles */
+.blueprint-saved-scenes {
+  position: relative;
+  display: block !important;
+  visibility: visible !important;
+}
+
+.blueprint-scenes-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.5rem;
+  min-width: 200px;
+  max-width: 300px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  z-index: 30;
+}
+
+.blueprint-scenes-empty {
+  padding: 1rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-family: var(--font-source-code), monospace;
+}
+
+.blueprint-scene-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.blueprint-scene-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.blueprint-scene-load {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--font-source-code), monospace;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.blueprint-scene-load:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.blueprint-scene-delete {
+  background: transparent;
+  border: none;
+  color: rgba(255, 100, 100, 0.7);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.blueprint-scene-delete:hover {
+  background: rgba(255, 0, 0, 0.1);
+  color: rgba(255, 100, 100, 1);
+}
+
+/* Save Dialog Styles */
+.blueprint-save-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.blueprint-save-dialog {
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 1.5rem;
+  min-width: 300px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.blueprint-save-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.blueprint-save-dialog-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-source-code), monospace;
+}
+
+.blueprint-save-dialog-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.blueprint-save-dialog-close:hover {
+  color: white;
+}
+
+.blueprint-save-dialog-content {
+  margin-bottom: 1.5rem;
+}
+
+.blueprint-save-dialog-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 0.75rem;
+  color: white;
+  font-family: var(--font-source-code), monospace;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.blueprint-save-dialog-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.blueprint-save-dialog-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.blueprint-save-dialog-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.blueprint-save-dialog-cancel,
+.blueprint-save-dialog-save {
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  font-family: var(--font-source-code), monospace;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.blueprint-save-dialog-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.blueprint-save-dialog-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.blueprint-save-dialog-save {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.blueprint-save-dialog-save:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.3);
+  border-color: rgba(34, 197, 94, 0.6);
+  color: rgba(34, 197, 94, 1);
+}
+
+.blueprint-save-dialog-save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Mobile Fullscreen Modals */
+.blueprint-mobile-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.blueprint-mobile-modal {
+  background: rgba(0, 0, 0, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  overflow: hidden;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.blueprint-mobile-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.75rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+}
+
+.blueprint-mobile-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: var(--font-source-code), monospace;
+}
+
+.blueprint-mobile-modal-close {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.blueprint-mobile-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  transform: rotate(90deg);
+}
+
+.blueprint-mobile-modal-content {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.blueprint-mobile-modal-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.blueprint-mobile-modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.blueprint-mobile-modal-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.blueprint-mobile-modal-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 1.5rem 1.25rem;
+  color: rgba(255, 255, 255, 0.95);
+  font-family: var(--font-source-code), monospace;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.blueprint-mobile-modal-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.blueprint-mobile-modal-btn:hover::before {
+  left: 100%;
+}
+
+.blueprint-mobile-modal-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: white;
+  transform: translateX(4px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+.blueprint-mobile-modal-btn:active {
+  transform: translateX(2px) scale(0.98);
+}
+
+.blueprint-mobile-modal-btn svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+  transition: opacity 0.3s ease;
+}
+
+.blueprint-mobile-modal-btn:hover svg {
+  opacity: 1;
+}
+
+.blueprint-mobile-modal-back-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: var(--font-source-code), monospace;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  margin-bottom: 0.5rem;
+}
+
+.blueprint-mobile-modal-back-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  transform: translateX(-2px);
+}
+
+.blueprint-mobile-modal-scenes {
+  gap: 0.75rem;
+}
+
+.blueprint-mobile-modal-scene-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--font-source-code), monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  width: 100%;
+}
+
+.blueprint-mobile-modal-scene-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.blueprint-mobile-modal-scene-btn span {
+  flex: 1;
+}
+
+.blueprint-mobile-modal-scene-delete {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: rgba(239, 68, 68, 0.9);
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.blueprint-mobile-modal-scene-delete:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: rgba(239, 68, 68, 1);
+}
+
+.blueprint-mobile-modal-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-source-code), monospace;
+  font-size: 14px;
+}
+
+/* Desktop: Hide mobile modals */
+@media (min-width: 769px) {
+  .blueprint-mobile-modal-overlay {
+    display: none !important;
+  }
+}
+
+/* Mobile styles for Build */
+@media (max-width: 768px) {
+  .blueprint-view {
+    width: calc(100% - 2rem);
+    height: calc(100% - 40px);
+    margin: 1rem;
+    padding-top: 60px;
+  }
+
+  .blueprint-top-bar {
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .blueprint-actions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .blueprint-file-name {
+    font-size: 10px;
+    padding: 0.4rem 0.6rem;
+    margin-left: 0.5rem;
+  }
+
+  /* Hide desktop buttons on mobile */
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* Show mobile plus button */
+  .mobile-only {
+    display: block !important;
+  }
+
+  .blueprint-actions-label.desktop-only,
+  .blueprint-actions-buttons.desktop-only {
+    display: none !important;
+  }
+
+  .blueprint-execute-btn.desktop-only {
+    display: none !important;
+  }
+
+  .blueprint-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .blueprint-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .blueprint-top-bar {
+    pointer-events: auto;
+  }
+
+  .blueprint-top-bar * {
+    pointer-events: auto;
+  }
+
+  .blueprint-action-btn,
+  .blueprint-icon-btn,
+  .blueprint-restart-btn,
+  .blueprint-execute-btn,
+  .blueprint-add-plus-btn {
+    pointer-events: auto;
+    touch-action: manipulation;
+  }
+
+  .blueprint-execute-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 10px;
+  }
+
+  /* Make buttons full width on mobile */
+  .blueprint-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+
+  .blueprint-icon-btn,
+  .blueprint-restart-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+
+  .blueprint-file-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+

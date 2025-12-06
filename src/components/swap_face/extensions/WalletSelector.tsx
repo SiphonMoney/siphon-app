@@ -13,6 +13,14 @@ interface WalletOption {
 
 const walletOptions: WalletOption[] = [
   {
+    id: 'metamask',
+    name: 'MetaMask',
+    icon: 'MM',
+    chain: 'EVM',
+    description: '',
+    active: true
+  },
+  {
     id: 'phantom',
     name: 'Phantom',
     icon: 'PH',
@@ -74,8 +82,6 @@ export default function WalletSelector({ onWalletSelect, className }: WalletSele
 
       {isOpen && (
         <div className="wallet-dropdown">
-            <p>preferred wallet to connect</p>
-          
           <div className="wallet-options">
             {walletOptions.map((wallet) => (
               <button
@@ -84,20 +90,10 @@ export default function WalletSelector({ onWalletSelect, className }: WalletSele
                 onClick={() => wallet.active && handleWalletClick(wallet.id)}
                 disabled={!wallet.active}
               >
-                <div className="wallet-option-content">
-                  <div className="wallet-option-header">
-                    <span className="wallet-option-icon">{wallet.icon}</span>
-                    <div className="wallet-option-info">
-                      <span className="wallet-option-name">{wallet.name}</span>
-                      <span className="wallet-option-chain">{wallet.chain}</span>
-                    </div>
-                    {wallet.active ? (
-                      <span className="status-indicator active">●</span>
-                    ) : (
-                      <span className="status-indicator inactive">○</span>
-                    )}
-                  </div>
-                  <p className="wallet-option-description">{wallet.description}</p>
+                <span className="wallet-option-icon">{wallet.icon}</span>
+                <div className="wallet-option-info">
+                  <span className="wallet-option-name">{wallet.name}</span>
+                  <span className="wallet-option-chain">{wallet.chain}</span>
                 </div>
               </button>
             ))}

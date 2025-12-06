@@ -1,14 +1,57 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import ConnectButton from "../swap_face/extensions/ConnectButton";
+import { WalletInfo } from "../../lib/walletManager";
 
-export default function Nav() {
+interface NavProps {
+  onWalletConnected?: (wallet: WalletInfo) => void;
+}
+
+export default function Nav({ onWalletConnected }: NavProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const isHomePage = pathname === "/";
+  const isDocsPage = pathname === "/docs";
+  const isDappPage = pathname?.startsWith("/dapp");
+  const isDarkPool = pathname === "/dapp/darkpool";
+  const isSwaps = pathname === "/dapp/swaps";
+  const isPro = pathname === "/dapp/pro";
+  
+  // Initialize with default value to avoid hydration mismatch
+  const [proViewMode, setProViewMode] = useState<'blueprint' | 'run' | 'discover'>('discover');
+  
+  useEffect(() => {
+    if (isDappPage && typeof window !== 'undefined') {
+      const stored = localStorage.getItem('pro-view-mode');
+      if (stored && ['blueprint', 'run', 'discover'].includes(stored)) {
+        setProViewMode(stored as 'blueprint' | 'run' | 'discover');
+      } else {
+        // Default to discover if no stored mode
+        setProViewMode('discover');
+        localStorage.setItem('pro-view-mode', 'discover');
+      }
+    }
+  }, [isDappPage]);
+
+  const handleProViewModeChange = (mode: 'blueprint' | 'run' | 'discover') => {
+    setProViewMode(mode);
+    localStorage.setItem('pro-view-mode', mode);
+    // Navigate to pro page if not already there
+    if (!isPro) {
+      router.push('/dapp/pro');
+    }
+    // Trigger view mode change event for ProSwapMode component
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pro-view-mode-change', { detail: mode }));
+    }
+  };
 
   return (
     <nav>
+      {/* Left: Logo */}
       <div className="logo">
         <Link href="/" className="logo-link">
           <div className="logo-container">
@@ -20,9 +63,118 @@ export default function Nav() {
         </Link>
       </div>
 
-      {isHomePage && (
-        <div className="nav-items">
-          <Link href="/dapp/darkpool" className="nav-link">dapp</Link>
+      {/* Center: Menu Buttons (only for dapp pages) */}
+      {isDappPage && (
+        <div className="nav-center">
+          {/* Darkpools button */}
+          <div 
+            className={`nav-single-btn nav-single-btn-disabled ${isDarkPool ? 'active' : ''}`}
+          >
+            <div className="nav-single-btn-content">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+              Darkpools
+            </div>
+            <span className="nav-soon-tag">soon</span>
+          </div>
+          {/* Single button for Swap */}
+          <div 
+            className={`nav-single-btn nav-single-btn-disabled ${isSwaps ? 'active' : ''}`}
+          >
+            <div className="nav-single-btn-content">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4" />
+              </svg>
+              Swap
+            </div>
+            <span className="nav-soon-tag">soon</span>
+          </div>
+          {/* Vertical divider */}
+          <div className="nav-divider"></div>
+          {/* Trio selector for Discover/Build/Run - always visible on dapp pages */}
+          <div className="nav-mode-selector">
+            <button
+              className={`nav-mode-btn ${proViewMode === 'discover' ? 'active' : ''}`}
+              onClick={() => handleProViewModeChange('discover')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              Discover
+            </button>
+            <button
+              className={`nav-mode-btn ${proViewMode === 'blueprint' ? 'active' : ''}`}
+              onClick={() => handleProViewModeChange('blueprint')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+              Build
+            </button>
+            <button
+              className={`nav-mode-btn ${proViewMode === 'run' ? 'active' : ''}`}
+              onClick={() => handleProViewModeChange('run')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              Run
+            </button>
+          </div>
+          {/* Vertical divider */}
+          <div className="nav-divider"></div>
+          {/* Docs button */}
+          <Link 
+            href="/docs" 
+            className={`nav-mode-btn ${isDocsPage ? 'active' : ''}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+            </svg>
+            docs
+          </Link>
+        </div>
+      )}
+
+      {/* Right: Menu Buttons for Home/Docs, Wallet for Dapp */}
+      {(isHomePage || isDocsPage) && (
+        <div className="nav-right">
+          <div className="nav-mode-selector">
+            <Link 
+              href="/docs" 
+              className={`nav-mode-btn ${isDocsPage ? 'active' : ''}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+              </svg>
+              docs
+            </Link>
+            <Link 
+              href="/dapp" 
+              className={`nav-mode-btn ${pathname?.startsWith('/dapp') ? 'active' : ''}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+              dapp
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Right: Wallet Connector for Dapp pages */}
+      {isDappPage && (
+        <div className="nav-wallet">
+          <ConnectButton 
+            className="top-connect-button"
+            onConnected={onWalletConnected}
+          />
         </div>
       )}
     </nav>

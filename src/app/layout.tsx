@@ -9,8 +9,25 @@ const sourceCode = Source_Code_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "Siphon",
-  description: "Hyperliquid privacy",
+  title: "Siphon Protocol - Fully Encrypted DeFi Execution Layer",
+  description: "Execute DeFi strategies on-demand in a fully encrypted manner. Run arbitrage, yield farming, liquidity mining, and grid trading privately. Your trades remain invisible to MEV bots and front-runners.",
+  keywords: ["DeFi", "encrypted execution", "privacy", "strategy execution", "MEV protection", "blockchain", "cryptocurrency"],
+  authors: [{ name: "Siphon Protocol" }],
+  openGraph: {
+    title: "Siphon Protocol - Fully Encrypted DeFi Execution Layer",
+    description: "Execute DeFi strategies on-demand in a fully encrypted manner. Your trades remain invisible to MEV bots and front-runners.",
+    type: "website",
+    siteName: "Siphon Protocol",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Siphon Protocol - Fully Encrypted DeFi Execution Layer",
+    description: "Execute DeFi strategies on-demand in a fully encrypted manner. Your trades remain invisible to MEV bots and front-runners.",
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

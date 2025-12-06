@@ -19,24 +19,43 @@
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+}
+
+html::-webkit-scrollbar {
+  display: none;
+}
+
 body {
   width: 100%;
+  max-width: 100vw;
   height: 100%;
   background: #000000;
   color: #ffffff;
   font-family: var(--font-source-code), monospace;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Hide scrollbar for all browsers */
+body::-webkit-scrollbar {
+  display: none;
 }
 
 h1 {
@@ -52,20 +71,191 @@ p {
 
 nav {
   position: fixed;
-  top: 0;
+  top: 15px;
   left: 0;
-  width: 100vw;
+  width: 100%;
+  max-width: 100vw;
   padding: 2em;
   display: flex;
   justify-content: space-between;
   align-items: center;
   z-index: 1100;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.nav-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 0.5rem;
+}
+
+.nav-single-btn {
+  background: rgba(255, 255, 255, 0.02);
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: lowercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.nav-single-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+
+.nav-single-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-single-btn.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+.nav-single-btn-disabled {
+  cursor: not-allowed !important;
+  opacity: 0.5;
+  overflow: visible;
+  position: relative;
+  pointer-events: auto;
+}
+
+.nav-single-btn-disabled:hover {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+}
+
+.nav-single-btn-disabled:hover .nav-single-btn-content {
+  filter: blur(4px);
+  opacity: 0.3;
+}
+
+.nav-single-btn-disabled:hover .nav-soon-tag {
+  opacity: 1;
+  visibility: visible;
+}
+
+.nav-single-btn-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.nav-soon-tag {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 7px;
+  padding: 2px 5px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.nav-wallet {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.nav-wallet .top-connect-button {
+  pointer-events: auto;
 }
 
 .nav-items {
   display: flex;
   align-items: center;
   gap: 2em;
+}
+
+.nav-mode-selector {
+  display: flex;
+  gap: 0.5rem;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.nav-mode-btn {
+  background: transparent;
+  border: none;
+  padding: 0.5rem 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: lowercase;
+  letter-spacing: 0.5px;
+  border-radius: 4px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.nav-mode-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+
+.nav-mode-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-mode-btn.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
 }
 
 button {
@@ -80,15 +270,7 @@ button {
 }
 
 footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100vw;
-  padding: 2em;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  z-index: 1100;
+  display: none; /* Hidden - removed bottom left and right angle content */
 }
 
 footer h1 {
@@ -108,6 +290,107 @@ footer h1 {
 
 /* Footer responsive styles */
 @media (max-width: 768px) {
+  nav {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 0.75rem;
+    padding: 1em 1.5em;
+    position: fixed;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow: visible;
+  }
+
+  /* First row: Logo, Docs/Dapp, and Wallet side by side */
+  .logo {
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: start;
+    align-self: center;
+  }
+
+  .nav-right {
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: end;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  .nav-right .nav-mode-selector {
+    display: flex;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.00);
+    border: none;
+    border-radius: 6px;
+    padding: 0.15rem;
+  }
+
+  .nav-right .nav-mode-btn {
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    margin: 0;
+  }
+
+  .nav-wallet {
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: end;
+    align-self: center;
+    width: auto;
+    margin-left: 0;
+  }
+
+  .nav-wallet .top-connect-button {
+    border: none;
+    width: auto;
+  }
+
+  .nav-wallet .wallet-selector {
+    width: auto;
+  }
+
+  .nav-wallet .wallet-selector-trigger {
+    width: auto;
+  }
+
+  /* Second row: Discover, Build, Run only */
+  .nav-center {
+    grid-row: 2;
+    grid-column: 1;
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 0;
+    box-sizing: border-box;
+    overflow: visible;
+  }
+
+  /* Hide darkpools, swap, dividers, and docs on mobile */
+  .nav-center .nav-single-btn:nth-of-type(1),
+  .nav-center .nav-single-btn:nth-of-type(2),
+  .nav-center .nav-divider,
+  .nav-center .nav-mode-btn[href="/docs"] {
+    display: none !important;
+  }
+
+  /* Show only the Discover/Build/Run selector */
+  .nav-center .nav-mode-selector {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: center;
+  }
+
   footer {
     padding: 1.5em;
   }
@@ -155,6 +438,8 @@ footer h1 {
 .nav-link:hover {
   opacity: 0.7;
 }
+
+/* Legacy nav-link styling - keeping for backwards compatibility */
 
 .about-link {
   position: fixed;
