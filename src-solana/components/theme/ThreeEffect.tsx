@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import "./ThreeEffect.css";
 
 // Declare THREE.js types
@@ -311,27 +311,6 @@ export default function ThreeEffect() {
       rightLabel: "RISK"
     },
   ];
-
-  const getStrategyGradient = (index: number): string => {
-    const gradients = [
-      "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-      "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-      "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
-      "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
-      "linear-gradient(135deg, #30cfd0 0%, #330867 100%)",
-      "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
-      "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)",
-      "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
-      "linear-gradient(135deg, #ff8a80 0%, #ea6100 100%)",
-      "linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)",
-      "linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)",
-      "linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)",
-      "linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%)",
-      "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
-    ];
-    return gradients[index % gradients.length];
-  };
 
   const createCardWrapper = (index: number) => {
     const wrapper = document.createElement("div");
@@ -951,7 +930,7 @@ export default function ThreeEffect() {
     };
 
     for (let i = 0; i < maxParticles; i++) {
-      const particle = createParticle();
+      const particle: Particle = createParticle();
       particle.originalAlpha = particle.alpha;
       particle.startX = particle.x;
       count++;
@@ -1159,7 +1138,7 @@ export default function ThreeEffect() {
       const currentIntensity = intensity;
 
       if (Math.random() < currentIntensity && count < currentMaxParticles) {
-        const particle = createParticle();
+        const particle: Particle = createParticle();
         particle.originalAlpha = particle.alpha;
         particle.startX = particle.x;
         count++;
@@ -1169,7 +1148,7 @@ export default function ThreeEffect() {
       const intensityRatio = intensity / 0.8;
 
       if (intensityRatio > 1.1 && Math.random() < (intensityRatio - 1.0) * 1.2) {
-        const particle = createParticle();
+        const particle: Particle = createParticle();
         particle.originalAlpha = particle.alpha;
         particle.startX = particle.x;
         count++;
@@ -1177,7 +1156,7 @@ export default function ThreeEffect() {
       }
 
       if (intensityRatio > 1.3 && Math.random() < (intensityRatio - 1.3) * 1.4) {
-        const particle = createParticle();
+        const particle: Particle = createParticle();
         particle.originalAlpha = particle.alpha;
         particle.startX = particle.x;
         count++;
@@ -1185,7 +1164,7 @@ export default function ThreeEffect() {
       }
 
       if (intensityRatio > 1.5 && Math.random() < (intensityRatio - 1.5) * 1.8) {
-        const particle = createParticle();
+        const particle: Particle = createParticle();
         particle.originalAlpha = particle.alpha;
         particle.startX = particle.x;
         count++;
@@ -1193,7 +1172,7 @@ export default function ThreeEffect() {
       }
 
       if (intensityRatio > 2.0 && Math.random() < (intensityRatio - 2.0) * 2.0) {
-        const particle = createParticle();
+        const particle: Particle = createParticle();
         particle.originalAlpha = particle.alpha;
         particle.startX = particle.x;
         count++;

@@ -5,6 +5,28 @@ import { ReactFlow, ReactFlowProvider, Background, Node, Edge, Handle, Position,
 import '@xyflow/react/dist/style.css';
 import "./Discover.css";
 
+interface NodeData {
+  label?: string;
+  type?: 'deposit' | 'swap' | 'withdraw' | 'strategy';
+  coin?: string;
+  toCoin?: string;
+  amount?: string;
+  strategy?: string;
+  chain?: string;
+}
+
+interface StrategyMetadata {
+  name: string;
+  author: string;
+  nodes: number;
+  usage: string | number;
+  profit: string;
+  description: string;
+  category: string;
+  chains: string[];
+  networks: string[];
+}
+
 interface DiscoverProps {
   isLoaded?: boolean;
   setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void;
@@ -32,7 +54,7 @@ export default function Discover({
   const [discoverViewMode, setDiscoverViewMode] = useState<'cards' | 'list'>('cards');
   const [favoriteStrategies, setFavoriteStrategies] = useState<Set<string>>(new Set());
   const [featuredStrategyIndex, setFeaturedStrategyIndex] = useState(0);
-  const [selectedStrategy, setSelectedStrategy] = useState<any>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyMetadata | null>(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
   const [likedStrategies, setLikedStrategies] = useState<Set<string>>(new Set());
   const [modalStrategyNodes, setModalStrategyNodes] = useState<Node[]>([]);
@@ -1057,12 +1079,12 @@ export default function Discover({
                 
                 {/* Input/Output Section */}
                 {modalStrategyNodes.length > 0 && (() => {
-                  const depositNodes = modalStrategyNodes.filter(node => (node.data as any)?.type === 'deposit');
-                  const strategyNodes = modalStrategyNodes.filter(node => (node.data as any)?.type === 'strategy');
+                  const depositNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'deposit');
+                  const strategyNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'strategy');
                   
                   // Get input coin from first deposit node, default to USDC
-                  const inputCoin = depositNodes.length > 0 && (depositNodes[0].data as any)?.coin 
-                    ? (depositNodes[0].data as any).coin 
+                  const inputCoin = depositNodes.length > 0 && (depositNodes[0].data as NodeData)?.coin 
+                    ? (depositNodes[0].data as NodeData).coin 
                     : 'USDC';
                   
                   // Output is input coin + Logic if strategy nodes exist
@@ -1101,34 +1123,37 @@ export default function Discover({
                   </div>
                   {modalStrategyNodes.length > 0 && (
                     <div className="strategy-steps-list">
-                      {modalStrategyNodes.map((node, index) => (
-                        <div key={node.id} className="strategy-step-item">
-                          <div className="strategy-step-number">{index + 1}</div>
-                          <div className="strategy-step-content">
-                            <div className="strategy-step-title">{(node.data as any)?.label || `Step ${index + 1}`}</div>
-                            <div className="strategy-step-details">
-                              {(node.data as any)?.type && (
-                                <span className="strategy-step-type">{(node.data as any).type}</span>
-                              )}
-                              {(node.data as any)?.chain && (
-                                <span className="strategy-step-chain">{(node.data as any).chain}</span>
-                              )}
-                              {(node.data as any)?.coin && (
-                                <span className="strategy-step-coin">{(node.data as any).coin}</span>
-                              )}
-                              {(node.data as any)?.toCoin && (
-                                <span className="strategy-step-coin">→ {(node.data as any).toCoin}</span>
-                              )}
-                              {(node.data as any)?.amount && (
-                                <span className="strategy-step-amount">{(node.data as any).amount}</span>
-                              )}
-                              {(node.data as any)?.strategy && (
-                                <span className="strategy-step-strategy">{(node.data as any).strategy}</span>
-                              )}
+                      {modalStrategyNodes.map((node, index) => {
+                        const nodeData = node.data as NodeData;
+                        return (
+                          <div key={node.id} className="strategy-step-item">
+                            <div className="strategy-step-number">{index + 1}</div>
+                            <div className="strategy-step-content">
+                              <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
+                              <div className="strategy-step-details">
+                                {nodeData?.type && (
+                                  <span className="strategy-step-type">{nodeData.type}</span>
+                                )}
+                                {nodeData?.chain && (
+                                  <span className="strategy-step-chain">{nodeData.chain}</span>
+                                )}
+                                {nodeData?.coin && (
+                                  <span className="strategy-step-coin">{nodeData.coin}</span>
+                                )}
+                                {nodeData?.toCoin && (
+                                  <span className="strategy-step-coin">→ {nodeData.toCoin}</span>
+                                )}
+                                {nodeData?.amount && (
+                                  <span className="strategy-step-amount">{nodeData.amount}</span>
+                                )}
+                                {nodeData?.strategy && (
+                                  <span className="strategy-step-strategy">{nodeData.strategy}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1161,8 +1186,9 @@ export default function Discover({
                             }, 100);
                           }}
                           nodeTypes={{
-                            custom: ({ data, id }) => {
-                              const isStrategy = (data as any).type === 'strategy';
+                            custom: ({ data }: { data: NodeData }) => {
+                              const nodeData = data as NodeData;
+                              const isStrategy = nodeData.type === 'strategy';
                               return (
                                 <div 
                                   className={`blueprint-custom-node ${isStrategy ? 'strategy-node' : ''}`} 
@@ -1174,30 +1200,30 @@ export default function Discover({
                                 >
                                   <Handle type="target" position={Position.Left} style={{ background: 'rgba(255, 255, 255, 0.3)' }} />
                                   <div className="node-content">
-                                    <div className="node-title">{(data as any).label}</div>
-                                    {(data as any).type === 'deposit' && (data as any).coin && (
+                                    <div className="node-title">{nodeData.label}</div>
+                                    {nodeData.type === 'deposit' && nodeData.coin && (
                                       <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {(data as any).coin} {(data as any).amount ? `- ${(data as any).amount}` : ''}
+                                        {nodeData.coin} {nodeData.amount ? `- ${nodeData.amount}` : ''}
                                       </div>
                                     )}
-                                    {(data as any).type === 'swap' && (
+                                    {nodeData.type === 'swap' && (
                                       <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {(data as any).coin || 'From'} → {(data as any).toCoin || 'To'} {(data as any).amount ? `- ${(data as any).amount}` : ''}
+                                        {nodeData.coin || 'From'} → {nodeData.toCoin || 'To'} {nodeData.amount ? `- ${nodeData.amount}` : ''}
                                       </div>
                                     )}
-                                    {(data as any).type === 'withdraw' && (
+                                    {nodeData.type === 'withdraw' && (
                                       <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {(data as any).coin || 'Coin'} {(data as any).amount ? `- ${(data as any).amount}` : ''}
+                                        {nodeData.coin || 'Coin'} {nodeData.amount ? `- ${nodeData.amount}` : ''}
                                       </div>
                                     )}
-                                    {(data as any).type === 'strategy' && (data as any).strategy && (
+                                    {nodeData.type === 'strategy' && nodeData.strategy && (
                                       <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {(data as any).strategy} {(data as any).coin ? `- ${(data as any).coin}` : ''} {(data as any).amount ? `- ${(data as any).amount}` : ''}
+                                        {nodeData.strategy} {nodeData.coin ? `- ${nodeData.coin}` : ''} {nodeData.amount ? `- ${nodeData.amount}` : ''}
                                       </div>
                                     )}
-                                    {(data as any).chain && (
+                                    {nodeData.chain && (
                                       <div className="node-preview-info" style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '0.25rem' }}>
-                                        {(data as any).chain}
+                                        {nodeData.chain}
                                       </div>
                                     )}
                                   </div>
