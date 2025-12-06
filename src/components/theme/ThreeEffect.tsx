@@ -4,13 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import "./ThreeEffect.css";
 
 // Declare THREE.js types
-declare global {
-  interface Window {
-    THREE: any;
-  }
+interface ThreeLibrary {
+  [key: string]: unknown;
 }
 
-const codeChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789(){}[]<>;:,._-+=!@#$%^&*|\\/\"'`~?";
+declare global {
+  interface Window {
+    THREE: ThreeLibrary;
+  }
+}
 
 interface Particle {
   x: number;
@@ -35,17 +37,11 @@ export default function ThreeEffect() {
   const cardStreamRef = useRef<HTMLDivElement>(null);
   const cardLineRef = useRef<HTMLDivElement>(null);
   
-  const [isAnimating, setIsAnimating] = useState(true);
-  const [direction, setDirection] = useState(-1);
-  const [isDragging, setIsDragging] = useState(false);
-  
   const positionRef = useRef(0); // Will be initialized after cards are created
   const velocityRef = useRef(120);
-  const lastMouseXRef = useRef(0);
-  const mouseVelocityRef = useRef(0);
   const animationIdRef = useRef<number | null>(null);
-  const particleSystemRef = useRef<any>(null);
-  const scannerRef = useRef<any>(null);
+  const particleSystemRef = useRef<{ destroy?: () => void } | null>(null);
+  const scannerRef = useRef<{ destroy?: () => void } | null>(null);
   const lastTimeRef = useRef(0);
 
   useEffect(() => {
@@ -103,6 +99,7 @@ export default function ThreeEffect() {
         scannerRef.current.destroy?.();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const generateCode = (width: number, height: number): string => {
@@ -215,9 +212,6 @@ export default function ThreeEffect() {
     const height = Math.floor(cardHeight / lineHeight);
     return { width, height, fontSize, lineHeight };
   };
-  
-  const cardWidth = 400;
-  const cardHeight = 260;
 
   const strategies = [
     { 
@@ -318,7 +312,7 @@ export default function ThreeEffect() {
     },
   ];
 
-  const getStrategyGradient = (index: number) => {
+  const getStrategyGradient = (index: number): string => {
     const gradients = [
       "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
       "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
@@ -527,7 +521,7 @@ export default function ThreeEffect() {
     strategyBadges.style.paddingTop = "14px";
     strategyBadges.style.borderTop = "1px solid rgba(255, 255, 255, 0.1)";
 
-    strategy.badges.forEach((badge) => {
+    strategy.badges.forEach((badge: string) => {
       const badgeEl = document.createElement("div");
       badgeEl.className = "strategy-badge";
       badgeEl.textContent = badge;
@@ -648,8 +642,12 @@ export default function ThreeEffect() {
     });
 
     // Notify scanner about scanning state
-    if (typeof window !== 'undefined' && (window as any).setScannerScanning) {
-      (window as any).setScannerScanning(anyScanningActive);
+    interface WindowWithScanner {
+      setScannerScanning?: (active: boolean) => void;
+    }
+    const windowWithScanner = window as Window & WindowWithScanner;
+    if (typeof window !== 'undefined' && windowWithScanner.setScannerScanning) {
+      windowWithScanner.setScannerScanning(anyScanningActive);
     }
   };
 
@@ -684,14 +682,14 @@ export default function ThreeEffect() {
       const deltaTime = (currentTime - lastTimeRef.current) / 1000;
       lastTimeRef.current = currentTime;
 
-      if (isAnimating && !isDragging) {
+      if (true) { // Always animate cards
         if (velocityRef.current > 30) {
           velocityRef.current *= 0.95;
         } else {
           velocityRef.current = Math.max(30, velocityRef.current);
         }
 
-        positionRef.current += velocityRef.current * direction * deltaTime;
+        positionRef.current += velocityRef.current * -1 * deltaTime; // Always move left
 
         const containerWidth = cardStreamRef.current?.offsetWidth || window.innerWidth;
         const cardLineWidth = (400 + 60) * 30; // card width + gap * count
@@ -727,8 +725,12 @@ export default function ThreeEffect() {
     if (!window.THREE || !particleCanvasRef.current) return;
 
     const THREE = window.THREE;
-    const scene = new THREE.Scene();
-    const camera = new THREE.OrthographicCamera(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SceneClass = THREE.Scene as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const CameraClass = THREE.OrthographicCamera as any;
+    const scene = new SceneClass();
+    const camera = new CameraClass(
       -window.innerWidth / 2,
       window.innerWidth / 2,
       125,
@@ -738,7 +740,9 @@ export default function ThreeEffect() {
     );
     camera.position.z = 100;
 
-    const renderer = new THREE.WebGLRenderer({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const RendererClass = THREE.WebGLRenderer as any;
+    const renderer = new RendererClass({
       canvas: particleCanvasRef.current,
       alpha: true,
       antialias: true,
@@ -747,7 +751,9 @@ export default function ThreeEffect() {
     renderer.setClearColor(0x000000, 0);
 
     const particleCount = 400;
-    const geometry = new THREE.BufferGeometry();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const GeometryClass = THREE.BufferGeometry as any;
+    const geometry = new GeometryClass();
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
     const sizes = new Float32Array(particleCount);
@@ -772,7 +778,9 @@ export default function ThreeEffect() {
     ctx.arc(half, half, half, 0, Math.PI * 2);
     ctx.fill();
 
-    const texture = new THREE.CanvasTexture(canvas);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const TextureClass = THREE.CanvasTexture as any;
+    const texture = new TextureClass(canvas);
 
     for (let i = 0; i < particleCount; i++) {
       positions[i * 3] = (Math.random() - 0.5) * window.innerWidth * 2;
@@ -786,17 +794,21 @@ export default function ThreeEffect() {
       velocities[i] = Math.random() * 60 + 30;
     }
 
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const BufferAttributeClass = THREE.BufferAttribute as any;
+    geometry.setAttribute("position", new BufferAttributeClass(positions, 3));
+    geometry.setAttribute("color", new BufferAttributeClass(colors, 3));
+    geometry.setAttribute("size", new BufferAttributeClass(sizes, 1));
 
     const alphas = new Float32Array(particleCount);
     for (let i = 0; i < particleCount; i++) {
       alphas[i] = (Math.random() * 8 + 2) / 10;
     }
-    geometry.setAttribute("alpha", new THREE.BufferAttribute(alphas, 1));
+    geometry.setAttribute("alpha", new BufferAttributeClass(alphas, 1));
 
-    const material = new THREE.ShaderMaterial({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MaterialClass = THREE.ShaderMaterial as any;
+    const material = new MaterialClass({
       uniforms: {
         pointTexture: { value: texture },
         size: { value: 15.0 },
@@ -828,7 +840,9 @@ export default function ThreeEffect() {
       vertexColors: true,
     });
 
-    const particles = new THREE.Points(geometry, material);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const PointsClass = THREE.Points as any;
+    const particles = new PointsClass(geometry, material);
     scene.add(particles);
 
     const animate = () => {
@@ -1240,8 +1254,12 @@ export default function ThreeEffect() {
     window.addEventListener("resize", handleResize);
 
     // Expose setScannerScanning function
+    interface WindowWithScanner {
+      setScannerScanning?: (active: boolean) => void;
+    }
+    const windowWithScanner = window as Window & WindowWithScanner;
     if (typeof window !== 'undefined') {
-      (window as any).setScannerScanning = (active: boolean) => {
+      windowWithScanner.setScannerScanning = (active: boolean) => {
         scanningActive = active;
       };
     }
@@ -1250,7 +1268,7 @@ export default function ThreeEffect() {
       destroy: () => {
         window.removeEventListener("resize", handleResize);
         if (typeof window !== 'undefined') {
-          delete (window as any).setScannerScanning;
+          delete windowWithScanner.setScannerScanning;
         }
       },
     };

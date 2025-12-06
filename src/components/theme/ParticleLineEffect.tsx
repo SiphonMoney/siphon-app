@@ -1,17 +1,33 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import "./ParticleLineEffect.css";
 
 interface ParticleLineEffectProps {
   isActive: boolean;
 }
 
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  alpha: number;
+  decay: number;
+  originalAlpha: number;
+  life: number;
+  time: number;
+  startX: number;
+  twinkleSpeed: number;
+  twinkleAmount: number;
+}
+
 export default function ParticleLineEffect({ isActive }: ParticleLineEffectProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationIdRef = useRef<number | null>(null);
-  const particlesRef = useRef<any[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
   const intensityRef = useRef(0);
 
   useEffect(() => {
