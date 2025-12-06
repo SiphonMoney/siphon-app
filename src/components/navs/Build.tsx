@@ -905,9 +905,7 @@ export default function Build({
             style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 },
             type: 'smoothstep'
           }}
-          fitView
           proOptions={{ hideAttribution: true }}
-          deleteKeyCode="Delete"
         >
           <Background />
           <Controls />
