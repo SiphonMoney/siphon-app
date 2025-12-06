@@ -1,15 +1,27 @@
 .heroContainer {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
+  min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 30px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   z-index: 3;
   pointer-events: none;
   font-family: 'Source Code Pro', monospace;
+  padding: 4em 5em;
+  padding-top: 45vh;
+}
+
+.heroTagline {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #ffffff;
+  margin: 0;
+  font-family: 'Source Code Pro', monospace;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  max-width: 800px;
 }
 
 .heroTitle {
@@ -22,13 +34,15 @@
 }
 
 .heroSubtitle {
-  font-size: 24px;
-  color: #ffffff;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.8);
   margin: 0;
-  margin-top: -10px;
-  margin-right: 10px;
-  align-self: flex-end;
+  margin-left: 10px;
+  margin-top: 1rem;
   font-family: 'Source Code Pro', monospace;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
 }
 
 .heroTextContainer {
@@ -46,72 +60,51 @@
 /* Tablet */
 @media (max-width: 1024px) {
   .heroContainer {
-    gap: 20px;
+    padding-top: 30vh;
   }
 
-  .heroTitle {
-    font-size: 120px;
+  .heroTagline {
+    font-size: 48px;
   }
 
   .heroSubtitle {
     font-size: 18px;
-  }
-
-  .logo {
-    width: 80px;
-    height: 65px;
   }
 }
 
 /* Mobile */
 @media (max-width: 768px) {
   .heroContainer {
-    flex-direction: column;
-    gap: 20px;
-    width: 90%;
-    text-align: center;
-    top: 45%;
+    padding: 3em 2em;
+    padding-top: 70vh;
   }
 
-  .heroTextContainer {
-    align-items: center;
-  }
-
-  .heroTitle {
-    font-size: 60px;
+  .heroTagline {
+    font-size: 36px;
+    max-width: 100%;
   }
 
   .heroSubtitle {
-    font-size: 14px;
-    align-self: center;
-    margin-right: 0;
-    margin-top: 15px;
-  }
-
-  .logo {
-    width: 90px;
-    height: 74px;
+    font-size: 16px;
+    margin-top: 0.75rem;
   }
 }
 
 /* Small mobile */
 @media (max-width: 480px) {
   .heroContainer {
-    top: 45%;
+    padding: 2em 1.5em;
+    padding-top: 70vh; /* Increased by 40% from 20vh (20vh * 1.4 = 28vh) */
   }
 
-  .heroTitle {
-    font-size: 40px;
+  .heroTagline {
+    font-size: 30px;
+    max-width: 100%;
   }
 
   .heroSubtitle {
-    font-size: 12px;
-    margin-top: 10px;
-  }
-
-  .logo {
-    width: 70px;
-    height: 57px;
+    font-size: 14px;
+    margin-top: 0.5rem;
   }
 }
 

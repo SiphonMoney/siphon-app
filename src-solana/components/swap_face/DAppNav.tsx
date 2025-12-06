@@ -18,25 +18,6 @@ export default function DAppNav({ onWalletConnected }: DAppNavProps) {
 
   return (
     <>
-      {/* Mode Toggle */}
-      <div className="floating-mode-toggle">
-        <Link href="/dapp/darkpool">
-          <button className={`toggle-button ${isDarkPool ? 'active' : ''}`}>
-            Dark Pools
-          </button>
-        </Link>
-        <Link href="/dapp/swaps">
-          <button className={`toggle-button ${isSwaps ? 'active-limited' : ''}`}>
-            Swaps
-          </button>
-        </Link>
-        <Link href="/dapp/pro">
-          <button className={`toggle-button ${isPro ? 'active-limited' : ''}`}>
-            Pro
-          </button>
-        </Link>
-      </div>
-
       {/* Wallet Connector */}
       <div className="top-right-wallet-connector">
         <ConnectButton 
