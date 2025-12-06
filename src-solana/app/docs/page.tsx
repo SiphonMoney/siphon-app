@@ -41,7 +41,7 @@ export default function DocsPage() {
             be built without exposing execution to the public.
           </p>
           <p className={styles.paragraph}>
-            Today's DeFi trading is transparent and vulnerable. Every transaction is visible 
+            Today&apos;s DeFi trading is transparent and vulnerable. Every transaction is visible 
             on-chain, every order can be front-run, and every strategy can be copied. Until now, 
             traders had to choose between transparency and privacy, between decentralization 
             and protection. We unify privacy and DeFi into one ecosystem — with a developer 
@@ -56,7 +56,7 @@ export default function DocsPage() {
             traders go when building privacy-first trading applications.
           </p>
           <p className={styles.paragraph}>
-            The future of DeFi isn't choosing between transparency and privacy — it's having 
+            The future of DeFi isn&apos;t choosing between transparency and privacy — it&apos;s having 
             both. Our platform is that unification.
           </p>
         </div>
@@ -68,7 +68,7 @@ export default function DocsPage() {
             every strategy execution is visible on-chain. MEV bots extract value from every 
             transaction. Front-runners copy profitable strategies. Surveillance systems track 
             every move. Each vulnerability exposes a different piece of the privacy problem, 
-            but until now, they've existed without unified solutions.
+            but until now, they&apos;ve existed without unified solutions.
           </p>
           <p className={styles.paragraph}>
             Developers building privacy-first trading applications face a fragmented landscape: 
@@ -79,12 +79,12 @@ export default function DocsPage() {
           </p>
           <p className={styles.paragraph}>
             Just as Uniswap unified decentralized exchange, Aave simplified lending, and 
-            Curve optimized stablecoin swaps, we're creating a unified platform for private 
-            DeFi execution. We're building the bridge between the research frontier and traders 
+            Curve optimized stablecoin swaps, we&apos;re creating a unified platform for private 
+            DeFi execution. We&apos;re building the bridge between the research frontier and traders 
             — making cryptographic privacy as accessible as modern trading infrastructure.
           </p>
           <p className={styles.paragraph}>
-            The future of DeFi isn't choosing one primitive over another — it's composing them 
+            The future of DeFi isn&apos;t choosing one primitive over another — it&apos;s composing them 
             together. Dark pools for private execution, sealed strategies for protected logic, 
             encrypted orders for hidden intent. Our platform enables developers to discover, 
             build, and deploy hybrid privacy architectures without touching cryptography.
@@ -112,21 +112,21 @@ export default function DocsPage() {
             not just data.
           </p>
           <p className={styles.paragraph}>
-            We're building Siphon Protocol as an open, extensible platform that others can build 
+            We&apos;re building Siphon Protocol as an open, extensible platform that others can build 
             upon. Just as early platforms accelerated DeFi, zero-knowledge systems, and private 
             computation, we plan to accelerate the arrival of unified privacy-powered trading 
             applications.
           </p>
           <p className={styles.paragraph}>
             The era of invisible, composable, private-by-default execution is just beginning. 
-            We're building the foundation that makes it possible.
+            We&apos;re building the foundation that makes it possible.
           </p>
         </div>
 
         <div className={styles.section}>
           <h2 className={styles.sectionTitle}>Our approach</h2>
           <p className={styles.paragraph}>
-            We're building Siphon Protocol in three layers: The Private Execution Layer — a 
+            We&apos;re building Siphon Protocol in three layers: The Private Execution Layer — a 
             unified registry where traders browse, publish, fork, and deploy dark pools, 
             sealed strategies, and encrypted order types. The Builder Layer — a full-stack 
             development environment with code mode (familiar languages) and flow mode (visual 
@@ -143,7 +143,7 @@ export default function DocsPage() {
           </p>
           <p className={styles.paragraph}>
             Our goal is not to own the applications built on our platform, but to enable everyone 
-            to build them. We're creating the standard library of private DeFi execution and the 
+            to build them. We&apos;re creating the standard library of private DeFi execution and the 
             default place developers go when building privacy-first trading software.
           </p>
         </div>
@@ -153,11 +153,11 @@ export default function DocsPage() {
           <p className={styles.paragraph}>
             Siphon Protocol is designed as an open, extensible platform that others can build upon. 
             Our work is open where possible, collaborative by default, and constructed to support 
-            the entire ecosystem. We're committed to making privacy execution accessible, not 
+            the entire ecosystem. We&apos;re committed to making privacy execution accessible, not 
             proprietary.
           </p>
           <p className={styles.paragraph}>
-            We're fostering a community of researchers, developers, and traders who believe that 
+            We&apos;re fostering a community of researchers, developers, and traders who believe that 
             unified privacy execution can become a universal good — and who want to help define 
             the standards, practices, and tools that make it real. A community where dark pools, 
             sealed strategies, and encrypted orders come together into one coherent developer 
