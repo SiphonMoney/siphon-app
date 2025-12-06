@@ -47,7 +47,7 @@ export default function Discover({
   setSavedScenes
 }: DiscoverProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | Set<string>>('all');
-  const [selectedChains, setSelectedChains] = useState<Set<string>>(new Set());
+  const [selectedChains] = useState<Set<string>>(new Set()); // Keep for potential future use
   const [selectedNetworks, setSelectedNetworks] = useState<Set<string>>(new Set());
   const [discoverSearch, setDiscoverSearch] = useState<string>('');
   const [discoverSort, setDiscoverSort] = useState<string>('popular');
@@ -444,7 +444,7 @@ export default function Discover({
                     style={{ transform: `translateX(-${featuredStrategyIndex * 100}%)` }}
                   >
                     {featuredStrategies.map((strategy, index) => {
-                      const isLiked = likedStrategies.has(strategy.title);
+                      // const isLiked = likedStrategies.has(strategy.title); // Removed unused variable
                       return (
                         <div key={index} className="strategy-slide">
                           <div className="strategy-of-week-content">
@@ -574,7 +574,7 @@ export default function Discover({
                     style={{ transform: `translateX(-${featuredStrategyIndex * 100}%)` }}
                   >
                     {featuredStrategies.map((strategy, index) => {
-                      const isLiked = likedStrategies.has(strategy.title);
+                      // const isLiked = likedStrategies.has(strategy.title); // Removed unused variable
                       return (
                         <div 
                           key={index} 
@@ -894,7 +894,7 @@ export default function Discover({
         })
         .filter(strategy => !discoverSearch || strategy.name.toLowerCase().includes(discoverSearch.toLowerCase()) || strategy.description.toLowerCase().includes(discoverSearch.toLowerCase()))
         .map((strategy, index) => {
-          const isFavorite = favoriteStrategies.has(strategy.name);
+          // const isFavorite = favoriteStrategies.has(strategy.name); // Removed unused variable
           const isLiked = likedStrategies.has(strategy.name);
           return (
             <div 

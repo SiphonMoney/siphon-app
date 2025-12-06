@@ -3,6 +3,16 @@
 import { useEffect, useRef } from "react";
 import "./ParticleLineEffect.css";
 
+interface ThreeLibrary {
+  [key: string]: unknown;
+}
+
+declare global {
+  interface Window {
+    THREE: ThreeLibrary;
+  }
+}
+
 interface ParticleLineEffectProps {
   isActive: boolean;
 }
@@ -57,11 +67,14 @@ export default function ParticleLineEffect({ isActive }: ParticleLineEffectProps
       const width = container.offsetWidth;
       const height = container.offsetHeight;
       
-      const scene = new THREE.Scene();
-      const camera = new THREE.OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 1, 1000);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scene = new (THREE as any).Scene();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const camera = new (THREE as any).OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 1, 1000);
       camera.position.z = 100;
 
-      const renderer = new THREE.WebGLRenderer({ 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const renderer = new (THREE as any).WebGLRenderer({ 
         canvas, 
         alpha: true, 
         antialias: true 
@@ -71,7 +84,8 @@ export default function ParticleLineEffect({ isActive }: ParticleLineEffectProps
 
       // Create particles along a horizontal line
       const particleCount = 150;
-      const geometry = new THREE.BufferGeometry();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const geometry = new (THREE as any).BufferGeometry();
       const positions = new Float32Array(particleCount * 3);
       const colors = new Float32Array(particleCount * 3);
       const sizes = new Float32Array(particleCount);
@@ -99,11 +113,15 @@ export default function ParticleLineEffect({ isActive }: ParticleLineEffectProps
         sizes[i] = 1 + Math.random() * 2;
       }
 
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      geometry.setAttribute('position', new (THREE as any).BufferAttribute(positions, 3));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      geometry.setAttribute('color', new (THREE as any).BufferAttribute(colors, 3));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      geometry.setAttribute('size', new (THREE as any).BufferAttribute(sizes, 1));
 
-      const material = new THREE.ShaderMaterial({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const material = new (THREE as any).ShaderMaterial({
         uniforms: {
           time: { value: 0 },
           intensity: { value: 0 },
@@ -140,10 +158,12 @@ export default function ParticleLineEffect({ isActive }: ParticleLineEffectProps
         vertexColors: true,
       });
 
-      const particles = new THREE.Points(geometry, material);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const particles = new (THREE as any).Points(geometry, material);
       scene.add(particles);
 
-      particlesRef.current = [particles, material, scene, camera, renderer];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      particlesRef.current = [particles, material, scene, camera, renderer] as any;
 
       // Animation loop
       const animate = () => {
@@ -156,13 +176,17 @@ export default function ParticleLineEffect({ isActive }: ParticleLineEffectProps
         const targetIntensity = isActive ? 1.0 : 0.3;
         intensityRef.current += (targetIntensity - intensityRef.current) * 0.1;
         
-        material.uniforms.time.value += 0.016;
-        material.uniforms.intensity.value = intensityRef.current;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (material as any).uniforms.time.value += 0.016;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (material as any).uniforms.intensity.value = intensityRef.current;
         
         // Rotate particles slightly for effect
-        particles.rotation.z += 0.001;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (particles as any).rotation.z += 0.001;
         
-        renderer.render(scene, camera);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (renderer as any).render(scene, camera);
       };
 
       animate();
