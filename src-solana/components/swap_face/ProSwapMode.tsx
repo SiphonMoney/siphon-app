@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
 import "./ProSwapMode.css";
 import BuildPreview from "./previews/BuildPreview";
@@ -110,38 +110,6 @@ export default function ProSwapMode({
     }
   }, []);
   
-  
-  const toggleFavorite = useCallback((strategyName: string, strategyData?: { nodes: Node[]; edges: Edge[] }) => {
-    setFavoriteStrategies((prev) => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(strategyName)) {
-        newFavorites.delete(strategyName);
-        // Remove from saved scenes if it was a favorite
-        setSavedScenes((scenes) => {
-          const filtered = scenes.filter(s => s.name !== strategyName);
-          localStorage.setItem('siphon-blueprint-scenes', JSON.stringify(filtered));
-          return filtered;
-        });
-      } else {
-        newFavorites.add(strategyName);
-        // If strategy data provided, save it as a scene
-        if (strategyData) {
-          const favoriteScene = {
-            name: strategyName,
-            nodes: strategyData.nodes || [],
-            edges: strategyData.edges || []
-          };
-          setSavedScenes((scenes) => {
-            const updated = [...scenes.filter(s => s.name !== strategyName), favoriteScene];
-            localStorage.setItem('siphon-blueprint-scenes', JSON.stringify(updated));
-            return updated;
-          });
-        }
-      }
-      localStorage.setItem('siphon-favorite-strategies', JSON.stringify(Array.from(newFavorites)));
-      return newFavorites;
-    });
-  }, []);
   
 
   return (

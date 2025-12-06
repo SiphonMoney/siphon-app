@@ -1148,9 +1148,10 @@ export default function ThreeEffect() {
       ctx.globalCompositeOperation = "lighter";
 
       for (let i = 1; i <= count; i++) {
-        if (particles[i]) {
-          updateParticle(particles[i]);
-          drawParticle(particles[i]);
+        const particle = particles[i];
+        if (particle) {
+          updateParticle(particle);
+          drawParticle(particle);
         }
       }
 

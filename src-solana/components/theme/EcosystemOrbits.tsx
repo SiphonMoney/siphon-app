@@ -27,7 +27,7 @@ export default function EcosystemOrbits({ chains, protocols }: EcosystemOrbitsPr
         if (!container) return;
         
         const containerWidth = container.offsetWidth;
-        const containerHeight = container.offsetHeight;
+        // containerHeight removed - unused
         
         // The orbits are positioned at bottom: 0, so their bottom edge is at the bottom of container
         // Chain circle: 800px diameter, radius 400px, center is 400px up from bottom
