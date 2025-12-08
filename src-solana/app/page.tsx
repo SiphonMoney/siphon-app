@@ -31,8 +31,8 @@ export default function Home() {
             <h2 className={landingStyles.sectionTitle}>On-Demand Strategy</h2>
             <p className={landingStyles.sectionDescription}>
               Run any DeFi strategy on-demand in a fully encrypted manner. Arbitrage, yield farming, liquidity mining, 
-              grid trading—all executed privately. Connect your wallet, select a strategy, 
-              execute. No long setups. No configuration. Your trades remain invisible to MEVs.
+              grid trading—all privately. Connect your wallet, select a strategy, 
+              execute. No long setups. No complicated configuration.
             </p>
           </div>
         </section>
@@ -50,12 +50,11 @@ export default function Home() {
         <section className={landingStyles.contentSection}>
           <div className={`${landingStyles.sectionContent} ${landingStyles.alignRight}`}>
             <h2 className={landingStyles.sectionTitle}>
-              Fully Encrypted Execution
+              Fully Encrypted
             </h2>
             <p className={landingStyles.sectionDescription}>
               Every strategy execution runs through fully encrypted channels. Your orders execute privately. Your 
-              strategy logic stays sealed. Trade large positions without market impact. Execute without revealing 
-              intent.
+              strategy logic stays sealed. Execute your alphas without revealing your intent.
             </p>
           </div>
         </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./ThreeEffect.css";
 
 // Declare THREE.js types
@@ -36,6 +36,9 @@ export default function ThreeEffect() {
   const scannerCanvasRef = useRef<HTMLCanvasElement>(null);
   const cardStreamRef = useRef<HTMLDivElement>(null);
   const cardLineRef = useRef<HTMLDivElement>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isHeroVisible, setIsHeroVisible] = useState(true);
+  const heroSectionRef = useRef<HTMLElement | null>(null);
   
   const positionRef = useRef(0); // Will be initialized after cards are created
   const velocityRef = useRef(120);
@@ -43,6 +46,50 @@ export default function ThreeEffect() {
   const particleSystemRef = useRef<{ destroy?: () => void } | null>(null);
   const scannerRef = useRef<{ destroy?: () => void } | null>(null);
   const lastTimeRef = useRef(0);
+
+  useEffect(() => {
+    setIsMounted(true);
+    
+    // Use Intersection Observer to track hero section visibility
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          // Hero is visible if any part of it is in the viewport
+          setIsHeroVisible(entry.isIntersecting || entry.boundingClientRect.bottom > 0);
+        });
+      },
+      {
+        threshold: 0,
+        rootMargin: '0px'
+      }
+    );
+    
+    // Find and observe hero section
+    const findAndObserveHero = () => {
+      const heroSection = document.querySelector('.heroSection') as HTMLElement;
+      if (heroSection) {
+        heroSectionRef.current = heroSection;
+        observer.observe(heroSection);
+        return true;
+      }
+      return false;
+    };
+    
+    // Try immediately and with delay
+    if (!findAndObserveHero()) {
+      const timer = setTimeout(() => {
+        findAndObserveHero();
+      }, 100);
+      return () => {
+        clearTimeout(timer);
+        observer.disconnect();
+      };
+    }
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     // Load Three.js dynamically
@@ -73,9 +120,9 @@ export default function ThreeEffect() {
       populateCardLine();
       // Initialize position so cards start from right side, just before entering scanner
       const isMobile = window.innerWidth <= 480;
-      const scannerX = isMobile 
-        ? window.innerWidth / 2 - 5  // 5px to the left of center on mobile (moved towards center)
-        : window.innerWidth / 2 + 65; // 65px to the right of center on desktop (moved right from 35px)
+        const scannerX = isMobile 
+          ? window.innerWidth / 2 + 75  // 75px to the right of center on mobile
+          : window.innerWidth / 2 + 65; // 65px to the right of center on desktop
       const initialOffset = isMobile 
         ? window.innerWidth - 100  // Start from right side, just before scanner on mobile
         : scannerX + 100; // Start almost before scanner on desktop (reduced from 250)
@@ -95,8 +142,20 @@ export default function ThreeEffect() {
       if (particleSystemRef.current) {
         particleSystemRef.current.destroy?.();
       }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Initialize scanner when canvas becomes available
+  useEffect(() => {
+    if (scannerCanvasRef.current && !scannerRef.current) {
+      initScanner();
+    }
+    
+    return () => {
       if (scannerRef.current) {
         scannerRef.current.destroy?.();
+        scannerRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -546,9 +605,14 @@ export default function ThreeEffect() {
     if (!cardLineRef.current) return;
     cardLineRef.current.innerHTML = "";
     const cardsCount = 30;
-    for (let i = 0; i < cardsCount; i++) {
-      const cardWrapper = createCardWrapper(i);
-      cardLineRef.current.appendChild(cardWrapper);
+    // Create multiple sets of cards for seamless infinite scrolling
+    // We'll create 3 sets: one visible, one coming, one going
+    const setsCount = 3;
+    for (let set = 0; set < setsCount; set++) {
+      for (let i = 0; i < cardsCount; i++) {
+        const cardWrapper = createCardWrapper(i);
+        cardLineRef.current.appendChild(cardWrapper);
+      }
     }
   };
 
@@ -556,8 +620,8 @@ export default function ThreeEffect() {
     // On mobile, align scanner towards center
     const isMobile = window.innerWidth <= 480;
     const scannerX = isMobile 
-      ? window.innerWidth / 2 + 50  // 5px to the left of center on mobile (moved towards center)
-      : window.innerWidth / 2 + 85; // 65px to the right of center on desktop (moved right from 35px)
+      ? window.innerWidth / 2 + 20// 75px to the right of center on mobile
+      : window.innerWidth / 2 + 85; // 85px to the right of center on desktop
     const scannerWidth = isMobile ? 6 : 8; // Bigger on mobile
     const scannerLeft = scannerX - scannerWidth / 2;
     const scannerRight = scannerX + scannerWidth / 2;
@@ -671,7 +735,8 @@ export default function ThreeEffect() {
         positionRef.current += velocityRef.current * -1 * deltaTime; // Always move left
 
         const containerWidth = cardStreamRef.current?.offsetWidth || window.innerWidth;
-        const cardLineWidth = (400 + 60) * 30; // card width + gap * count
+        const singleSetWidth = (400 + 60) * 30; // card width + gap * count for one set
+        const totalCardLineWidth = singleSetWidth * 3; // 3 sets for seamless loop
         const isMobile = window.innerWidth <= 480;
         const scannerX = isMobile 
           ? window.innerWidth / 2 - 5  // 5px to the left of center on mobile (moved towards center)
@@ -680,10 +745,12 @@ export default function ThreeEffect() {
           ? window.innerWidth - 100  // Start from right side, just before scanner on mobile
           : scannerX + 100; // Start almost before scanner on desktop (reduced from 300)
 
-        if (positionRef.current < -cardLineWidth) {
-          positionRef.current = containerWidth + initialOffset;
-        } else if (positionRef.current > containerWidth) {
-          positionRef.current = -cardLineWidth + initialOffset;
+        // Seamless infinite loop: when one set moves completely off screen, reset to show next set
+        if (positionRef.current < -singleSetWidth) {
+          // Move position forward by one set width to seamlessly continue
+          positionRef.current += singleSetWidth;
+        } else if (positionRef.current > containerWidth + singleSetWidth) {
+          positionRef.current = -singleSetWidth + initialOffset;
         }
 
         if (cardLineRef.current) {
@@ -884,7 +951,10 @@ export default function ThreeEffect() {
     let count = 0;
     const maxParticles = 800;
     let intensity = 0.8;
-    let lightBarX = w / 2 + 35; // 35px to the right of center
+    const isMobile = w <= 480;
+    let lightBarX = isMobile 
+      ? w / 2 + 5  // 5px to the right of center on mobile
+      : w / 2 + 65; // 65px to the right of center on desktop
     const lightBarWidth = 3;
     let fadeZone = 60;
     let scanningActive = false;
@@ -1197,8 +1267,8 @@ export default function ThreeEffect() {
     const checkScanning = () => {
       const isMobile = window.innerWidth <= 480;
       const scannerX = isMobile 
-        ? window.innerWidth / 2 - 5  // 5px to the left of center on mobile (moved towards center)
-        : window.innerWidth / 2 + 65; // 65px to the right of center on desktop (moved right from 35px)
+        ? window.innerWidth / 2 + 75  // 75px to the right of center on mobile
+        : window.innerWidth / 2 + 65; // 65px to the right of center on desktop
       const scannerWidth = isMobile ? 6 : 8; // Bigger on mobile
       const scannerLeft = scannerX - scannerWidth / 2;
       const scannerRight = scannerX + scannerWidth / 2;
@@ -1223,8 +1293,8 @@ export default function ThreeEffect() {
       w = window.innerWidth;
       const isMobile = w <= 480;
       lightBarX = isMobile 
-        ? w / 2 - 5  // 5px to the left of center on mobile (moved towards center)
-        : w / 2 + 65; // 65px to the right of center on desktop (moved right from 35px)
+        ? w / 2 + 75  // 75px to the right of center on mobile
+        : w / 2 + 65; // 65px to the right of center on desktop
       canvas.width = w;
       canvas.height = h;
       canvas.style.width = `${w}px`;
@@ -1258,9 +1328,12 @@ export default function ThreeEffect() {
     <div className="three-effect-container">
       <div className="container" ref={containerRef}>
         <canvas id="particleCanvas" ref={particleCanvasRef}></canvas>
-        <canvas id="scannerCanvas" ref={scannerCanvasRef}></canvas>
-
-        <div className="scanner"></div>
+        <canvas 
+          id="scannerCanvas" 
+          ref={scannerCanvasRef} 
+          style={{ display: 'block', opacity: isHeroVisible ? 1 : 0, transition: 'opacity 0.3s' }}
+        ></canvas>
+        <div className="scanner" style={{ opacity: isHeroVisible ? 1 : 0, transition: 'opacity 0.3s' }}></div>
 
         <div className="card-stream" ref={cardStreamRef}>
           <div className="card-line" ref={cardLineRef}></div>
