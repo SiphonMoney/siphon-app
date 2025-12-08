@@ -427,8 +427,8 @@
 #scannerCanvas {
   position: absolute;
   top: 37%;
-  left: calc(50% + 100px);
-  transform: translate(-50%, -50%);
+  left: 0;
+  transform: translateY(-50%);
   width: 100%;
   height: 300px;
   z-index: 15;
@@ -461,14 +461,32 @@
 /* Mobile styles */
 @media (max-width: 480px) {
   .scanner {
-    left: calc(50% - 5px); /* Move towards center (was calc(50% - 20px)) */
+    position: absolute;
+    left: calc(50% - 72px);
+    top: 37%;
     width: 6px; /* Make bigger (was 4px) */
     height: 350px; /* Make bigger (was 300px) */
+    animation: scanPulseMobile 2s ease-in-out infinite alternate;
+    transform: translateY(-50%);
   }
 
   #scannerCanvas {
-    left: calc(50% - 5px); /* Move towards center (was calc(50% - 20px)) */
+    position: absolute;
+    left: 0;
+    top: 37%;
+    transform: translateY(-50%);
     height: 350px; /* Make bigger (was 300px) */
+  }
+}
+
+@keyframes scanPulseMobile {
+  0% {
+    opacity: 0.8;
+    transform: translateY(-50%) scaleY(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-50%) scaleY(1.1);
   }
 }
 
