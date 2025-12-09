@@ -4,7 +4,7 @@ export default function AppFooter() {
       <div className="footer-left">
       <p>Fully Homomorphic Encryption.</p>
       <p>Multi-Party Computation.</p>
-      <p>Zero-Knowledge Audit Proofs.</p>
+      <p>Zero-Knowledge Proofs.</p>
 
       </div>
 

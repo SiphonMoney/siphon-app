@@ -1,20 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import ProSwapMode from "@/components/ProSwapMode";
+import { useState, useEffect } from "react";
 import Nav from "@/components/theme/Nav";
+import SimpleSwapMode from "@/components/archive/SimpleSwapMode";
 import { WalletInfo } from "@/components/archive/lib/walletManager";
-import styles from "../hero.module.css";
+import styles from "../../hero.module.css";
+import "@/components/swap_face/SwapInterface.css";
 
-export default function DappPage() {
-  const [, setWalletConnected] = useState(false);
+const marqueeKeyframes = `
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  @keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  @keyframes fadeInUp {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+`;
+
+export default function SwapsPage() {
+  const [walletConnected, setWalletConnected] = useState(false);
   const [, setConnectedWallet] = useState<WalletInfo | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const handleWalletConnected = (wallet: WalletInfo) => {
+    console.log('Wallet connected:', wallet);
     setWalletConnected(true);
     setConnectedWallet(wallet);
     localStorage.setItem('siphon-connected-wallet', JSON.stringify(wallet));
   };
+
+  useEffect(() => {
+    // Delay to ensure styles are loaded
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 100);
+
+    // Check for persisted wallet connection
+    const persistedWallet = localStorage.getItem('siphon-connected-wallet');
+    if (persistedWallet) {
+      try {
+        const wallet = JSON.parse(persistedWallet);
+        setConnectedWallet(wallet);
+        setWalletConnected(true);
+      } catch (error) {
+        console.error('Failed to parse persisted wallet:', error);
+        localStorage.removeItem('siphon-connected-wallet');
+      }
+    }
+
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div style={{ 
@@ -93,10 +133,15 @@ export default function DappPage() {
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <ProSwapMode isDemoMode={true} />
+            <SimpleSwapMode
+              isLoaded={isLoaded}
+              walletConnected={walletConnected}
+              onWalletConnected={handleWalletConnected}
+            />
           </div>
         </div>
       </div>
     </div>
   );
 }
+
