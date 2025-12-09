@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import ConnectButton from "../swap_face/extensions/ConnectButton";
-import { WalletInfo } from "../../lib/walletManager";
+import ConnectButton from "../archive/extensions/ConnectButton";
+import { WalletInfo } from "../archive/lib/walletManager";
 
 interface NavProps {
   onWalletConnected?: (wallet: WalletInfo) => void;
@@ -18,7 +18,7 @@ export default function Nav({ onWalletConnected }: NavProps) {
   const isDappPage = pathname?.startsWith("/dapp");
   const isDarkPool = pathname === "/dapp/darkpool";
   const isSwaps = pathname === "/dapp/swaps";
-  const isPro = pathname === "/dapp/pro";
+  const isPro = pathname === "/dapp" || pathname === "/dapp/pro";
   
   // Initialize with default value to avoid hydration mismatch
   const [proViewMode, setProViewMode] = useState<'blueprint' | 'run' | 'discover'>('discover');
@@ -39,9 +39,9 @@ export default function Nav({ onWalletConnected }: NavProps) {
   const handleProViewModeChange = (mode: 'blueprint' | 'run' | 'discover') => {
     setProViewMode(mode);
     localStorage.setItem('pro-view-mode', mode);
-    // Navigate to pro page if not already there
+    // Navigate to dapp page if not already there
     if (!isPro) {
-      router.push('/dapp/pro');
+      router.push('/dapp');
     }
     // Trigger view mode change event for ProSwapMode component
     if (typeof window !== 'undefined') {
