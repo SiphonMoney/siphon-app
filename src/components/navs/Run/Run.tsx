@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Node, Edge } from '@xyflow/react';
+import StratDetails from "@/components/StratDetails";
 import "./Run.css";
 
 interface RunProps {
@@ -34,6 +35,24 @@ export default function Run({
   setViewMode
 }: RunProps) {
   const [strategyViewMode, setStrategyViewMode] = useState<'cards' | 'list'>('cards');
+  const [selectedStrategy, setSelectedStrategy] = useState<{ name: string; nodes: Node[]; edges: Edge[] } | null>(null);
+  const [showStrategyModal, setShowStrategyModal] = useState(false);
+  const [publishedStrategies, setPublishedStrategies] = useState<Set<string>>(new Set());
+
+  // Load published strategies from localStorage
+  useEffect(() => {
+    const discoverStrategiesKey = 'siphon-discover-strategies';
+    const stored = localStorage.getItem(discoverStrategiesKey);
+    if (stored) {
+      try {
+        const strategiesData = JSON.parse(stored);
+        const published = new Set(Object.keys(strategiesData));
+        setPublishedStrategies(published);
+      } catch (error) {
+        console.error('Failed to load published strategies:', error);
+      }
+    }
+  }, []);
 
   const onEditStrategy = useCallback((sceneName: string) => {
     const scene = savedScenes.find(s => s.name === sceneName);
@@ -136,23 +155,31 @@ export default function Run({
     }
   }, [setSavedScenes, runningStrategies, stopStrategy]);
 
-  const onPublishStrategy = useCallback((sceneName: string) => {
+  const togglePublishStrategy = useCallback((sceneName: string) => {
     const scene = savedScenes.find(s => s.name === sceneName);
-    if (scene) {
-      // Save to discover strategies (published strategies)
-      const discoverStrategiesKey = 'siphon-discover-strategies';
-      const stored = localStorage.getItem(discoverStrategiesKey);
-      let discoverStrategies: Record<string, any> = {};
-      
-      if (stored) {
-        try {
-          discoverStrategies = JSON.parse(stored);
-        } catch (error) {
-          console.error('Failed to load discover strategies:', error);
-        }
+    if (!scene) return;
+
+    const discoverStrategiesKey = 'siphon-discover-strategies';
+    const stored = localStorage.getItem(discoverStrategiesKey);
+    let discoverStrategies: Record<string, any> = {};
+    
+    if (stored) {
+      try {
+        discoverStrategies = JSON.parse(stored);
+      } catch (error) {
+        console.error('Failed to load discover strategies:', error);
       }
-      
-      // Add to discover strategies
+    }
+
+    const isCurrentlyPublished = publishedStrategies.has(sceneName);
+    const newPublished = new Set(publishedStrategies);
+
+    if (isCurrentlyPublished) {
+      // Unpublish - remove from discover strategies
+      delete discoverStrategies[sceneName];
+      newPublished.delete(sceneName);
+    } else {
+      // Publish - add to discover strategies
       discoverStrategies[sceneName] = {
         nodes: scene.nodes,
         edges: scene.edges,
@@ -163,11 +190,12 @@ export default function Run({
         chains: [],
         networks: []
       };
-      
-      localStorage.setItem(discoverStrategiesKey, JSON.stringify(discoverStrategies));
-      alert(`Strategy "${sceneName}" published to Discover!`);
+      newPublished.add(sceneName);
     }
-  }, [savedScenes]);
+    
+    localStorage.setItem(discoverStrategiesKey, JSON.stringify(discoverStrategies));
+    setPublishedStrategies(newPublished);
+  }, [savedScenes, publishedStrategies]);
 
   return (
     <div className={`run-mode-view ${isLoaded ? 'loaded' : ''}`}>
@@ -241,91 +269,121 @@ export default function Run({
                     <div className="strategy-card-info">
                       <div className="strategy-card-header-row">
                         <h3 className="strategy-card-title">{scene.name}</h3>
-                        <div className="strategy-card-controls">
-                          <button
-                            className="strategy-edit-btn"
-                            onClick={() => onEditStrategy(scene.name)}
-                            title="Edit strategy"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                          </button>
-                          <button
-                            className="strategy-publish-btn"
-                            onClick={() => onPublishStrategy(scene.name)}
-                            title="Publish strategy"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                              <polyline points="15 3 21 3 21 9" />
-                              <line x1="10" y1="14" x2="21" y2="3" />
-                            </svg>
-                          </button>
-                          <button
-                            className="strategy-delete-btn"
-                            onClick={() => onDeleteStrategy(scene.name)}
-                            title="Delete strategy"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                          <button
-                            className={`strategy-loop-toggle ${isLooping ? 'active' : ''}`}
-                            onClick={() => toggleLoop(scene.name)}
-                            title={isLooping ? 'Disable loop' : 'Enable loop'}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="23 4 23 10 17 10" />
-                              <polyline points="1 20 1 14 7 14" />
-                              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                            </svg>
-                          </button>
-                          <div className="strategy-card-action">
-                            {isRunning ? (
-                              <button
-                                className="strategy-stop-btn"
-                                onClick={() => stopStrategy(scene.name)}
-                                title="Stop strategy"
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                                </svg>
-                              </button>
-                            ) : (
-                              <button
-                                className="strategy-play-btn"
-                                onClick={() => startStrategy(scene.name)}
-                                title="Start strategy"
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                  <polygon points="5 3 19 12 5 21 5 3" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
                       </div>
                       <p className="strategy-card-description">{getStrategyDescription()}</p>
                       <div className="strategy-card-meta">
-                        <span className="strategy-meta-item">{nodeCount} step{nodeCount !== 1 ? 's' : ''}</span>
-                        <span className="strategy-meta-item">${cost.toFixed(4)} est. cost</span>
-                        <span className="strategy-meta-item">Expected Input: {calculateExpectedInput(scene)}</span>
-                        <span className="strategy-meta-item">Estimated Output: {calculateEstimatedOutput(scene)}</span>
+                        <div className="strategy-meta-row">
+                          <span className="strategy-meta-label">Steps</span>
+                          <span className="strategy-meta-value">{nodeCount} step{nodeCount !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="strategy-meta-row">
+                          <span className="strategy-meta-label">Est. Cost</span>
+                          <span className="strategy-meta-value">${cost.toFixed(4)}</span>
+                        </div>
+                        <div className="strategy-meta-row">
+                          <span className="strategy-meta-label">Expected Input</span>
+                          <span className="strategy-meta-value">{calculateExpectedInput(scene)}</span>
+                        </div>
+                        <div className="strategy-meta-row">
+                          <span className="strategy-meta-label">Estimated Output</span>
+                          <span className="strategy-meta-value">{calculateEstimatedOutput(scene)}</span>
+                        </div>
                         {isLooping && (
-                          <span className="strategy-meta-item loop-indicator">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="23 4 23 10 17 10" />
-                              <polyline points="1 20 1 14 7 14" />
-                              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                            </svg>
-                            Loop
-                          </span>
+                          <div className="strategy-meta-row">
+                            <span className="strategy-meta-label">Loop</span>
+                            <span className="strategy-meta-item loop-indicator">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="23 4 23 10 17 10" />
+                                <polyline points="1 20 1 14 7 14" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                              </svg>
+                              Enabled
+                            </span>
+                          </div>
                         )}
                       </div>
+                    </div>
+                  </div>
+                  <div className="strategy-card-actions">
+                    <div className="strategy-card-actions-group">
+                      <button
+                        className={`strategy-publish-btn ${publishedStrategies.has(scene.name) ? 'active' : ''}`}
+                        onClick={() => togglePublishStrategy(scene.name)}
+                        title={publishedStrategies.has(scene.name) ? 'Make private' : 'Make public'}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill={publishedStrategies.has(scene.name) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                          <line x1="4" y1="22" x2="4" y2="15" />
+                        </svg>
+                        <span>{publishedStrategies.has(scene.name) ? 'Public' : 'Public'}</span>
+                      </button>
+                      {isRunning ? (
+                        <button
+                          className="strategy-stop-btn"
+                          onClick={() => stopStrategy(scene.name)}
+                          title="Stop strategy"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="6" y="6" width="12" height="12" rx="2" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          className="strategy-play-btn"
+                          onClick={() => startStrategy(scene.name)}
+                          title="Start strategy"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </button>
+                      )}
+                      <button
+                        className={`strategy-loop-toggle ${isLooping ? 'active' : ''}`}
+                        onClick={() => toggleLoop(scene.name)}
+                        title={isLooping ? 'Disable loop' : 'Enable loop'}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="23 4 23 10 17 10" />
+                          <polyline points="1 20 1 14 7 14" />
+                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                        </svg>
+                      </button>
+                      <button
+                        className="strategy-edit-btn"
+                        onClick={() => onEditStrategy(scene.name)}
+                        title="Edit strategy"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        className="strategy-details-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedStrategy(scene);
+                          setShowStrategyModal(true);
+                        }}
+                        title="More Details"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="16" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                      </button>
+                      <button
+                        className="strategy-delete-btn"
+                        onClick={() => onDeleteStrategy(scene.name)}
+                        title="Delete strategy"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                   {isRunning && runningData && (
@@ -341,6 +399,71 @@ export default function Run({
             })
         )}
       </div>
+      
+      {/* Strategy Details Modal */}
+      <StratDetails
+        isOpen={showStrategyModal}
+        onClose={() => {
+          setShowStrategyModal(false);
+          setSelectedStrategy(null);
+        }}
+        strategy={selectedStrategy ? (() => {
+          const nodeTypes = selectedStrategy.nodes.map(n => n.data.type);
+          const hasDeposit = nodeTypes.includes('deposit');
+          const hasSwap = nodeTypes.includes('swap');
+          const hasWithdraw = nodeTypes.includes('withdraw');
+          const hasStrategy = nodeTypes.includes('strategy');
+          
+          const parts = [];
+          if (hasDeposit) parts.push('Deposit');
+          if (hasSwap) parts.push('Swap');
+          if (hasStrategy) parts.push('Strategy');
+          if (hasWithdraw) parts.push('Withdraw');
+          
+          let description = 'Empty strategy';
+          if (parts.length === 1) description = `${parts[0]} operation`;
+          else if (parts.length === 2) description = `${parts[0]} -> ${parts[1]}`;
+          else if (parts.length > 2) description = `${parts[0]} -> ${parts.slice(1, -1).join(' -> ')} -> ${parts[parts.length - 1]}`;
+          
+          return {
+            name: selectedStrategy.name,
+            nodes: selectedStrategy.nodes,
+            edges: selectedStrategy.edges,
+            cost: calculateStrategyCost(selectedStrategy),
+            description: description
+          };
+        })() : null}
+        onEdit={() => {
+          if (selectedStrategy) {
+            onEditStrategy(selectedStrategy.name);
+            setShowStrategyModal(false);
+            setSelectedStrategy(null);
+          }
+        }}
+        onRun={() => {
+          if (selectedStrategy) {
+            startStrategy(selectedStrategy.name);
+            setShowStrategyModal(false);
+            setSelectedStrategy(null);
+          }
+        }}
+        onFavorite={() => {
+          if (selectedStrategy) {
+            const newFavorites = new Set(favoriteStrategies);
+            if (newFavorites.has(selectedStrategy.name)) {
+              newFavorites.delete(selectedStrategy.name);
+            } else {
+              newFavorites.add(selectedStrategy.name);
+            }
+            // Save to localStorage
+            localStorage.setItem('siphon-favorite-strategies', JSON.stringify(Array.from(newFavorites)));
+            // Note: The parent component (ProSwapMode) will reload favorites on next render
+            setShowStrategyModal(false);
+            setSelectedStrategy(null);
+          }
+        }}
+        isFavorite={selectedStrategy ? favoriteStrategies.has(selectedStrategy.name) : false}
+      />
     </div>
   );
 }
