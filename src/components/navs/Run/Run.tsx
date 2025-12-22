@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Node, Edge } from '@xyflow/react';
-import StratDetails from "@/components/StratDetails";
+import StratDetails from "@/components/navs/Run/StratDetails";
 import "./Run.css";
 
 interface RunProps {

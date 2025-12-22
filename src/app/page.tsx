@@ -12,7 +12,6 @@ export default function Home() {
       <Nav />
       {/* Hero section with ThreeEffect */}
       <div className={landingStyles.heroSection}>
-        <ThreeEffect />
         {/* Hero tagline */}
         <div className={styles.heroContainer}>
           <h1 className={styles.heroTagline}>
@@ -22,6 +21,7 @@ export default function Home() {
            run any DeFi logic privately
           </p>
         </div>
+        <ThreeEffect />
       </div>
       
       {/* Scrollable Content Sections */}
@@ -69,28 +69,27 @@ export default function Home() {
           </div>
         </section>
 
+        <footer className={landingStyles.simpleFooter}>
+          <div className={landingStyles.footerLeft}>
+            <p>Fully Homomorphic Encryption.</p>
+            <p>Multi-Party Computation.</p>
+            <p>Zero-Knowledge Audit Proofs.</p>
+          </div>
+          
+          <div className={landingStyles.footerCenter}>
+            <a href="/docs">Docs</a>
+            <a href="/dapp/darkpool">Services</a>
+            <a href="#about">About</a>
+            <a href="#contact">Contact</a>
+          </div>
+          
+          <div className={landingStyles.footerRight}>
+            <p>Hyperliquid.</p>
+            <p>Untraceable.</p>
+            <p>Provable.</p>
+          </div>
+        </footer>
       </div>
-      
-      <footer className={landingStyles.simpleFooter}>
-        <div className={landingStyles.footerLeft}>
-          <p>Fully Homomorphic Encryption.</p>
-          <p>Multi-Party Computation.</p>
-          <p>Zero-Knowledge Audit Proofs.</p>
-        </div>
-        
-        <div className={landingStyles.footerCenter}>
-          <a href="/docs">Docs</a>
-          <a href="/dapp/darkpool">Services</a>
-          <a href="#about">About</a>
-          <a href="#contact">Contact</a>
-        </div>
-        
-        <div className={landingStyles.footerRight}>
-          <p>Hyperliquid.</p>
-          <p>Untraceable.</p>
-          <p>Provable.</p>
-        </div>
-      </footer>
     </div>
   );
 }

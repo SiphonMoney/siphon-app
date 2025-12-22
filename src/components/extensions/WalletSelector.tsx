@@ -19,22 +19,6 @@ const walletOptions: WalletOption[] = [
     chain: 'EVM',
     description: '',
     active: true
-  },
-  {
-    id: 'phantom',
-    name: 'Phantom',
-    icon: 'PH',
-    chain: 'Solana',
-    description: '',
-    active: true
-  },
-  {
-    id: 'solflare',
-    name: 'Solflare',
-    icon: 'SF',
-    chain: 'Solana',
-    description: '',
-    active: true
   }
 ];
 
@@ -103,3 +87,4 @@ export default function WalletSelector({ onWalletSelect, className }: WalletSele
     </div>
   );
 }
+

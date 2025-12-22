@@ -1,0 +1,95 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
+import Discover from "./navs/Discover/Discover";
+import Build from "./navs/Builder/Build";
+import Run from "./navs/Run/Run";
+import UserDash from "./navs/UserDash/UserDash";
+
+interface NexusProps {
+  isLoaded?: boolean;
+}
+
+export default function Nexus({
+  isLoaded = true
+}: NexusProps) {
+  const [viewMode, setViewMode] = useState<'blueprint' | 'run' | 'discover' | 'userdash'>('discover');
+  const [runningStrategies, setRunningStrategies] = useState<Map<string, { startTime: number; isRunning: boolean; loop: boolean }>>(new Map());
+  const [savedScenes, setSavedScenes] = useState<Array<{ name: string; nodes: Node[]; edges: Edge[] }>>([]);
+  const [currentFileName, setCurrentFileName] = useState<string>('untitled.io');
+  const [favoriteStrategies, setFavoriteStrategies] = useState<Set<string>>(new Set());
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  
+  // React Flow state
+  const initialNodes: Node[] = [];
+  const [nodes, setNodes] = useNodesState(initialNodes);
+  const [edges, setEdges] = useEdgesState<Edge>([]);
+
+  // Listen for view mode changes from Nav component or balance click
+  useEffect(() => {
+    const handleViewModeChange = (event: CustomEvent) => {
+      const mode = event.detail as 'blueprint' | 'run' | 'discover' | 'userdash';
+      setViewMode(mode);
+    };
+
+    window.addEventListener('pro-view-mode-change', handleViewModeChange as EventListener);
+    window.addEventListener('userdash-view-change', handleViewModeChange as EventListener);
+    return () => {
+      window.removeEventListener('pro-view-mode-change', handleViewModeChange as EventListener);
+      window.removeEventListener('userdash-view-change', handleViewModeChange as EventListener);
+    };
+  }, []);
+
+  return (
+    <div className="pro-mode-wrapper">
+      <div className="pro-mode-content">
+        {viewMode === 'discover' ? (
+          <Discover
+            isLoaded={isLoaded}
+            setNodes={setNodes}
+            setEdges={setEdges}
+            setViewMode={setViewMode}
+            setCurrentFileName={setCurrentFileName}
+            savedScenes={savedScenes}
+            setSavedScenes={setSavedScenes}
+            runningStrategies={runningStrategies}
+            setRunningStrategies={setRunningStrategies}
+          />
+        ) : viewMode === 'run' ? (
+          <Run
+            isLoaded={isLoaded}
+            savedScenes={savedScenes}
+            setSavedScenes={setSavedScenes}
+            favoriteStrategies={favoriteStrategies}
+            showFavoritesOnly={showFavoritesOnly}
+            setShowFavoritesOnly={setShowFavoritesOnly}
+            runningStrategies={runningStrategies}
+            setRunningStrategies={setRunningStrategies}
+            setNodes={setNodes}
+            setEdges={setEdges}
+            setCurrentFileName={setCurrentFileName}
+            setViewMode={setViewMode}
+          />
+        ) : viewMode === 'userdash' ? (
+          <UserDash
+            isLoaded={isLoaded}
+          />
+        ) : (
+          <Build
+            isLoaded={isLoaded}
+            nodes={nodes}
+            edges={edges}
+            setNodes={setNodes}
+            setEdges={setEdges}
+            currentFileName={currentFileName}
+            setCurrentFileName={setCurrentFileName}
+            savedScenes={savedScenes}
+            setSavedScenes={setSavedScenes}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
