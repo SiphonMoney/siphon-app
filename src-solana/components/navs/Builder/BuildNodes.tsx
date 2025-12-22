@@ -3,8 +3,24 @@
 import { Handle, Position } from '@xyflow/react';
 import "./BuildNodes.css";
 
+interface NodeData {
+  label?: string;
+  type?: 'deposit' | 'withdraw' | 'swap' | 'strategy';
+  coin?: string;
+  toCoin?: string;
+  amount?: string;
+  toAmount?: string;
+  chain?: string;
+  dex?: string;
+  strategy?: string;
+  wallet?: string;
+  priceGoal?: string;
+  intervals?: string;
+  [key: string]: unknown; // Allow additional properties
+}
+
 interface CustomNodeProps {
-  data: any;
+  data: NodeData;
   id: string;
   updateNodeData?: (nodeId: string, field: string, value: string) => void;
   tokens?: string[];
@@ -146,7 +162,7 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
               type="text"
               className="node-input"
               placeholder="Intervals"
-              value={data.intervals || ''}
+              value={(data.intervals as string) || ''}
               onChange={(e) => handleChange('intervals', e.target.value)}
               onMouseDown={(e) => e.stopPropagation()}
             />

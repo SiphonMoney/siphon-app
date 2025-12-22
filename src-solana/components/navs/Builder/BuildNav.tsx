@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Node } from '@xyflow/react';
+import { Node, Edge } from '@xyflow/react';
 import "./BuildNav.css";
 
 interface BuildNavProps {
   nodes: Node[];
   currentFileName: string;
-  savedScenes: Array<{ name: string; nodes: Node[]; edges: any[] }>;
+  savedScenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>;
   onAddNode: (type: 'deposit' | 'withdraw' | 'swap' | 'strategy', chainOrDexOrStrategy?: string) => void;
   onSaveScene: (sceneName: string) => void;
   onLoadScene: (sceneName: string) => void;

@@ -34,7 +34,7 @@ export default function Run({
   setCurrentFileName,
   setViewMode
 }: RunProps) {
-  const [strategyViewMode, setStrategyViewMode] = useState<'cards' | 'list'>('cards');
+  const [strategyViewMode] = useState<'cards' | 'list'>('cards');
   const [selectedStrategy, setSelectedStrategy] = useState<{ name: string; nodes: Node[]; edges: Edge[] } | null>(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
   const [publishedStrategies, setPublishedStrategies] = useState<Set<string>>(new Set());
@@ -161,7 +161,7 @@ export default function Run({
 
     const discoverStrategiesKey = 'siphon-discover-strategies';
     const stored = localStorage.getItem(discoverStrategiesKey);
-    let discoverStrategies: Record<string, any> = {};
+    let discoverStrategies: Record<string, { nodes: Node[]; edges: Edge[]; author?: string; usage?: number; profit?: string; category?: string; chains?: string[]; networks?: string[] }> = {};
     
     if (stored) {
       try {

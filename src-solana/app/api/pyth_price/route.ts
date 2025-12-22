@@ -171,7 +171,7 @@ export async function GET(request: Request) {
     }
     
     // Return response
-    const response: any = {
+    const response: { prices: Record<string, number>; source: string; timestamp: number; errors?: Record<string, string> } = {
       prices,
       source: 'pyth',
       timestamp: Date.now()
