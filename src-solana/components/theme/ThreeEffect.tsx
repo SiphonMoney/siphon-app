@@ -156,7 +156,6 @@ export default function ThreeEffect() {
         scannerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const generateCode = (width: number, height: number): string => {

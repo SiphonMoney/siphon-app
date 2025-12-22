@@ -149,9 +149,6 @@ export default function Discover({
   const fixedCost = calculateFixedCost(transactionOutputUSD);
   const totalCost = variableCost + fixedCost;
   
-  const initialBalance = getInitialBalance(modalStrategyNodes, runModeValues);
-  const inputCoin = getInputCoin(modalStrategyNodes, runModeValues);
-  
   // Initialize Limit Order strategy in localStorage
   useEffect(() => {
     initializeLimitOrderStrategy();
@@ -215,7 +212,7 @@ export default function Discover({
     }, 5000); // Change every 5 seconds
     
     return () => clearInterval(interval);
-  }, [featuredStrategies.length]);
+  }, []);
   
   // Initialize discover strategies with node data
   useEffect(() => {
@@ -710,7 +707,7 @@ export default function Discover({
                       e.stopPropagation();
                       if (!setFavoriteStrategies) return;
                       
-                      const newFavorites = new Set(favoriteStrategies || new Set());
+                      const newFavorites = new Set<string>(favoriteStrategies || new Set<string>());
                       if (newFavorites.has(strategy.name)) {
                         newFavorites.delete(strategy.name);
                         // Remove from savedScenes
