@@ -43,6 +43,8 @@ interface DiscoverProps {
   setSavedScenes: (scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }> | ((scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>) => Array<{ name: string; nodes: Node[]; edges: Edge[] }>)) => void;
   runningStrategies?: Map<string, { startTime: number; isRunning: boolean; loop: boolean }>;
   setRunningStrategies?: (strategies: Map<string, { startTime: number; isRunning: boolean; loop: boolean }> | ((prev: Map<string, { startTime: number; isRunning: boolean; loop: boolean }>) => Map<string, { startTime: number; isRunning: boolean; loop: boolean }>)) => void;
+  favoriteStrategies?: Set<string>;
+  setFavoriteStrategies?: (strategies: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
 }
 
 export default function Discover({
@@ -54,7 +56,9 @@ export default function Discover({
   savedScenes,
   setSavedScenes,
   runningStrategies,
-  setRunningStrategies
+  setRunningStrategies,
+  favoriteStrategies,
+  setFavoriteStrategies
 }: DiscoverProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | Set<string>>('all');
   const [selectedChains] = useState<Set<string>>(new Set()); // Keep for potential future use
@@ -62,11 +66,9 @@ export default function Discover({
   const [discoverSearch, setDiscoverSearch] = useState<string>('');
   const [discoverSort, setDiscoverSort] = useState<string>('popular');
   const [discoverViewMode, setDiscoverViewMode] = useState<'cards' | 'list'>('cards');
-  const [favoriteStrategies, setFavoriteStrategies] = useState<Set<string>>(new Set());
   const [featuredStrategyIndex, setFeaturedStrategyIndex] = useState(0);
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyMetadata | null>(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
-  const [likedStrategies, setLikedStrategies] = useState<Set<string>>(new Set());
   const [modalStrategyNodes, setModalStrategyNodes] = useState<Node[]>([]);
   const [modalStrategyEdges, setModalStrategyEdges] = useState<Edge[]>([]);
   const [flowKey, setFlowKey] = useState(0);
@@ -92,7 +94,7 @@ export default function Discover({
     return calculateExchange(inputAmount, coinA, coinB, coinPrices);
   };
   
-  // Fetch coin prices from Pyth Network API
+  // Fetch coin prices from Pyth Network API - only once on mount
   useEffect(() => {
     const fetchPrices = async () => {
       try {
@@ -122,10 +124,6 @@ export default function Discover({
       }
     };
     fetchPrices();
-    
-    // Refresh prices every 30 seconds
-    const interval = setInterval(fetchPrices, 30000);
-    return () => clearInterval(interval);
   }, []);
   
   // Log when coin prices change
@@ -225,14 +223,14 @@ export default function Discover({
     
     // Load favorites
     const favorites = localStorage.getItem('siphon-favorite-strategies');
-    if (favorites) {
+    if (favorites && setFavoriteStrategies) {
       try {
         setFavoriteStrategies(new Set(JSON.parse(favorites)));
       } catch (error) {
         console.error('Failed to load favorites:', error);
       }
     }
-  }, []);
+  }, [setFavoriteStrategies]);
 
   return (
     <div className={`discover-view ${isLoaded ? 'loaded' : ''}`}>
@@ -695,8 +693,9 @@ export default function Discover({
         })
         .filter(strategy => !discoverSearch || strategy.name.toLowerCase().includes(discoverSearch.toLowerCase()) || strategy.description.toLowerCase().includes(discoverSearch.toLowerCase()))
         .map((strategy, index) => {
-          // const isFavorite = favoriteStrategies.has(strategy.name); // Removed unused variable
-          const isLiked = likedStrategies.has(strategy.name);
+          const isFavorite = favoriteStrategies?.has(strategy.name) || false;
+          const activeNetworks = strategy.activeNetworks || strategy.networks;
+          
           return (
             <div 
               key={index} 
@@ -707,32 +706,66 @@ export default function Discover({
                 <div className="discover-card-stats">
                   <button 
                     className="discover-like-stat"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      const newLiked = new Set(likedStrategies);
-                      if (newLiked.has(strategy.name)) {
-                        newLiked.delete(strategy.name);
+                      if (!setFavoriteStrategies) return;
+                      
+                      const newFavorites = new Set(favoriteStrategies || new Set());
+                      if (newFavorites.has(strategy.name)) {
+                        newFavorites.delete(strategy.name);
+                        // Remove from savedScenes
+                        setSavedScenes(savedScenes.filter(s => s.name !== strategy.name));
                       } else {
-                        newLiked.add(strategy.name);
+                        newFavorites.add(strategy.name);
+                        // Save strategy to savedScenes for Run library
+                        const discoverStrategiesKey = 'siphon-discover-strategies';
+                        const stored = localStorage.getItem(discoverStrategiesKey);
+                        if (stored) {
+                          try {
+                            const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
+                            const strategyData = strategiesData[strategy.name];
+                            if (strategyData && strategyData.nodes && strategyData.edges) {
+                              const newScene = {
+                                name: strategy.name,
+                                nodes: strategyData.nodes,
+                                edges: strategyData.edges
+                              };
+                              setSavedScenes([...savedScenes.filter(s => s.name !== strategy.name), newScene]);
+                              localStorage.setItem('siphon-blueprint-scenes', JSON.stringify([...savedScenes.filter(s => s.name !== strategy.name), newScene]));
+                            }
+                          } catch (error) {
+                            console.error('Failed to save favorite strategy:', error);
+                          }
+                        }
                       }
-                      setLikedStrategies(newLiked);
+                      setFavoriteStrategies(newFavorites);
+                      localStorage.setItem('siphon-favorite-strategies', JSON.stringify(Array.from(newFavorites)));
                     }}
-                    title={isLiked ? 'Unlike' : 'Like'}
+                    title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                     </svg>
-                    <span className="discover-like-count">{strategy.usage}</span>
                   </button>
                 </div>
               </div>
               <p className="discover-card-description">{strategy.description}</p>
               <div className="discover-card-categories">
-                {strategy.chains.map((chain, idx) => (
-                  <span key={idx} className="discover-card-category-badge">
-                    {chain.charAt(0).toUpperCase() + chain.slice(1)}
-                  </span>
-                ))}
+                {strategy.networks.map((network, idx) => {
+                  const isActive = activeNetworks.includes(network);
+                  return (
+                    <span 
+                      key={idx} 
+                      className={`discover-card-category-badge ${isActive ? 'active' : 'inactive'}`}
+                      title={isActive ? 'Active' : 'Inactive'}
+                    >
+                      {network}
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="discover-card-category-label">
+                <span className="discover-category-text">{strategy.category.charAt(0).toUpperCase() + strategy.category.slice(1)}</span>
               </div>
               <div className="discover-card-meta">
                 <div className="discover-meta-item">

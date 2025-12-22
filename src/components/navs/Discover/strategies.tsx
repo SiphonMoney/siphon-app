@@ -16,6 +16,7 @@ export interface StrategyMetadata {
   category: string;
   chains: string[];
   networks: string[];
+  activeNetworks?: string[]; // Networks that are currently active for this strategy
   isActive?: boolean;
 }
 
@@ -56,7 +57,8 @@ export const strategyList: StrategyMetadata[] = [
     description: 'Set your desired price and wait for the market to reach it. Execute trades at your specified price level for better control.', 
     category: 'trading', 
     chains: ['base', 'ethereum', 'solana', 'btc'], 
-    networks: ['Base', 'Ethereum', 'Solana', 'Bitcoin'], 
+    networks: ['Base', 'Ethereum', 'Solana', 'Bitcoin'],
+    activeNetworks: ['Sepolia'], // Only Sepolia (Ethereum) is active
     isActive: true 
   },
   { 

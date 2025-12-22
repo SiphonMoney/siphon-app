@@ -236,6 +236,7 @@ export default function Build({
           setCurrentFileName={setCurrentFileName}
         />
         
+        <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -280,6 +281,7 @@ export default function Build({
           <Controls />
           <MiniMap />
         </ReactFlow>
+        </div>
       </ReactFlowProvider>
     </div>
   );

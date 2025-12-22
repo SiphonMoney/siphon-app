@@ -763,7 +763,7 @@
 }
 
 .discover-like-count {
-  color: rgba(255, 255, 255, 0.9);
+  display: none;
 }
 
 .discover-card-title {
@@ -808,6 +808,34 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 500;
+}
+
+.discover-card-category-badge.active {
+  background: rgba(76, 175, 80, 0.2);
+  border-color: rgba(76, 175, 80, 0.4);
+  color: rgba(76, 175, 80, 0.9);
+}
+
+.discover-card-category-badge.inactive {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.4);
+  opacity: 0.6;
+}
+
+.discover-card-category-label {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.discover-category-text {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-source-code), monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 400;
 }
 
 .discover-card-description {
