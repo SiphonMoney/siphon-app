@@ -9,7 +9,12 @@
   pointer-events: none;
   font-family: 'Source Code Pro', monospace;
   padding: 4em 5em;
-  padding-top: 45vh;
+  padding-top: 500px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .heroTagline {
@@ -61,6 +66,8 @@
 @media (max-width: 1024px) {
   .heroContainer {
     padding-top: 30vh;
+    padding-left: 2em;
+    padding-right: 2em;
   }
 
   .heroTagline {

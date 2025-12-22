@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import ConnectButton from "../archive/extensions/ConnectButton";
-import { WalletInfo } from "../archive/lib/walletManager";
+import ConnectButton from "../extensions/ConnectButton";
+import { WalletInfo } from "../extensions/walletManager";
 
 interface NavProps {
   onWalletConnected?: (wallet: WalletInfo) => void;
@@ -20,30 +20,15 @@ export default function Nav({ onWalletConnected }: NavProps) {
   const isSwaps = pathname === "/dapp/swaps";
   const isPro = pathname === "/dapp" || pathname === "/dapp/pro";
   
-  // Initialize with default value to avoid hydration mismatch
   const [proViewMode, setProViewMode] = useState<'blueprint' | 'run' | 'discover'>('discover');
-  
-  useEffect(() => {
-    if (isDappPage && typeof window !== 'undefined') {
-      const stored = localStorage.getItem('pro-view-mode');
-      if (stored && ['blueprint', 'run', 'discover'].includes(stored)) {
-        setProViewMode(stored as 'blueprint' | 'run' | 'discover');
-      } else {
-        // Default to discover if no stored mode
-        setProViewMode('discover');
-        localStorage.setItem('pro-view-mode', 'discover');
-      }
-    }
-  }, [isDappPage]);
 
   const handleProViewModeChange = (mode: 'blueprint' | 'run' | 'discover') => {
     setProViewMode(mode);
-    localStorage.setItem('pro-view-mode', mode);
     // Navigate to dapp page if not already there
     if (!isPro) {
       router.push('/dapp');
     }
-    // Trigger view mode change event for ProSwapMode component
+    // Trigger view mode change event for Nexus component
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pro-view-mode-change', { detail: mode }));
     }
@@ -51,8 +36,9 @@ export default function Nav({ onWalletConnected }: NavProps) {
 
   return (
     <nav>
-      {/* Left: Logo */}
-      <div className="logo">
+      <div className="nav-container">
+        {/* Left: Logo */}
+        <div className="logo">
         <Link href="/" className="logo-link">
           <div className="logo-container">
             <svg width="24" height="20" viewBox="0 0 97.34 80" className="logo-svg">
@@ -177,6 +163,7 @@ export default function Nav({ onWalletConnected }: NavProps) {
           />
         </div>
       )}
+      </div>
     </nav>
   );
 }

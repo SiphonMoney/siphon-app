@@ -1,8 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import ConnectButton from "../extensions/ConnectButton";
-import { WalletInfo } from "../extensions/walletManager";
+import ConnectButton from "./ConnectButton";
+import { WalletInfo } from "./walletManager";
 
 interface DAppNavProps {
   onWalletConnected?: (wallet: WalletInfo) => void;

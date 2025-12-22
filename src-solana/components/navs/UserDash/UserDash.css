@@ -1,0 +1,233 @@
+/* UserDash View Styles */
+.userdash-view {
+  width: calc(100% - 3rem);
+  height: fit-content;
+  max-width: 1400px;
+  margin: 0px auto 0 auto;
+  padding: 0px 0 2rem 0;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.userdash-view::-webkit-scrollbar {
+  display: none;
+}
+
+.userdash-view {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.userdash-view.loaded {
+  opacity: 1;
+  transform: translateY(0);
+  height: fit-content;
+  margin-top: 0px;
+  padding-top: 0px;
+  overflow: visible;
+}
+
+.userdash-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.userdash-header {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.userdash-title {
+  color: white;
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0;
+  font-family: var(--font-source-code), monospace;
+}
+
+.userdash-address {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  font-family: var(--font-source-code), monospace;
+}
+
+.userdash-address-label {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.75rem;
+}
+
+.userdash-address-value {
+  color: white;
+  font-weight: 500;
+}
+
+.userdash-copy-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.userdash-copy-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.userdash-balances {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.userdash-balance-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: all 0.2s ease;
+}
+
+.userdash-balance-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.userdash-balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.userdash-balance-title {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+  font-family: var(--font-source-code), monospace;
+}
+
+.userdash-balance-network {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-family: var(--font-source-code), monospace;
+}
+
+.userdash-balance-content {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.userdash-balance-amount {
+  color: white;
+  font-size: 2.5rem;
+  font-weight: 600;
+  font-family: var(--font-source-code), monospace;
+  line-height: 1;
+}
+
+.userdash-balance-currency {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.25rem;
+  font-weight: 500;
+  font-family: var(--font-source-code), monospace;
+}
+
+.userdash-balance-loading {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1rem;
+  font-family: var(--font-source-code), monospace;
+}
+
+.userdash-balance-description {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  font-family: var(--font-source-code), monospace;
+  margin-top: 0.5rem;
+}
+
+.userdash-actions {
+  width: 100%;
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.userdash-action-button {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  color: white;
+  font-family: var(--font-source-code), monospace;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.userdash-action-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.userdash-action-button:active {
+  transform: translateY(0);
+}
+
+.userdash-empty-state {
+  width: 100%;
+  text-align: center;
+  padding: 4rem 2rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.userdash-empty-state h2 {
+  color: white;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-family: var(--font-source-code), monospace;
+}
+
+.userdash-empty-state p {
+  font-size: 1rem;
+  font-family: var(--font-source-code), monospace;
+}
+

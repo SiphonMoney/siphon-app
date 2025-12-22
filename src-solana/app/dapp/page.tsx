@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import ProSwapMode from "@/components/ProSwapMode";
 import Nav from "@/components/theme/Nav";
-import { WalletInfo } from "@/components/archive/lib/walletManager";
+import Nexus from "@/components/Nexus";
+import { WalletInfo } from "@/components/extensions/walletManager";
 import styles from "../hero.module.css";
 
 export default function DappPage() {
@@ -22,8 +22,6 @@ export default function DappPage() {
       backgroundColor: '#000',
       position: 'relative'
     }}>
-      <Nav onWalletConnected={handleWalletConnected} />
-      
       {/* Hero text, logo and subtitle - behind everything */}
       <div className={styles.heroContainer} style={{ zIndex: 1 }}>
         {/* SVG Logo */}
@@ -74,26 +72,48 @@ export default function DappPage() {
         height: '100%',
         zIndex: 1000,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        pointerEvents: 'none'
+        justifyContent: 'flex-start',
+        pointerEvents: 'none',
+        overflow: 'hidden'
       }}>
-        <div className="dapp-container" style={{
+        {/* Common container for nav and content with same width */}
+        <div className="dapp-main-container" style={{
           width: '98vw',
-          height: '90vh',
           maxWidth: 'none',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           pointerEvents: 'auto',
-          position: 'relative'
+          position: 'relative',
+          overflow: 'hidden'
         }}>
-          {/* Content */}
+          {/* Nav - fixed at top, not scrollable */}
           <div style={{
             width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            pointerEvents: 'auto',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            flexShrink: 0
           }}>
-            <ProSwapMode isDemoMode={true} />
+            <Nav onWalletConnected={handleWalletConnected} />
+          </div>
+          
+          {/* Content container - scrollable */}
+          <div className="dapp-container" style={{
+            width: '100%',
+            flex: 1,
+            maxWidth: 'none',
+            pointerEvents: 'auto',
+            position: 'relative',
+            marginTop: '0',
+            overflow: 'hidden',
+            minHeight: 0
+          }}>
+            {/* Content */}
+            <Nexus isLoaded={true} />
           </div>
         </div>
       </div>

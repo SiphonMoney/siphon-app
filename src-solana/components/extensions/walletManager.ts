@@ -25,7 +25,46 @@ class WalletManager {
         return { success: false, error: 'MetaMask not detected. Please install MetaMask.' };
       }
 
-      const accounts = await (eth as { request: (params: { method: string }) => Promise<string[]> }).request({ method: 'eth_requestAccounts' });
+      const ethereum = eth as {
+        request: (params: { method: string; params?: unknown[] }) => Promise<unknown>;
+        chainId?: string;
+      };
+
+      // Switch to Sepolia network (chain ID: 11155111)
+      try {
+        await ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0xaa36a7' }], // 11155111 in hex
+        });
+      } catch (switchError: unknown) {
+        // If the chain doesn't exist, add it
+        if (switchError && typeof switchError === 'object' && 'code' in switchError && switchError.code === 4902) {
+          try {
+            await ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0xaa36a7',
+                chainName: 'Sepolia',
+                nativeCurrency: {
+                  name: 'Ether',
+                  symbol: 'ETH',
+                  decimals: 18,
+                },
+                rpcUrls: ['https://sepolia.infura.io/v3/'],
+                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+              }],
+            });
+          } catch (addError) {
+            return { success: false, error: 'Failed to add Sepolia network. Please add it manually in MetaMask.' };
+          }
+        } else {
+          // User rejected the switch or other error
+          const errorMessage = switchError instanceof Error ? switchError.message : 'Failed to switch network';
+          return { success: false, error: errorMessage };
+        }
+      }
+
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' }) as string[];
       if (accounts.length === 0) {
         return { success: false, error: 'No accounts found' };
       }
