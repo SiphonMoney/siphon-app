@@ -41,9 +41,21 @@ export default function Nexus({
     };
   }, []);
 
+  // Load favorites from localStorage on mount
+  useEffect(() => {
+    const favorites = localStorage.getItem('siphon-favorite-strategies');
+    if (favorites) {
+      try {
+        setFavoriteStrategies(new Set(JSON.parse(favorites)));
+      } catch (error) {
+        console.error('Failed to load favorites:', error);
+      }
+    }
+  }, []);
+
   return (
-    <div className="pro-mode-wrapper">
-      <div className="pro-mode-content">
+    <div className="pro-mode-wrapper" style={{ height: '100%', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div className="pro-mode-content" style={{ paddingTop: '2rem', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {viewMode === 'discover' ? (
           <Discover
             isLoaded={isLoaded}
@@ -55,6 +67,8 @@ export default function Nexus({
             setSavedScenes={setSavedScenes}
             runningStrategies={runningStrategies}
             setRunningStrategies={setRunningStrategies}
+            favoriteStrategies={favoriteStrategies}
+            setFavoriteStrategies={setFavoriteStrategies}
           />
         ) : viewMode === 'run' ? (
           <Run

@@ -378,24 +378,49 @@
 .footerCenter {
   flex: 1;
   display: flex;
+  flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
-  gap: 2em;
+  align-items: center;
+  gap: 1em;
+}
+
+.footerCenterIcons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5em;
   flex-wrap: wrap;
 }
 
 .footerCenter a {
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: rgba(255, 255, 255, 0.6);
   text-decoration: none;
-  font-family: 'Source Code Pro', monospace;
-  font-weight: 300;
-  letter-spacing: 0.5px;
-  transition: color 0.3s ease;
+  transition: color 0.3s ease, transform 0.2s ease;
+  width: 32px;
+  height: 32px;
 }
 
 .footerCenter a:hover {
   color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+}
+
+.footerCenter a svg {
+  width: 100%;
+  height: 100%;
+}
+
+.footerCopyright {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  font-family: 'Source Code Pro', monospace;
+  font-weight: 300;
+  letter-spacing: 0.5px;
+  text-align: center;
 }
 
 .footerRight {
