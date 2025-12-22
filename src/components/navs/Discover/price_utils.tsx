@@ -10,13 +10,13 @@ export interface PriceUtils {
   calculateVariableCost: (duration: string) => number;
   calculateFixedCost: (transactionOutputUSD: number) => number;
   getTransactionOutputForCost: (
-    modalStrategyNodes: any[],
+    modalStrategyNodes: Array<{ id: string; data?: { type?: string; coin?: string; toCoin?: string } }>,
     runModeValues: Record<string, Record<string, string>>,
     coinPrices: Record<string, number>,
     calculateExchange: (inputAmount: number, coinA: string, coinB: string, coinPrices: Record<string, number>) => number
   ) => number;
-  getInitialBalance: (modalStrategyNodes: any[], runModeValues: Record<string, Record<string, string>>) => string;
-  getInputCoin: (modalStrategyNodes: any[], runModeValues: Record<string, Record<string, string>>) => string;
+  getInitialBalance: (modalStrategyNodes: Array<{ id: string; data?: { type?: string } }>, runModeValues: Record<string, Record<string, string>>) => string;
+  getInputCoin: (modalStrategyNodes: Array<{ id: string; data?: { type?: string; coin?: string } }>, runModeValues: Record<string, Record<string, string>>) => string;
 }
 
 /**
@@ -122,15 +122,15 @@ export const calculateFixedCost = (transactionOutputUSD: number): number => {
  * Get transaction output in USD for cost calculation
  */
 export const getTransactionOutputForCost = (
-  modalStrategyNodes: any[],
+  modalStrategyNodes: Array<{ id: string; data?: { type?: string; coin?: string; toCoin?: string } }>,
   runModeValues: Record<string, Record<string, string>>,
   coinPrices: Record<string, number>,
   calculateExchangeFn: (inputAmount: number, coinA: string, coinB: string, coinPrices: Record<string, number>) => number
 ): number => {
   if (modalStrategyNodes.length === 0) return 0;
   
-  const depositNode = modalStrategyNodes.find((node: any) => node.data?.type === 'deposit');
-  const swapNode = modalStrategyNodes.find((node: any) => node.data?.type === 'swap');
+  const depositNode = modalStrategyNodes.find((node) => node.data?.type === 'deposit');
+  const swapNode = modalStrategyNodes.find((node) => node.data?.type === 'swap');
   
   if (!depositNode) return 0;
   
@@ -159,11 +159,11 @@ export const getTransactionOutputForCost = (
  * Get initial balance from deposit step
  */
 export const getInitialBalance = (
-  modalStrategyNodes: any[],
+  modalStrategyNodes: Array<{ id: string; data?: { type?: string } }>,
   runModeValues: Record<string, Record<string, string>>
 ): string => {
   if (modalStrategyNodes.length === 0) return '0.0';
-  const depositNode = modalStrategyNodes.find((node: any) => node.data?.type === 'deposit');
+  const depositNode = modalStrategyNodes.find((node) => node.data?.type === 'deposit');
   if (depositNode) {
     const stepId = depositNode.id;
     const stepValues = runModeValues[stepId] || {};
@@ -176,11 +176,11 @@ export const getInitialBalance = (
  * Get input coin from deposit step
  */
 export const getInputCoin = (
-  modalStrategyNodes: any[],
+  modalStrategyNodes: Array<{ id: string; data?: { type?: string; coin?: string } }>,
   runModeValues: Record<string, Record<string, string>>
 ): string => {
   if (modalStrategyNodes.length === 0) return 'USDC';
-  const depositNode = modalStrategyNodes.find((node: any) => node.data?.type === 'deposit');
+  const depositNode = modalStrategyNodes.find((node) => node.data?.type === 'deposit');
   if (depositNode) {
     const stepId = depositNode.id;
     const stepValues = runModeValues[stepId] || {};

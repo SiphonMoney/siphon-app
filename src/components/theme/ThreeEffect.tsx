@@ -36,7 +36,6 @@ export default function ThreeEffect() {
   const scannerCanvasRef = useRef<HTMLCanvasElement>(null);
   const cardStreamRef = useRef<HTMLDivElement>(null);
   const cardLineRef = useRef<HTMLDivElement>(null);
-  const [isMounted, setIsMounted] = useState(false);
   const [isHeroVisible, setIsHeroVisible] = useState(true);
   const heroSectionRef = useRef<HTMLElement | null>(null);
   
@@ -48,7 +47,6 @@ export default function ThreeEffect() {
   const lastTimeRef = useRef(0);
 
   useEffect(() => {
-    setIsMounted(true);
     
     // Use Intersection Observer to track hero section visibility
     const observer = new IntersectionObserver(
@@ -736,7 +734,6 @@ export default function ThreeEffect() {
 
         const containerWidth = cardStreamRef.current?.offsetWidth || window.innerWidth;
         const singleSetWidth = (400 + 60) * 30; // card width + gap * count for one set
-        const totalCardLineWidth = singleSetWidth * 3; // 3 sets for seamless loop
         const isMobile = window.innerWidth <= 480;
         const scannerX = isMobile 
           ? window.innerWidth / 2 - 5  // 5px to the left of center on mobile (moved towards center)

@@ -16,6 +16,7 @@ import {
 } from "./price_utils";
 import {
   StrategyMetadata,
+  StrategyData,
   strategyList,
   featuredStrategies,
   initializeLimitOrderStrategy,
@@ -166,7 +167,7 @@ export default function Discover({
       const stored = localStorage.getItem(discoverStrategiesKey);
       if (stored) {
         try {
-          const strategiesData = JSON.parse(stored);
+          const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
           const strategyData = strategiesData[selectedStrategy.name];
           if (strategyData && strategyData.nodes && strategyData.edges) {
             // Ensure nodes have proper structure
@@ -401,7 +402,7 @@ export default function Discover({
                             const stored = localStorage.getItem(discoverStrategiesKey);
                             if (stored) {
                               try {
-                                const strategiesData = JSON.parse(stored);
+                                const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
                                 // Try to find matching strategy by name
                                 const strategyData = strategiesData[strategy.title] || strategiesData['Buy High - Sell Low'];
                                 if (strategyData && strategyData.nodes && strategyData.edges) {
@@ -760,7 +761,7 @@ export default function Discover({
                     const stored = localStorage.getItem(discoverStrategiesKey);
                     if (stored) {
                       try {
-                        const strategiesData = JSON.parse(stored);
+                        const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
                         const strategyData = strategiesData[strategy.name];
                         if (strategyData && strategyData.nodes && strategyData.edges) {
                           // Ensure nodes have proper structure
@@ -854,7 +855,7 @@ export default function Discover({
             <div className="strategy-success-notification-text">
               <p className="strategy-success-notification-title">Strategy Started Successfully</p>
               <p className="strategy-success-notification-message">
-                Your strategy "{selectedStrategy.name}" is now running. You can find it in the <strong>Run</strong> tab under <strong>Running</strong>.
+                Your strategy &quot;{selectedStrategy.name}&quot; is now running. You can find it in the <strong>Run</strong> tab under <strong>Running</strong>.
               </p>
             </div>
           </div>

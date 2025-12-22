@@ -12,8 +12,7 @@ interface UserDashProps {
 export default function UserDash({ isLoaded = true }: UserDashProps) {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [siphonBalance, setSiphonBalance] = useState<number>(0); // Placeholder for now
-  const [loading, setLoading] = useState(true);
+  const [siphonBalance] = useState<number>(0); // Placeholder for now
 
   useEffect(() => {
     const checkWallet = async () => {
@@ -41,8 +40,6 @@ export default function UserDash({ isLoaded = true }: UserDashProps) {
         }
       } catch (error) {
         console.error('Error fetching wallet data:', error);
-      } finally {
-        setLoading(false);
       }
     };
 

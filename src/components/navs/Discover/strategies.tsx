@@ -31,6 +31,18 @@ export interface FeaturedStrategy {
   networks: string[];
 }
 
+export interface StrategyData {
+  name?: string;
+  nodes: Node[];
+  edges: Edge[];
+  author?: string;
+  usage?: number;
+  profit?: string;
+  category?: string;
+  chains?: string[];
+  networks?: string[];
+}
+
 /**
  * Strategy list metadata
  */
@@ -262,7 +274,7 @@ export const createLimitOrderStrategy = (): { nodes: Node[]; edges: Edge[] } => 
 /**
  * Create other strategy nodes and edges
  */
-export const createOtherStrategies = (): Record<string, any> => {
+export const createOtherStrategies = (): Record<string, StrategyData> => {
   const timestamp1 = Date.now();
   const timestamp2 = Date.now() + 1000;
   const timestamp3 = Date.now() + 2000;
@@ -283,8 +295,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: null
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 255, 255, 0.12)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -302,8 +314,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: 'buy-high'
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 193, 7, 0.2)',
             border: '1px solid rgba(255, 193, 7, 0.5)',
@@ -321,8 +333,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: null
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 255, 255, 0.12)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -340,8 +352,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: null
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 255, 255, 0.12)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -387,8 +399,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: null
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 255, 255, 0.12)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -406,8 +418,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: 'dca'
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 193, 7, 0.2)',
             border: '1px solid rgba(255, 193, 7, 0.5)',
@@ -425,8 +437,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: null
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 255, 255, 0.12)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -444,8 +456,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: 'loop'
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 193, 7, 0.2)',
             border: '1px solid rgba(255, 193, 7, 0.5)',
@@ -463,8 +475,8 @@ export const createOtherStrategies = (): Record<string, any> => {
             dex: null,
             strategy: null
           },
-          sourcePosition: 'right',
-          targetPosition: 'left',
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           style: {
             background: 'rgba(255, 255, 255, 0.12)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -519,7 +531,7 @@ export const createOtherStrategies = (): Record<string, any> => {
 export const initializeLimitOrderStrategy = (): void => {
   const discoverStrategiesKey = 'siphon-discover-strategies';
   const stored = localStorage.getItem(discoverStrategiesKey);
-  let discoverStrategies: Record<string, any> = {};
+  let discoverStrategies: Record<string, StrategyData> = {};
   
   if (stored) {
     try {
