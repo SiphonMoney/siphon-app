@@ -45,7 +45,11 @@ export default function Build({
   savedScenes,
   setSavedScenes
 }: BuildProps) {
-  const tokens = ['SOL', 'USDC', 'USDT', 'WBTC', 'XMR'];
+  const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
+  
+  // Active tokens
+  const activeTokens = ['ETH', 'USDC'];
+  const isTokenActive = (token: string) => activeTokens.includes(token);
   
   // Normalize node to ensure it has all required properties
   const normalizeNode = useCallback((node: Node): Node => {
@@ -268,6 +272,7 @@ export default function Build({
                 id={id}
                 updateNodeData={updateNodeData}
                 tokens={tokens}
+                isTokenActive={isTokenActive}
               />
             )
           }}

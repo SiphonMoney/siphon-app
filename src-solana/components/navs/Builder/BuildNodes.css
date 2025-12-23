@@ -60,6 +60,13 @@
   color: white;
 }
 
+.node-select option.inactive-token,
+.node-select option:disabled {
+  opacity: 0.4;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: not-allowed;
+}
+
 .node-select:focus,
 .node-input:focus {
   outline: none;

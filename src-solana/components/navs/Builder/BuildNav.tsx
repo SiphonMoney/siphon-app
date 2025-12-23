@@ -40,8 +40,18 @@ export default function BuildNav({
   
   const submenuRef = useRef<HTMLDivElement>(null);
   
-  const chains = ['Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
-  const dexes = ['Raydium', 'Jupiter', 'Orca', 'Serum', 'Meteora', 'Uniswap'];
+  const chains = ['Sepolia', 'Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
+  const dexes = ['Uniswap', 'Raydium', 'Jupiter', 'Orca', 'Serum', 'Meteora'];
+  const strategies = ['Limit Order', 'Buy Dip', 'Sell Rally', 'DCA'];
+  
+  // Active options
+  const activeChain = 'Sepolia';
+  const activeDex = 'Uniswap';
+  const activeStrategy = 'Limit Order';
+  
+  const isChainActive = (chain: string) => chain === activeChain;
+  const isDexActive = (dex: string) => dex === activeDex;
+  const isStrategyActive = (strategy: string) => strategy === activeStrategy;
   
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -206,6 +216,12 @@ export default function BuildNav({
             </button>
             <button 
               className="blueprint-action-btn"
+              onClick={(e) => onActionClick('strategy', e)}
+            >
+              Strategies
+            </button>
+            <button 
+              className="blueprint-action-btn"
               onClick={(e) => onActionClick('swap', e)}
             >
               Swap
@@ -215,12 +231,6 @@ export default function BuildNav({
               onClick={(e) => onActionClick('withdraw', e)}
             >
               Withdraw
-            </button>
-            <button 
-              className="blueprint-action-btn"
-              onClick={(e) => onActionClick('strategy', e)}
-            >
-              Strategies
             </button>
             {showSubmenu && (
               <div 
@@ -244,32 +254,44 @@ export default function BuildNav({
                       : 'Strategy:'}
                   </div>
                   {showSubmenu.type === 'strategy' ? (
-                    ['Buy Dip', 'Sell Rally', 'DCA'].map((strategy) => (
+                    strategies.map((strategy) => {
+                      const isActive = isStrategyActive(strategy);
+                      return (
+                        <button
+                          key={strategy}
+                          className={`blueprint-submenu-item ${!isActive ? 'inactive' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isActive) {
+                              onAddNode(showSubmenu.type, strategy);
+                              setShowSubmenu(null);
+                            }
+                          }}
+                          disabled={!isActive}
+                        >
+                          {strategy}
+                        </button>
+                      );
+                    })
+                  ) : (showSubmenu.type === 'swap' ? dexes : chains).map((item) => {
+                    const isActive = showSubmenu.type === 'swap' ? isDexActive(item) : isChainActive(item);
+                    return (
                       <button
-                        key={strategy}
-                        className="blueprint-submenu-item"
+                        key={item}
+                        className={`blueprint-submenu-item ${!isActive ? 'inactive' : ''}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onAddNode(showSubmenu.type, strategy);
-                          setShowSubmenu(null);
+                          if (isActive) {
+                            onAddNode(showSubmenu.type, item);
+                            setShowSubmenu(null);
+                          }
                         }}
+                        disabled={!isActive}
                       >
-                        {strategy}
+                        {item}
                       </button>
-                    ))
-                  ) : (showSubmenu.type === 'swap' ? dexes : chains).map((item) => (
-                    <button
-                      key={item}
-                      className="blueprint-submenu-item"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAddNode(showSubmenu.type, item);
-                        setShowSubmenu(null);
-                      }}
-                    >
-                      {item}
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -438,6 +460,23 @@ export default function BuildNav({
                     className="blueprint-mobile-modal-btn"
                     onClick={(e) => {
                       e.stopPropagation();
+                      setSelectedAddType('strategy');
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                    <span>Strategies</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
+                  <button 
+                    className="blueprint-mobile-modal-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setSelectedAddType('swap');
                     }}
                   >
@@ -466,23 +505,6 @@ export default function BuildNav({
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                   </button>
-                  <button 
-                    className="blueprint-mobile-modal-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedAddType('strategy');
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                    <span>Strategies</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
                 </>
               ) : (
                 <>
@@ -499,50 +521,68 @@ export default function BuildNav({
                     <span>Back</span>
                   </button>
                   {selectedAddType === 'strategy' ? (
-                    ['Buy Dip', 'Sell Rally', 'DCA'].map((strategy) => (
-                      <button
-                        key={strategy}
-                        className="blueprint-mobile-modal-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddNode(selectedAddType, strategy);
-                          setShowAddModal(false);
-                          setSelectedAddType(null);
-                        }}
-                      >
-                        <span>{strategy}</span>
-                      </button>
-                    ))
+                    strategies.map((strategy) => {
+                      const isActive = isStrategyActive(strategy);
+                      return (
+                        <button
+                          key={strategy}
+                          className={`blueprint-mobile-modal-btn ${!isActive ? 'inactive' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isActive) {
+                              onAddNode(selectedAddType, strategy);
+                              setShowAddModal(false);
+                              setSelectedAddType(null);
+                            }
+                          }}
+                          disabled={!isActive}
+                        >
+                          <span>{strategy}</span>
+                        </button>
+                      );
+                    })
                   ) : selectedAddType === 'swap' ? (
-                    dexes.map((dex) => (
-                      <button
-                        key={dex}
-                        className="blueprint-mobile-modal-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddNode(selectedAddType, dex);
-                          setShowAddModal(false);
-                          setSelectedAddType(null);
-                        }}
-                      >
-                        <span>{dex}</span>
-                      </button>
-                    ))
+                    dexes.map((dex) => {
+                      const isActive = isDexActive(dex);
+                      return (
+                        <button
+                          key={dex}
+                          className={`blueprint-mobile-modal-btn ${!isActive ? 'inactive' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isActive) {
+                              onAddNode(selectedAddType, dex);
+                              setShowAddModal(false);
+                              setSelectedAddType(null);
+                            }
+                          }}
+                          disabled={!isActive}
+                        >
+                          <span>{dex}</span>
+                        </button>
+                      );
+                    })
                   ) : (
-                    chains.map((chain) => (
-                      <button
-                        key={chain}
-                        className="blueprint-mobile-modal-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddNode(selectedAddType, chain);
-                          setShowAddModal(false);
-                          setSelectedAddType(null);
-                        }}
-                      >
-                        <span>{chain}</span>
-                      </button>
-                    ))
+                    chains.map((chain) => {
+                      const isActive = isChainActive(chain);
+                      return (
+                        <button
+                          key={chain}
+                          className={`blueprint-mobile-modal-btn ${!isActive ? 'inactive' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isActive) {
+                              onAddNode(selectedAddType, chain);
+                              setShowAddModal(false);
+                              setSelectedAddType(null);
+                            }
+                          }}
+                          disabled={!isActive}
+                        >
+                          <span>{chain}</span>
+                        </button>
+                      );
+                    })
                   )}
                 </>
               )}

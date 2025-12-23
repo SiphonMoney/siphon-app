@@ -244,3 +244,113 @@
   font-family: var(--font-source-code), monospace;
 }
 
+/* Transaction Mode Toggle Styles */
+.userdash-mode-toggle {
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.userdash-mode-toggle:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.userdash-mode-toggle.active {
+  color: white;
+  font-weight: 600;
+}
+
+/* Transaction Content Styles */
+.userdash-transaction-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.userdash-input-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.userdash-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: white;
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.userdash-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.userdash-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.userdash-select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: white;
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.userdash-select:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.userdash-select option {
+  background: #1a1a1a;
+  color: white;
+}
+
+/* Confirm Button Styles */
+.userdash-confirm-button {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.875rem 1.5rem;
+  color: white;
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.5rem;
+}
+
+.userdash-confirm-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.userdash-confirm-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.userdash-confirm-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

@@ -311,7 +311,7 @@ export default function DetailsModal({
                         const tags: Array<{ label: string; field: string; options?: string[] }> = [];
                         
                         if (nodeData?.type === 'deposit') {
-                          tags.push({ label: 'Chain', field: 'chain', options: ['Base'] });
+                          tags.push({ label: 'Chain', field: 'chain', options: ['Sepolia'] });
                           tags.push({ label: 'Token A', field: 'tokenA', options: ['USDC', 'ETH'] });
                           tags.push({ label: 'Amount', field: 'amount' });
                         } else if (nodeData?.type === 'strategy' && nodeData.strategy === 'Limit Order') {
@@ -319,9 +319,9 @@ export default function DetailsModal({
                           tags.push({ label: 'PriceGoal', field: 'priceGoal' });
                         } else if (nodeData?.type === 'swap') {
                           tags.push({ label: 'Dex Type', field: 'dexType', options: ['Uniswap'] });
-                          tags.push({ label: 'Coin B', field: 'coinB', options: ['ETH', 'USDC'] });
+                          tags.push({ label: 'Token B', field: 'coinB', options: ['ETH', 'USDC'] });
                         } else if (nodeData?.type === 'withdraw') {
-                          tags.push({ label: 'Chain', field: 'chain', options: ['Base'] });
+                          tags.push({ label: 'Chain', field: 'chain', options: ['Sepolia'] });
                           tags.push({ label: 'Address', field: 'address' });
                         }
                         
@@ -566,7 +566,7 @@ export default function DetailsModal({
                           <div className="strategy-modal-io-title">Output</div>
                           <div className="strategy-modal-io-items">
                             <div className="strategy-modal-io-item">
-                              <span className="strategy-modal-io-coin">Coin B</span>
+                              <span className="strategy-modal-io-coin">Token B</span>
                             </div>
                           </div>
                         </div>
@@ -595,7 +595,7 @@ export default function DetailsModal({
                           tags.push({ label: 'PriceGoal', field: 'priceGoal' });
                         } else if (nodeData?.type === 'swap') {
                           tags.push({ label: 'Dex Type', field: 'dexType' });
-                          tags.push({ label: 'Coin B', field: 'coinB' });
+                          tags.push({ label: 'Token B', field: 'coinB' });
                         } else if (nodeData?.type === 'withdraw') {
                           tags.push({ label: 'Chain', field: 'chain' });
                           tags.push({ label: 'Address', field: 'address' });

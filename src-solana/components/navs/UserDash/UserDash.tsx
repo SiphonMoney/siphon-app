@@ -20,17 +20,15 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [walletBalances, setWalletBalances] = useState<UnifiedBalance[] | null>(null);
   const [siphonVaultBalances, setSiphonVaultBalances] = useState<{ [token: string]: number } | null>(null);
-  const [isDepositing, setIsDepositing] = useState(false);
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isDepositMode, setIsDepositMode] = useState(true);
   const VAULT_CHAIN_ID = 11155111; // Sepolia id
   
-  const [withdrawals, setWithdrawals] = useState([
-    { chain: "Ethereum Sepolia", token: "ETH", amount: "", recipient: "" }
-  ]);
-
-  const [depositInputs, setDepositInputs] = useState([
-    { chain: "Ethereum Sepolia", token: "ETH", amount: "" }
-  ]);
+  const [transactionInput, setTransactionInput] = useState({
+    token: "ETH",
+    amount: "",
+    recipient: ""
+  });
   useEffect(() => {
     const fetchBalances = async () => {
       const { details } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
@@ -54,7 +52,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         
         if (metamaskWallet) {
           setWallet(metamaskWallet);
-          setWithdrawals(prev => [{...prev[0], recipient: metamaskWallet.address}]);
+          setTransactionInput(prev => ({...prev, recipient: metamaskWallet.address}));
           
           const balances = await getUnifiedBalances();
           setWalletBalances(balances);
@@ -86,10 +84,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  const handleDeposit = async () => {
-    if (isDepositing) return;
-
-    console.log('Depositing to Siphon Vault');
+  const handleConfirm = async () => {
+    if (isProcessing) return;
 
     if (!walletConnected) {
       alert('Please connect wallet first');
@@ -97,95 +93,49 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     }
 
     // Validate inputs
-    for (let i = 0; i < depositInputs.length; i++) {
-      const dep = depositInputs[i];
-      if (!dep || parseFloat(dep.amount) <= 0) {
-        alert(`Please enter a valid amount for Deposit #${i + 1}`);
-        return;
-      }
-      if (!dep.token) {
-        alert(`Please select a token for Deposit #${i + 1}`);
-        return;
-      }
+    if (!transactionInput.amount || parseFloat(transactionInput.amount) <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    if (!transactionInput.token) {
+      alert('Please select a token');
+      return;
+    }
+    if (!isDepositMode && !transactionInput.recipient) {
+      alert('Please enter a recipient address');
+      return;
     }
 
-    setIsDepositing(true);
+    setIsProcessing(true);
 
-    // Execute each deposit
-    for (let i = 0; i < depositInputs.length; i++) {
-      try {
-        const dep = depositInputs[i];
-
-        // Deposit directly to vault (updated signature - no srcChain)
-        const result = await deposit(dep.token, dep.amount);
-
+    try {
+      if (isDepositMode) {
+        console.log('Depositing to Siphon Vault');
+        const result = await deposit(transactionInput.token, transactionInput.amount);
+        
         if (result.success) {
-          alert(`Successfully deposited ${dep.amount} ${dep.token} for Deposit #${i + 1}`);
-          setDepositInputs([{ chain: "Ethereum Sepolia", token: "ETH", amount: "" }]);
+          alert(`Successfully deposited ${transactionInput.amount} ${transactionInput.token}`);
+          setTransactionInput(prev => ({...prev, amount: ""}));
         } else {
           alert(`Deposit failed: ${result.error}`);
         }
-      } catch (error: unknown) {
-        console.error('Deposit failed:', error);
-        alert(`Deposit failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-
-    setIsDepositing(false);
-  };
-
-  const handleWithdraw = async () => {
-    if (isWithdrawing) return;
-
-    console.log('Withdrawing from Siphon Vault');
-
-    if (!walletConnected) {
-      alert('Please connect wallet first');
-      return;
-    }
-
-    // Validate inputs
-    for (let i = 0; i < withdrawals.length; i++) {
-      const w = withdrawals[i];
-      if (!w || parseFloat(w.amount) <= 0) {
-        alert(`Please enter a valid amount for Withdrawal #${i + 1}`);
-        return;
-      }
-      if (!w.token) {
-        alert(`Please select a token for Withdrawal #${i + 1}`);
-        return;
-      }
-      if (!w.recipient) {
-        alert(`Please enter a recipient address for Withdrawal #${i + 1}`);
-        return;
-      }
-    }
-
-    setIsWithdrawing(true);
-
-    // Execute each withdrawal
-    for (let i = 0; i < withdrawals.length; i++) {
-      try {
-        const w = withdrawals[i];
-
-        // Withdraw from vault (updated signature - no chain parameter)
-        const result = await withdraw(w.token, w.amount, w.recipient);
-
+      } else {
+        console.log('Withdrawing from Siphon Vault');
+        const result = await withdraw(transactionInput.token, transactionInput.amount, transactionInput.recipient);
+        
         if (result.success) {
-          console.log(`Successfully withdrawn ${w.amount} ${w.token} for Withdrawal #${i + 1}`);
-          alert(`Successfully withdrawn ${w.amount} ${w.token}`);
-          setWithdrawals([{ chain: "Ethereum Sepolia", token: "ETH", amount: "", recipient: "" }]);
+          alert(`Successfully withdrawn ${transactionInput.amount} ${transactionInput.token}`);
+          setTransactionInput(prev => ({...prev, amount: ""}));
         } else {
           alert(`Withdraw failed: ${result.error}`);
-          console.log(result.error);
         }
-      } catch (error: unknown) {
-        console.error('Withdraw failed:', error);
-        alert(`Withdraw failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
+    } catch (error: unknown) {
+      console.error('Transaction failed:', error);
+      alert(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    setIsWithdrawing(false);
+    setIsProcessing(false);
   };
 
   if (!wallet) {
@@ -292,135 +242,75 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
-              <h2 className="userdash-balance-title">Deposit Funds</h2>
+              <h2 className="userdash-balance-title">
+                <span 
+                  className={`userdash-mode-toggle ${isDepositMode ? 'active' : ''}`}
+                  onClick={() => setIsDepositMode(true)}
+                >
+                  Deposit
+                </span>
+                {' / '}
+                <span 
+                  className={`userdash-mode-toggle ${!isDepositMode ? 'active' : ''}`}
+                  onClick={() => setIsDepositMode(false)}
+                >
+                  Withdraw
+                </span>
+              </h2>
             </div>
-            <div className="userdash-balance-content">
-              {depositInputs.map((input, index) => (
-                <div key={index} className="userdash-input-group">
-                  <input
-                    type="number"
-                    placeholder="Amount"
-                    value={input.amount}
-                    onChange={(e) => {
-                      const newInputs = [...depositInputs];
-                      newInputs[index].amount = e.target.value;
-                      setDepositInputs(newInputs);
-                    }}
-                    className="userdash-input"
-                  />
-                  <select
-                    value={input.token}
-                    onChange={(e) => {
-                      const newInputs = [...depositInputs];
-                      newInputs[index].token = e.target.value;
-                      setDepositInputs(newInputs);
-                    }}
-                    className="userdash-select"
-                  >
-                    {Object.keys(TOKEN_MAP)
-                      .filter(tokenSymbol => tokenSymbol === 'ETH' || tokenSymbol === 'USDC')
-                      .map((tokenSymbol) => (
-                        <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.6em' }}>
-                          {tokenSymbol}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-            <div className="userdash-balance-description">
-              Deposit funds to the Siphon contract
-            </div>
-          </div>
-
-          <div className="userdash-balance-card">
-            <div className="userdash-balance-header">
-              <h2 className="userdash-balance-title">Withdraw Funds</h2>
-            </div>
-            <div className="userdash-balance-content">
-              {withdrawals.map((input, index) => (
-                <div key={index} className="userdash-input-group">
-                  <input
-                    type="number"
-                    placeholder="Amount"
-                    value={input.amount}
-                    onChange={(e) => {
-                      const newInputs = [...withdrawals];
-                      newInputs[index].amount = e.target.value;
-                      setWithdrawals(newInputs);
-                    }}
-                    className="userdash-input"
-                  />
-                  <select
-                    value={input.token}
-                    onChange={(e) => {
-                      const newInputs = [...withdrawals];
-                      newInputs[index].token = e.target.value;
-                      setWithdrawals(newInputs);
-                    }}
-                    className="userdash-select"
-                  >
-                    {Object.keys(TOKEN_MAP)
-                      .filter(tokenSymbol => tokenSymbol === 'ETH' || tokenSymbol === 'USDC')
-                      .map((tokenSymbol) => (
-                        <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.8em' }}>
-                          {tokenSymbol}
-                        </option>
-                      ))}
-                  </select>
+            <div className="userdash-transaction-content">
+              <div className="userdash-input-group">
+                <input
+                  type="number"
+                  placeholder="Amount"
+                  value={transactionInput.amount}
+                  onChange={(e) => {
+                    setTransactionInput(prev => ({...prev, amount: e.target.value}));
+                  }}
+                  className="userdash-input"
+                />
+                <select
+                  value={transactionInput.token}
+                  onChange={(e) => {
+                    setTransactionInput(prev => ({...prev, token: e.target.value}));
+                  }}
+                  className="userdash-select"
+                >
+                  {Object.keys(TOKEN_MAP)
+                    .filter(tokenSymbol => tokenSymbol === 'ETH' || tokenSymbol === 'USDC')
+                    .map((tokenSymbol) => (
+                      <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.8em' }}>
+                        {tokenSymbol}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              {!isDepositMode && (
+                <div className="userdash-input-group">
                   <input
                     type="text"
                     placeholder="Recipient Address"
-                    value={input.recipient}
+                    value={transactionInput.recipient}
                     onChange={(e) => {
-                      const newInputs = [...withdrawals];
-                      newInputs[index].recipient = e.target.value;
-                      setWithdrawals(newInputs);
+                      setTransactionInput(prev => ({...prev, recipient: e.target.value}));
                     }}
                     className="userdash-input"
                   />
                 </div>
-              ))}
+              )}
             </div>
-            <div className="userdash-balance-description">
-              Withdraw funds from the Siphon contract
-            </div>
+            <button
+              className="userdash-confirm-button"
+              onClick={handleConfirm}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                isDepositMode ? 'Depositing...' : 'Withdrawing...'
+              ) : (
+                'Confirm'
+              )}
+            </button>
           </div>
-        </div>
-
-        <div className="userdash-actions">
-          <button
-            className="userdash-action-button"
-            onClick={handleDeposit}
-            disabled={isDepositing}
-          >
-            {isDepositing ? (
-              'Depositing...'
-            ) : (
-              <>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12l7-7 7 7" />
-                </svg>
-                Deposit
-              </>
-            )}
-          </button>
-          <button
-            className="userdash-action-button"
-            onClick={handleWithdraw}
-            disabled={isWithdrawing}
-          >
-            {isWithdrawing ? (
-              'Withdrawing...'
-            ) : (
-              <>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 19V5M5 12l7 7 7-7" />
-                </svg>
-                Withdraw
-              </>
-            )}
-          </button>
         </div>
       </div>
     </div>
