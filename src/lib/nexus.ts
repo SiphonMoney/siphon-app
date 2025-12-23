@@ -1,5 +1,5 @@
 // replaced original nexus handler code with ethers.js implementation
-import { ethers, BrowserProvider, Signer, Contract, formatUnits, parseUnits } from 'ethers';
+import { ethers, BrowserProvider, Signer, Contract, formatUnits, parseUnits, Eip1193Provider } from 'ethers';
 
 // --- State Variables ---
 let provider: BrowserProvider | null = null;
@@ -57,7 +57,7 @@ export function isInitialized(): boolean {
 // --- Core Functions ---
 
 // Initialize the ethers provider and signer from a browser wallet
-export async function initializeWithProvider(eip1193Provider: unknown) {
+export async function initializeWithProvider(eip1193Provider: Eip1193Provider) {
   if (!eip1193Provider) {
     throw new Error('No EIP-1193 provider (e.g., MetaMask) found'); 
   }
@@ -65,7 +65,7 @@ export async function initializeWithProvider(eip1193Provider: unknown) {
 
   try {
     // Create a new ethers provider
-    provider = new ethers.BrowserProvider(eip1193Provider as any);
+    provider = new ethers.BrowserProvider(eip1193Provider);
     // Get the signer
     signer = await provider.getSigner();
     console.log("Ethers initialized with signer:", await signer.getAddress());

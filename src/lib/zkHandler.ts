@@ -1,4 +1,4 @@
-import { ethers, Contract } from 'ethers';
+import { ethers, Contract, Log } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
 import { prepareWithdrawalTransaction } from "./generateProof";
@@ -44,7 +44,7 @@ export interface ZKData {
   newDepositKey: string;
   newDeposit: CommitmentData;
   spentDepositKey: string | null;
-  spentDeposit: any;
+  spentDeposit: CommitmentData | null;
 }
 
 // --------- Utilities ----------
@@ -110,24 +110,24 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   const vaultAddress = await entrypoint.getVault(tokenAddress);
   console.log("Vault address (from entrypoint):", vaultAddress);
 
-  const vault = new Contract(vaultAddress, nativeVaultAbiJson.abi as any, provider);
+  const vault = new Contract(vaultAddress, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
   const merkleTreeAddress = await vault.merkleTree();
   console.log("MerkleTree address:", merkleTreeAddress);
 
-  const merkleTree = new Contract(merkleTreeAddress, merkleTreeAbiJson.abi as any, provider);
+  const merkleTree = new Contract(merkleTreeAddress, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider);
   const filter = merkleTree.filters.LeafInserted();
   const logs = await merkleTree.queryFilter(filter, 0, 'latest');
   console.log("Fetched LeafInserted logs count:", logs.length);
 
-  const merkleTreeInterface = new ethers.Interface(merkleTreeAbiJson.abi as any);
+  const merkleTreeInterface = new ethers.Interface(merkleTreeAbiJson.abi as ethers.InterfaceAbi);
   const decoded = logs.map(l => {
     try {
-      return merkleTreeInterface.parseLog(l as any);
+      return merkleTreeInterface.parseLog(l as Log);
     } catch (e) {
       console.warn("Failed to parse MerkleTree log:", e);
       return null;
     }
-  }).filter(Boolean) as any[];
+  }).filter(Boolean) as ethers.LogDescription[];
 
   // Sort by index
   decoded.sort((a, b) => {
@@ -157,7 +157,7 @@ export async function generateZKData(
   const F = poseidon.F;
 
   // 1) Find a spendable commitment in localStorage
-  let storedDeposit: any = null;
+  let storedDeposit: CommitmentData | null = null;
   let spentDepositKey: string | null = null;
 
   console.log("Scanning localStorage for spendable deposits...");
@@ -197,13 +197,10 @@ export async function generateZKData(
   // 2) Reconstruct secrets and values
   const existingSecret = BigInt(storedDeposit.secret);
   const existingNullifier = BigInt(storedDeposit.nullifier);
+  if (!storedDeposit.commitment) {throw new Error('Stored deposit is missing commitment');}
   const existingCommitment = BigInt(storedDeposit.commitment);
-  const existingValue = BigInt(
-    ethers.parseUnits(storedDeposit.amount, _token.decimals).toString()
-  );
-  const withdrawnValue = BigInt(
-    ethers.parseUnits(_amount, _token.decimals).toString()
-  );
+  const existingValue = BigInt( ethers.parseUnits(storedDeposit.amount, _token.decimals).toString() );
+  const withdrawnValue = BigInt( ethers.parseUnits(_amount, _token.decimals).toString() );
 
   console.log("existingSecret:", existingSecret.toString());
   console.log("existingNullifier:", existingNullifier.toString());

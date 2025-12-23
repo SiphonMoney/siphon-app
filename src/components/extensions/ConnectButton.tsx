@@ -83,7 +83,10 @@ export default function ConnectButton({ className, onConnected }: { className?: 
         setConnectedWallet(result.wallet);
         onConnected?.(result.wallet);
         window.dispatchEvent(new Event('walletConnected'));
-        await initializeWithProvider((window as any).ethereum);
+        if (!window.ethereum) {
+        throw new Error('No Ethereum provider found');
+        }
+        await initializeWithProvider(window.ethereum);
         // Persist wallet connection
         localStorage.setItem('siphon-connected-wallet', JSON.stringify(result.wallet));
       } else {
