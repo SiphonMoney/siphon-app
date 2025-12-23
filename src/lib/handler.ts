@@ -1,4 +1,4 @@
-import { getSigner, getProvider, TOKEN_MAP } from './nexus';
+import { getSigner, getProvider, TOKEN_MAP, getTokenAllowance, approveToken } from './nexus';
 import { ethers, Interface, Log, Contract, TransactionResponse, TransactionReceipt, BrowserProvider, Signer} from 'ethers';
 import { generateCommitmentData, generateZKData, TokenInfo } from './zkHandler';
 import entrypointArtifact from "../../contract/artifacts/src/Entrypoint.sol/Entrypoint.json";
@@ -59,18 +59,17 @@ export async function deposit(_token: string, _amount: string) {
     address: token.address
   };
 
+  let depositId: string | null = null; // Initialize depositId
+  let finalDepositId: string | null = null; // Initialize finalDepositId
+
   try {
     // 1) Generate commitment data using zkHandler
     console.log("Generating commitment data...");
     const commitmentData = await generateCommitmentData(VAULT_CHAIN_ID, tokenInfo, _amount);
 
-    const decAmount = ethers.parseUnits(_amount, token.decimals).toString();
+    const decAmount = ethers.parseUnits(_amount, token.decimals);
     const tokenAddress = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
-
-    // Save secrets locally before transaction (with precommitment as temp key)
-    const depositId = `${VAULT_CHAIN_ID}-${_token}-${commitmentData.precommitment}`;
-    localStorage.setItem(depositId, JSON.stringify(commitmentData));
-    console.log("Stored deposit hint in localStorage:", depositId);
+    const signerAddress = await signer.getAddress();
 
     const contract = await getEntrypointContract(signer);
     let receipt: TransactionReceipt | null = null;
@@ -87,30 +86,60 @@ export async function deposit(_token: string, _amount: string) {
       console.log("Deposit tx sent (ETH):", tx.hash);
       receipt = await tx.wait();
       if (!receipt) throw new Error("Receipt is null after deposit tx");
-      console.log("Deposit tx mined (ETH):", receipt.hash ?? receipt.hash);
+      console.log("Deposit tx mined (ETH):", receipt.hash);
     } else {
-      console.log(`Approving ${token.symbol} for vault...`);
-      const tokenContract = new Contract(
-        token.address,
-        ["function approve(address spender, uint256 amount) returns (bool)"],
-        signer
-      );
+      // ERC20 deposit: Check allowance and approve if necessary
+      console.log("Signer Address:", signerAddress);
+      console.log("Token Address (ERC20):", tokenAddress);
+
       const vaultAddress = await contract.getVault(tokenAddress);
       console.log("Vault address for token:", vaultAddress);
 
-      const approveTx = await tokenContract.approve(vaultAddress, decAmount);
-      console.log("Approve tx sent:", approveTx.hash);
-      const approveReceipt = await approveTx.wait();
-      if (!approveReceipt) throw new Error("Approve receipt is null");
-      console.log("Approve tx mined:", approveReceipt.hash ?? approveReceipt.transactionHash);
+      let currentAllowance = await getTokenAllowance(tokenAddress, signerAddress, ENTRYPOINT_ADDRESS);
+      console.log(`Initial allowance for ${token.symbol} (raw): ${currentAllowance.toString()}`);
+      console.log(`Initial allowance for ${token.symbol}: ${ethers.formatUnits(currentAllowance, token.decimals)}`);
+      console.log(`Deposit amount (raw): ${decAmount.toString()}`);
+      console.log(`Deposit amount: ${ethers.formatUnits(decAmount, token.decimals)}`);
 
-      console.log(`Calling entrypoint.deposit for ${token.symbol}...`);
+      if (currentAllowance < decAmount) {
+        console.log(`Insufficient allowance. Approving ${token.symbol} for Entrypoint...`);
+        try {
+          const approveTx = await approveToken(tokenAddress, ENTRYPOINT_ADDRESS, ethers.MaxUint256);
+          console.log("Approve tx sent:", approveTx.hash);
+          const approveReceipt = await approveTx.wait();
+          if (!approveReceipt) throw new Error("Approve receipt is null");
+          console.log("Approve tx mined:", approveReceipt.hash);
+
+          currentAllowance = await getTokenAllowance(tokenAddress, signerAddress, ENTRYPOINT_ADDRESS);
+          console.log(`Allowance after approval (raw): ${currentAllowance.toString()}`);
+          console.log(`Allowance after approval: ${ethers.formatUnits(currentAllowance, token.decimals)}`);
+
+          if (currentAllowance < decAmount) {
+            console.error("Allowance still insufficient after approval. This should not happen if approval was successful.");
+            throw new Error("Allowance still insufficient after approval. Please check MetaMask for failed approval transactions.");
+          }
+
+        } catch (approveErr: unknown) {
+          const approveMessage = approveErr instanceof Error ? approveErr.message : String(approveErr);
+          console.error("Error during token approval:", approveMessage);
+          throw new Error(`Token approval failed: ${approveMessage}`);
+        }
+      } else {
+        console.log("Allowance sufficient. Skipping explicit approval.");
+      }
+
+      console.log(`Proceeding with entrypoint.deposit for ${token.symbol}...`);
       const tx = await contract.deposit(tokenAddress, decAmount, commitmentData.precommitment);
       console.log("Deposit tx sent (ERC20):", tx.hash);
       receipt = await tx.wait();
       if (!receipt) throw new Error("Receipt is null after deposit tx");
-      console.log("Deposit tx mined (ERC20):", receipt.hash ?? receipt.hash);
+      console.log("Deposit tx mined (ERC20):", receipt.hash);
     }
+
+    // Now that the transaction is successful, store the deposit hint locally
+    depositId = `${VAULT_CHAIN_ID}-${_token}-${commitmentData.precommitment}`;
+    localStorage.setItem(depositId, JSON.stringify(commitmentData));
+    console.log("Stored deposit hint in localStorage:", depositId);
 
     // 3) Parse LeafInserted from MerkleTree logs
     const provider = getProvider();
@@ -143,7 +172,7 @@ export async function deposit(_token: string, _amount: string) {
     const commitment = depositLog.args._leaf.toString();
 
     // Update localStorage with commitment (use commitment as final key)
-    const finalDepositId = `${VAULT_CHAIN_ID}-${_token}-${commitment}`;
+    finalDepositId = `${VAULT_CHAIN_ID}-${_token}-${commitment}`;
     localStorage.removeItem(depositId); // Remove temp key
     localStorage.setItem(finalDepositId, JSON.stringify({
       ...commitmentData,
@@ -153,15 +182,22 @@ export async function deposit(_token: string, _amount: string) {
     console.log("✅ Deposit successful!");
     console.log("Precommitment:", commitmentData.precommitment);
     console.log("Commitment (from event):", commitment);
-    console.log("Transaction hash:", receipt.hash ?? receipt.hash);
+    console.log("Transaction hash:", receipt.hash);
 
-    return { success: true, executeTransaction: receipt.hash ?? receipt.hash };
+    return { success: true, executeTransaction: receipt.hash };
+
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Error during deposit:", message);
+    // If an error occurred, and depositId was set, remove it from localStorage
+    if (depositId && !finalDepositId) {
+      localStorage.removeItem(depositId);
+      console.log("Removed temporary deposit hint from localStorage due to error:", depositId);
+    }
     return { success: false, error: message };
   }
 }
+
 
 // --------- Withdraw Implementation ----------
 export async function withdraw(_token: string, _amount: string, _recipient: string) {
@@ -263,7 +299,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
 
       const receipt = await tx.wait();
       if (!receipt) throw new Error("Withdrawal tx was not mined (receipt null)");
-      console.log("Withdraw tx mined:", receipt.hash ?? receipt.hash);
+      console.log("Withdraw tx mined:", receipt.hash);
 
       // 5) Update localStorage
       // Mark spent deposit
@@ -285,7 +321,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         console.log("Saved change commitment locally:", zkData.newDepositKey);
       }
 
-      return { success: true, transactionHash: receipt.hash ?? receipt.hash };
+      return { success: true, transactionHash: receipt.hash };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("Error during withdraw transaction:", message);
