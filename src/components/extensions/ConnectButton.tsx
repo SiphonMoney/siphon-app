@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import WalletSelector from './WalletSelector';
 import { walletManager, WalletInfo } from './walletManager';
 import { formatEther } from 'viem';
+import { initializeWithProvider, deinit } from '../../lib/nexus';
 
 export default function ConnectButton({ className, onConnected }: { className?: string; onConnected?: (wallet: WalletInfo) => void }) {
   const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
@@ -81,6 +82,8 @@ export default function ConnectButton({ className, onConnected }: { className?: 
         console.log(`Successfully connected ${walletId} wallet:`, result.wallet);
         setConnectedWallet(result.wallet);
         onConnected?.(result.wallet);
+        window.dispatchEvent(new Event('walletConnected'));
+        await initializeWithProvider((window as any).ethereum);
         // Persist wallet connection
         localStorage.setItem('siphon-connected-wallet', JSON.stringify(result.wallet));
       } else {
@@ -99,6 +102,8 @@ export default function ConnectButton({ className, onConnected }: { className?: 
       console.log(`Disconnecting ${connectedWallet.id} wallet...`);
       walletManager.disconnectWallet(connectedWallet.id);
       setConnectedWallet(null);
+      window.dispatchEvent(new Event('walletDisconnected'));
+      deinit();
       // Clear persisted wallet connection
       localStorage.removeItem('siphon-connected-wallet');
     }

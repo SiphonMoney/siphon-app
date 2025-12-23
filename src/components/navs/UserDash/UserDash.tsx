@@ -4,15 +4,36 @@ import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import { formatEther } from 'viem';
 import './UserDash.css';
+import { deposit, withdraw } from "../../../lib/handler";
 
 interface UserDashProps {
   isLoaded?: boolean;
+  walletConnected?: boolean;
 }
 
-export default function UserDash({ isLoaded = true }: UserDashProps) {
+export default function UserDash({ isLoaded = true, walletConnected }: UserDashProps) {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [siphonBalance] = useState<number>(0); // Placeholder for now
+  const [siphonBalance, setSiphonBalance] = useState<number>(0);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  
+  useEffect(() => {
+    const fetchSiphonBalance = async () => {
+      // TODO: Replace with actual implementation to fetch Siphon balance
+      const balance = 0;
+      setSiphonBalance(balance);
+    };
+    
+    fetchSiphonBalance();
+  }, [wallet]);
+   const [withdrawals, setWithdrawals] = useState([
+    { chain: "Ethereum Sepolia", token: "ETH", amount: "", recipient: "" }
+  ]);
+
+  const [depositInputs, setDepositInputs] = useState([
+    { chain: "Ethereum Sepolia", token: "ETH", amount: "" }
+  ]);
 
   useEffect(() => {
     const checkWallet = async () => {
@@ -22,6 +43,7 @@ export default function UserDash({ isLoaded = true }: UserDashProps) {
         
         if (metamaskWallet) {
           setWallet(metamaskWallet);
+          setWithdrawals(prev => [{...prev[0], recipient: metamaskWallet.address}]);
           
           // Fetch wallet balance
           const eth = (window as Window & { ethereum?: unknown })?.ethereum;
@@ -76,14 +98,106 @@ export default function UserDash({ isLoaded = true }: UserDashProps) {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  const handleDeposit = () => {
-    // Mock action - will be implemented later
-    alert('Deposit functionality coming soon! Funds will be sent to Siphon contract.');
+  const handleDeposit = async () => {
+    if (isDepositing) return;
+
+    console.log('Depositing to Siphon Vault');
+
+    if (!walletConnected) {
+      alert('Please connect wallet first');
+      return;
+    }
+
+    // Validate inputs
+    for (let i = 0; i < depositInputs.length; i++) {
+      const dep = depositInputs[i];
+      if (!dep || parseFloat(dep.amount) <= 0) {
+        alert(`Please enter a valid amount for Deposit #${i + 1}`);
+        return;
+      }
+      if (!dep.token) {
+        alert(`Please select a token for Deposit #${i + 1}`);
+        return;
+      }
+    }
+
+    setIsDepositing(true);
+
+    // Execute each deposit
+    for (let i = 0; i < depositInputs.length; i++) {
+      try {
+        const dep = depositInputs[i];
+
+        // Deposit directly to vault (updated signature - no srcChain)
+        const result = await deposit(dep.token, dep.amount);
+
+        if (result.success) {
+          alert(`Successfully deposited ${dep.amount} ${dep.token} for Deposit #${i + 1}`);
+          setDepositInputs([{ chain: "Ethereum Sepolia", token: "ETH", amount: "" }]);
+        } else {
+          alert(`Deposit failed: ${result.error}`);
+        }
+      } catch (error: unknown) {
+        console.error('Deposit failed:', error);
+        alert(`Deposit failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    setIsDepositing(false);
   };
 
-  const handleWithdraw = () => {
-    // Mock action - will be implemented later
-    alert('Withdraw functionality coming soon!');
+  const handleWithdraw = async () => {
+    if (isWithdrawing) return;
+
+    console.log('Withdrawing from Siphon Vault');
+
+    if (!walletConnected) {
+      alert('Please connect wallet first');
+      return;
+    }
+
+    // Validate inputs
+    for (let i = 0; i < withdrawals.length; i++) {
+      const w = withdrawals[i];
+      if (!w || parseFloat(w.amount) <= 0) {
+        alert(`Please enter a valid amount for Withdrawal #${i + 1}`);
+        return;
+      }
+      if (!w.token) {
+        alert(`Please select a token for Withdrawal #${i + 1}`);
+        return;
+      }
+      if (!w.recipient) {
+        alert(`Please enter a recipient address for Withdrawal #${i + 1}`);
+        return;
+      }
+    }
+
+    setIsWithdrawing(true);
+
+    // Execute each withdrawal
+    for (let i = 0; i < withdrawals.length; i++) {
+      try {
+        const w = withdrawals[i];
+
+        // Withdraw from vault (updated signature - no chain parameter)
+        const result = await withdraw(w.token, w.amount, w.recipient);
+
+        if (result.success) {
+          console.log(`Successfully withdrawn ${w.amount} ${w.token} for Withdrawal #${i + 1}`);
+          alert(`Successfully withdrawn ${w.amount} ${w.token}`);
+          setWithdrawals([{ chain: "Ethereum Sepolia", token: "ETH", amount: "", recipient: "" }]);
+        } else {
+          alert(`Withdraw failed: ${result.error}`);
+          console.log(result.error);
+        }
+      } catch (error: unknown) {
+        console.error('Withdraw failed:', error);
+        alert(`Withdraw failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    setIsWithdrawing(false);
   };
 
   if (!wallet) {
@@ -148,17 +262,86 @@ export default function UserDash({ isLoaded = true }: UserDashProps) {
 
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
-              <h2 className="userdash-balance-title">Siphon Balance</h2>
-              <span className="userdash-balance-network">Sepolia</span>
+              <h2 className="userdash-balance-title">Deposit Funds</h2>
             </div>
             <div className="userdash-balance-content">
-              <div className="userdash-balance-amount">
-                {siphonBalance.toFixed(6)}
-              </div>
-              <div className="userdash-balance-currency">ETH</div>
+              {depositInputs.map((input, index) => (
+                <div key={index} className="userdash-input-group">
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={input.amount}
+                    onChange={(e) => {
+                      const newInputs = [...depositInputs];
+                      newInputs[index].amount = e.target.value;
+                      setDepositInputs(newInputs);
+                    }}
+                    className="userdash-input"
+                  />
+                  <select
+                    value={input.token}
+                    onChange={(e) => {
+                      const newInputs = [...depositInputs];
+                      newInputs[index].token = e.target.value;
+                      setDepositInputs(newInputs);
+                    }}
+                    className="userdash-select"
+                  >
+                    <option value="ETH">ETH</option>
+                  </select>
+                </div>
+              ))}
             </div>
             <div className="userdash-balance-description">
-              Funds deposited to Siphon contract
+              Deposit funds to the Siphon contract
+            </div>
+          </div>
+
+          <div className="userdash-balance-card">
+            <div className="userdash-balance-header">
+              <h2 className="userdash-balance-title">Withdraw Funds</h2>
+            </div>
+            <div className="userdash-balance-content">
+              {withdrawals.map((input, index) => (
+                <div key={index} className="userdash-input-group">
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={input.amount}
+                    onChange={(e) => {
+                      const newInputs = [...withdrawals];
+                      newInputs[index].amount = e.target.value;
+                      setWithdrawals(newInputs);
+                    }}
+                    className="userdash-input"
+                  />
+                  <select
+                    value={input.token}
+                    onChange={(e) => {
+                      const newInputs = [...withdrawals];
+                      newInputs[index].token = e.target.value;
+                      setWithdrawals(newInputs);
+                    }}
+                    className="userdash-select"
+                  >
+                    <option value="ETH">ETH</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Recipient Address"
+                    value={input.recipient}
+                    onChange={(e) => {
+                      const newInputs = [...withdrawals];
+                      newInputs[index].recipient = e.target.value;
+                      setWithdrawals(newInputs);
+                    }}
+                    className="userdash-input"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="userdash-balance-description">
+              Withdraw funds from the Siphon contract
             </div>
           </div>
         </div>
@@ -167,20 +350,34 @@ export default function UserDash({ isLoaded = true }: UserDashProps) {
           <button
             className="userdash-action-button"
             onClick={handleDeposit}
+            disabled={isDepositing}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12l7-7 7 7" />
-            </svg>
-            Deposit
+            {isDepositing ? (
+              'Depositing...'
+            ) : (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12l7-7 7 7" />
+                </svg>
+                Deposit
+              </>
+            )}
           </button>
           <button
             className="userdash-action-button"
             onClick={handleWithdraw}
+            disabled={isWithdrawing}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 19V5M5 12l7 7 7-7" />
-            </svg>
-            Withdraw
+            {isWithdrawing ? (
+              'Withdrawing...'
+            ) : (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19V5M5 12l7 7 7-7" />
+                </svg>
+                Withdraw
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -20,11 +20,25 @@ export default function Nexus({
   const [currentFileName, setCurrentFileName] = useState<string>('untitled.io');
   const [favoriteStrategies, setFavoriteStrategies] = useState<Set<string>>(new Set());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [walletConnected, setWalletConnected] = useState(false);
   
   // React Flow state
   const initialNodes: Node[] = [];
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges] = useEdgesState<Edge>([]);
+
+  useEffect(() => {
+    const handleWalletConnected = () => setWalletConnected(true);
+    const handleWalletDisconnected = () => setWalletConnected(false);
+
+    window.addEventListener('walletConnected', handleWalletConnected);
+    window.addEventListener('walletDisconnected', handleWalletDisconnected);
+
+    return () => {
+      window.removeEventListener('walletConnected', handleWalletConnected);
+      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
+    };
+  }, []);
 
   // Listen for view mode changes from Nav component or balance click
   useEffect(() => {
@@ -88,6 +102,7 @@ export default function Nexus({
         ) : viewMode === 'userdash' ? (
           <UserDash
             isLoaded={isLoaded}
+            walletConnected={walletConnected}
           />
         ) : (
           <Build
