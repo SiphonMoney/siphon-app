@@ -1,45 +1,53 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
-import { formatEther } from 'viem';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
-import { getSiphonVaultTotalBalance, TOKEN_MAP } from '../../../lib/nexus';
+import { getSiphonVaultTotalBalance, TOKEN_MAP, getUnifiedBalances } from '../../../lib/nexus';
+
+interface UnifiedBalance {
+  symbol: string;
+  balance: string;
+  decimals: number;
+}
 
 interface UserDashProps {
   isLoaded?: boolean;
-  walletConnected?: boolean;
+  walletConnected: boolean;
 }
 
 export default function UserDash({ isLoaded = true, walletConnected }: UserDashProps) {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [siphonBalance, setSiphonBalance] = useState<number>(0);
+  const [walletBalances, setWalletBalances] = useState<UnifiedBalance[] | null>(null);
+  const [siphonVaultBalances, setSiphonVaultBalances] = useState<{ [token: string]: number } | null>(null);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const VAULT_CHAIN_ID = 11155111; // Sepolia id
   
-  useEffect(() => {
-    const fetchSiphonBalance = () => {
-      const { totalBalance } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
-      setSiphonBalance(totalBalance);
-    };
-    
-    fetchSiphonBalance();
-    // Refresh Siphon balance periodically
-    const interval = setInterval(fetchSiphonBalance, 10000);
-    return () => clearInterval(interval);
-  }, [wallet]);
-   const [withdrawals, setWithdrawals] = useState([
+  const [withdrawals, setWithdrawals] = useState([
     { chain: "Ethereum Sepolia", token: "ETH", amount: "", recipient: "" }
   ]);
 
   const [depositInputs, setDepositInputs] = useState([
     { chain: "Ethereum Sepolia", token: "ETH", amount: "" }
   ]);
+  useEffect(() => {
+    const fetchBalances = async () => {
+      const { details } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
+      setSiphonVaultBalances(details);
+      console.log("Siphon Vault Balances fetched:", details); // Debug log
+    };
+    
+    fetchBalances();
+    // Refresh Siphon balance periodically
+    const interval = setInterval(fetchBalances, 10000);
+    return () => clearInterval(interval);
+  }, [wallet]);
+
+  // ... (keep the depositInputs and withdrawals state as is) ...
 
   useEffect(() => {
-    const checkWallet = async () => {
+    const checkWalletAndFetchBalances = async () => {
       try {
         const wallets = walletManager.getConnectedWallets();
         const metamaskWallet = wallets.find(w => w.id === 'metamask');
@@ -48,47 +56,24 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           setWallet(metamaskWallet);
           setWithdrawals(prev => [{...prev[0], recipient: metamaskWallet.address}]);
           
-          // Fetch wallet balance
-          const eth = (window as Window & { ethereum?: unknown })?.ethereum;
-          if (eth) {
-            const ethereum = eth as {
-              request: (params: { method: string; params?: unknown[] }) => Promise<unknown>;
-            };
-            const balanceHex = await ethereum.request({
-              method: 'eth_getBalance',
-              params: [metamaskWallet.address, 'latest'],
-            }) as string;
-            const balanceWei = BigInt(balanceHex);
-            const balanceEth = parseFloat(formatEther(balanceWei));
-            setWalletBalance(balanceEth);
-          }
+          const balances = await getUnifiedBalances();
+          setWalletBalances(balances);
         }
       } catch (error) {
         console.error('Error fetching wallet data:', error);
       }
     };
 
-    checkWallet();
+    checkWalletAndFetchBalances();
     
     // Refresh wallet balance every 10 seconds
     const interval = setInterval(async () => {
       if (wallet) {
         try {
-          const eth = (window as Window & { ethereum?: unknown })?.ethereum;
-          if (eth) {
-            const ethereum = eth as {
-              request: (params: { method: string; params?: unknown[] }) => Promise<unknown>;
-            };
-            const balanceHex = await ethereum.request({
-              method: 'eth_getBalance',
-              params: [wallet.address, 'latest'],
-            }) as string;
-            const balanceWei = BigInt(balanceHex);
-            const balanceEth = parseFloat(formatEther(balanceWei));
-            setWalletBalance(balanceEth);
-          }
+          const balances = await getUnifiedBalances();
+          setWalletBalances(balances);
         } catch (error) {
-          console.error('Error refreshing balance:', error);
+          console.error('Error refreshing wallet balances:', error);
         }
       }
     }, 10000);
@@ -246,14 +231,24 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               <h2 className="userdash-balance-title">Wallet Balance</h2>
               <span className="userdash-balance-network">Sepolia</span>
             </div>
-            <div className="userdash-balance-content">
-              {walletBalance !== null ? (
-                <>
-                  <div className="userdash-balance-amount">
-                    {walletBalance.toFixed(6)}
-                  </div>
-                  <div className="userdash-balance-currency">ETH</div>
-                </>
+            <div className="userdash-balance-content-multi">
+              {walletBalances !== null && walletBalances.length > 0 ? (
+                // Sort and filter balances to show ETH then USDC
+                walletBalances
+                  .filter(bal => bal.symbol === 'ETH' || bal.symbol === 'USDC')
+                  .sort((a, b) => {
+                    if (a.symbol === 'ETH') return -1;
+                    if (b.symbol === 'ETH') return 1;
+                    return 0;
+                  })
+                  .map((bal, index) => (
+                    <div key={index} className="userdash-balance-item-multi">
+                      <div className="userdash-balance-amount">
+                        {parseFloat(bal.balance).toFixed(6)}
+                      </div>
+                      <div className="userdash-balance-currency">{bal.symbol}</div>
+                    </div>
+                  ))
               ) : (
                 <div className="userdash-balance-loading">Loading...</div>
               )}
@@ -268,14 +263,24 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               <h2 className="userdash-balance-title">Siphon Vault Balance</h2>
               <span className="userdash-balance-network">Sepolia</span>
             </div>
-            <div className="userdash-balance-content">
-              {siphonBalance !== null ? (
-                <>
-                  <div className="userdash-balance-amount">
-                    {siphonBalance.toFixed(6)}
-                  </div>
-                  <div className="userdash-balance-currency">ETH</div>
-                </>
+            <div className="userdash-balance-content-multi">
+              {siphonVaultBalances !== null && Object.keys(siphonVaultBalances).length > 0 ? (
+                // Sort and filter balances to show ETH then USDC
+                Object.entries(siphonVaultBalances)
+                  .filter(([symbol]) => symbol === 'ETH' || symbol === 'USDC')
+                  .sort(([symbolA], [symbolB]) => {
+                    if (symbolA === 'ETH') return -1;
+                    if (symbolB === 'ETH') return 1;
+                    return 0;
+                  })
+                  .map(([tokenSymbol, amount], index) => (
+                    <div key={index} className="userdash-balance-item-multi">
+                      <div className="userdash-balance-amount">
+                        {amount.toFixed(6)}
+                      </div>
+                      <div className="userdash-balance-currency">{tokenSymbol}</div>
+                    </div>
+                  ))
               ) : (
                 <div className="userdash-balance-loading">Loading...</div>
               )}
@@ -312,11 +317,13 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                     }}
                     className="userdash-select"
                   >
-                    {Object.keys(TOKEN_MAP).map((tokenSymbol) => (
-                      <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.6em' }}>
-                        {tokenSymbol}
-                      </option>
-                    ))}
+                    {Object.keys(TOKEN_MAP)
+                      .filter(tokenSymbol => tokenSymbol === 'ETH' || tokenSymbol === 'USDC')
+                      .map((tokenSymbol) => (
+                        <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.6em' }}>
+                          {tokenSymbol}
+                        </option>
+                      ))}
                   </select>
                 </div>
               ))}
@@ -353,11 +360,13 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                     }}
                     className="userdash-select"
                   >
-                    {Object.keys(TOKEN_MAP).map((tokenSymbol) => (
-                      <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.8em' }}>
-                        {tokenSymbol}
-                      </option>
-                    ))}
+                    {Object.keys(TOKEN_MAP)
+                      .filter(tokenSymbol => tokenSymbol === 'ETH' || tokenSymbol === 'USDC')
+                      .map((tokenSymbol) => (
+                        <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.8em' }}>
+                          {tokenSymbol}
+                        </option>
+                      ))}
                   </select>
                   <input
                     type="text"

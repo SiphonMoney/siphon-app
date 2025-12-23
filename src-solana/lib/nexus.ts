@@ -13,6 +13,12 @@ const ERC20_ABI = [
   "function decimals() view returns (uint8)"
 ];
 
+// Minimal ERC20 ABI for allowance and approve
+const ERC20_ABI_ALLOWANCE = [
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)"
+];
+
 // Sepolia Chain ID
 const SEPOLIA_CHAIN_ID = 11155111;
 
@@ -23,7 +29,7 @@ export const TOKEN_MAP: { [key: string]: { address: string, decimals: number, sy
     symbol: 'ETH'
   },
   'USDC': {
-    address: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8',
+    address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
     decimals: 6,
     symbol: 'USDC'
   },
@@ -83,6 +89,24 @@ export async function deinit() {
   provider = null;
   signer = null;
   console.log("Ethers de-initialized.");
+}
+
+// --- ERC20 Allowance Functions ---
+
+export async function getTokenAllowance(tokenAddress: string, owner: string, spender: string): Promise<bigint> {
+  if (!provider) {
+    throw new Error('Ethers provider not initialized.');
+  }
+  const tokenContract = new Contract(tokenAddress, ERC20_ABI_ALLOWANCE, provider);
+  return tokenContract.allowance(owner, spender);
+}
+
+export async function approveToken(tokenAddress: string, spender: string, amount: bigint): Promise<ethers.TransactionResponse> {
+  if (!signer) {
+    throw new Error('Ethers signer not initialized.');
+  }
+  const tokenContract = new Contract(tokenAddress, ERC20_ABI_ALLOWANCE, signer);
+  return tokenContract.approve(spender, amount);
 }
 
 // Gets ETH and ERC20 balances for the connected wallet on Sepolia
