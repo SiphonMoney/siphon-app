@@ -193,3 +193,39 @@ export async function transferTokens(tokenSymbol: string, amount: string, recipi
     };
   }
 }
+
+export function getSiphonVaultTotalBalance(chainId: number, tokenMap: { [key: string]: { decimals: number } }): { totalBalance: number; details: { [token: string]: number } } {
+  let totalBalance = 0;
+  const details: { [token: string]: number } = {};
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+
+    // Expected key format: `${chainId}-${tokenSymbol}-${commitment}`
+    if (key.startsWith(`${chainId}-`)) {
+      try {
+        const parts = key.split('-');
+        if (parts.length < 3) continue; // Not a valid siphon deposit key
+
+        const tokenSymbol = parts[1];
+        const data = JSON.parse(localStorage.getItem(key) || '{}');
+
+        if (data && data.amount && !data.spent) {
+          const tokenInfo = tokenMap[tokenSymbol.toUpperCase()];
+          if (tokenInfo) {
+            const amountInUnits = parseFloat(ethers.formatUnits(BigInt(ethers.parseUnits(data.amount, tokenInfo.decimals).toString()), tokenInfo.decimals));
+            totalBalance += amountInUnits;
+            details[tokenSymbol] = (details[tokenSymbol] || 0) + amountInUnits;
+          } else {
+            console.warn(`Token info not found for symbol: ${tokenSymbol}`);
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed to parse local storage item with key ${key}:`, e);
+      }
+    }
+  }
+
+  return { totalBalance, details };
+}

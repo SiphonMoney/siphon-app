@@ -1,10 +1,10 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import { formatEther } from 'viem';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
+import { getSiphonVaultTotalBalance, TOKEN_MAP } from '../../../lib/nexus';
 
 interface UserDashProps {
   isLoaded?: boolean;
@@ -17,15 +17,18 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [siphonBalance, setSiphonBalance] = useState<number>(0);
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const VAULT_CHAIN_ID = 11155111; // Sepolia id
   
   useEffect(() => {
-    const fetchSiphonBalance = async () => {
-      // TODO: Replace with actual implementation to fetch Siphon balance
-      const balance = 0;
-      setSiphonBalance(balance);
+    const fetchSiphonBalance = () => {
+      const { totalBalance } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
+      setSiphonBalance(totalBalance);
     };
     
     fetchSiphonBalance();
+    // Refresh Siphon balance periodically
+    const interval = setInterval(fetchSiphonBalance, 10000);
+    return () => clearInterval(interval);
   }, [wallet]);
    const [withdrawals, setWithdrawals] = useState([
     { chain: "Ethereum Sepolia", token: "ETH", amount: "", recipient: "" }
@@ -262,6 +265,28 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
+              <h2 className="userdash-balance-title">Siphon Vault Balance</h2>
+              <span className="userdash-balance-network">Sepolia</span>
+            </div>
+            <div className="userdash-balance-content">
+              {siphonBalance !== null ? (
+                <>
+                  <div className="userdash-balance-amount">
+                    {siphonBalance.toFixed(6)}
+                  </div>
+                  <div className="userdash-balance-currency">ETH</div>
+                </>
+              ) : (
+                <div className="userdash-balance-loading">Loading...</div>
+              )}
+            </div>
+            <div className="userdash-balance-description">
+              Your aggregated balance across all Siphon Vault deposits
+            </div>
+          </div>
+
+          <div className="userdash-balance-card">
+            <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">Deposit Funds</h2>
             </div>
             <div className="userdash-balance-content">
@@ -287,7 +312,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                     }}
                     className="userdash-select"
                   >
-                    <option value="ETH">ETH</option>
+                    {Object.keys(TOKEN_MAP).map((tokenSymbol) => (
+                      <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.6em' }}>
+                        {tokenSymbol}
+                      </option>
+                    ))}
                   </select>
                 </div>
               ))}
@@ -324,7 +353,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                     }}
                     className="userdash-select"
                   >
-                    <option value="ETH">ETH</option>
+                    {Object.keys(TOKEN_MAP).map((tokenSymbol) => (
+                      <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.8em' }}>
+                        {tokenSymbol}
+                      </option>
+                    ))}
                   </select>
                   <input
                     type="text"
