@@ -338,9 +338,20 @@
   letter-spacing: 0.3px;
 }
 
-.blueprint-submenu-item:hover {
+.blueprint-submenu-item:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
   color: white;
+}
+
+.blueprint-submenu-item.inactive {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.blueprint-submenu-item.inactive:hover {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* Saved Scenes Styles */
@@ -721,12 +732,30 @@
   left: 100%;
 }
 
-.blueprint-mobile-modal-btn:hover {
+.blueprint-mobile-modal-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.25);
   color: white;
   transform: translateX(4px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+.blueprint-mobile-modal-btn.inactive {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.blueprint-mobile-modal-btn.inactive:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.4);
+  transform: none;
+  box-shadow: none;
+}
+
+.blueprint-mobile-modal-btn.inactive::before {
+  display: none;
 }
 
 .blueprint-mobile-modal-btn:active {

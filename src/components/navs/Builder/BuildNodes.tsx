@@ -19,17 +19,23 @@ interface NodeData {
   [key: string]: unknown; // Allow additional properties
 }
 
+
+const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
+
 interface CustomNodeProps {
   data: NodeData;
   id: string;
   updateNodeData?: (nodeId: string, field: string, value: string) => void;
   tokens?: string[];
+  isTokenActive?: (token: string) => boolean;
 }
 
-const tokens = ['SOL', 'USDC', 'USDT', 'WBTC', 'XMR'];
-
-export function CustomNode({ data, id, updateNodeData, tokens: propTokens = tokens }: CustomNodeProps) {
+export function CustomNode({ data, id, updateNodeData, tokens: propTokens = tokens, isTokenActive }: CustomNodeProps) {
   const handleChange = (field: string, value: string) => {
+    // Prevent selecting inactive tokens
+    if ((field === 'coin' || field === 'toCoin') && value && isTokenActive && !isTokenActive(value)) {
+      return;
+    }
     if (updateNodeData) {
       updateNodeData(id, field, value);
     }
@@ -51,9 +57,14 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <option value="">Coin</option>
-                {propTokens.map(token => (
-                  <option key={token} value={token}>{token}</option>
-                ))}
+                {propTokens.map(token => {
+                  const active = isTokenActive ? isTokenActive(token) : true;
+                  return (
+                    <option key={token} value={token} disabled={!active} className={!active ? 'inactive-token' : ''}>
+                      {token}
+                    </option>
+                  );
+                })}
               </select>
               <input
                 type="number"
@@ -77,9 +88,14 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <option value="">From</option>
-                {propTokens.map(token => (
-                  <option key={token} value={token}>{token}</option>
-                ))}
+                {propTokens.map(token => {
+                  const active = isTokenActive ? isTokenActive(token) : true;
+                  return (
+                    <option key={token} value={token} disabled={!active} className={!active ? 'inactive-token' : ''}>
+                      {token}
+                    </option>
+                  );
+                })}
               </select>
               <input
                 type="number"
@@ -98,9 +114,14 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <option value="">To</option>
-                {propTokens.map(token => (
-                  <option key={token} value={token}>{token}</option>
-                ))}
+                {propTokens.map(token => {
+                  const active = isTokenActive ? isTokenActive(token) : true;
+                  return (
+                    <option key={token} value={token} disabled={!active} className={!active ? 'inactive-token' : ''}>
+                      {token}
+                    </option>
+                  );
+                })}
               </select>
               <input
                 type="number"
@@ -124,9 +145,14 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <option value="">Coin</option>
-                {propTokens.map(token => (
-                  <option key={token} value={token}>{token}</option>
-                ))}
+                {propTokens.map(token => {
+                  const active = isTokenActive ? isTokenActive(token) : true;
+                  return (
+                    <option key={token} value={token} disabled={!active} className={!active ? 'inactive-token' : ''}>
+                      {token}
+                    </option>
+                  );
+                })}
               </select>
               <input
                 type="number"
