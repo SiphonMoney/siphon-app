@@ -1,6 +1,6 @@
 import { getSigner, getProvider, TOKEN_MAP } from './nexus';
-import { ethers, Interface, Log, EventLog, Contract, TransactionResponse, TransactionReceipt } from 'ethers';
-import { generateCommitmentData, generateZKData, encodeProof, TokenInfo } from './zkHandler';
+import { ethers, Interface, Log, Contract, TransactionResponse, TransactionReceipt, BrowserProvider, Signer} from 'ethers';
+import { generateCommitmentData, generateZKData, TokenInfo } from './zkHandler';
 import entrypointArtifact from "../../contract/artifacts/src/Entrypoint.sol/Entrypoint.json";
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
@@ -8,56 +8,30 @@ import merkleTreeAbiJson from './abi/MerkleTree.json';
 // --------- Constants ----------
 const VAULT_CHAIN_ID = 11155111; // Sepolia id
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-let ENTRYPOINT_ADDRESS = '0x046f21d540C438ea830E735540Ae20bc9b32aB28';
+const ENTRYPOINT_ADDRESS = '0x046f21d540C438ea830E735540Ae20bc9b32aB28';
 
 // --------- ABIs & interface helpers ----------
-const entrypointAbi = entrypointArtifact.abi as any;
-const entrypointInterface = new Interface(entrypointAbi);
-const vaultInterface = new Interface(nativeVaultAbiJson.abi as any);
-const merkleTreeInterface = new Interface(merkleTreeAbiJson.abi as any);
+const entrypointAbi = entrypointArtifact.abi as ethers.InterfaceAbi;
+const vaultAbi = nativeVaultAbiJson.abi as ethers.InterfaceAbi;
+const merkleTreeAbi = merkleTreeAbiJson.abi as ethers.InterfaceAbi;
+const merkleTreeInterface = new Interface(merkleTreeAbi);
 
 // --------- getEntrypointContract ----------
-export async function getEntrypointContract(signerOrProvider: any): Promise<any> {
-  let actor = signerOrProvider;
-  
-  try {
-    if (actor && typeof actor.getSigner === "function" && typeof actor.send === "function") {
-      try {
-        actor = await actor.getSigner();
-        console.log("getEntrypointContract: converted BrowserProvider to Signer via getSigner()");
-      } catch (e) {
-        console.log("getEntrypointContract: actor.getSigner() failed, continuing with actor as-is", e);
-      }
-    }
-  } catch (e) {
-    console.warn("getEntrypointContract: provider check failed", e);
+export async function getEntrypointContract(
+  signerOrProvider: Signer | BrowserProvider
+): Promise<Contract> {
+
+  let actor: Signer | BrowserProvider = signerOrProvider;
+
+  if (actor instanceof BrowserProvider) {
+    actor = await actor.getSigner();
   }
 
-  const abi = entrypointArtifact?.abi;
-  if (!abi) {
-    console.error("getEntrypointContract - no ABI available (entrypointArtifact.abi missing)");
-  }
-
-  const contract = new Contract(ENTRYPOINT_ADDRESS, abi, actor);
-  console.log("getEntrypointContract() created Contract at", ENTRYPOINT_ADDRESS);
-
-  // List available functions
-  try {
-    const fnNames = Object.keys((contract as any).functions || {});
-    console.log("Entrypoint contract functions:", fnNames.slice(0, 40));
-    console.log("Entrypoint ABI length:", (abi as any).length);
-    console.log("Withdraw exists in ABI:", (abi as any).some((x: any) => x.name === "withdraw"));
-  } catch (e) {
-    console.warn("Could not list contract functions:", e);
-  }
-
-  // Sanity check
-  console.log("Entrypoint sanity:", {
-    hasRunner: !!contract.runner,
-    address: contract.target,
-    hasCallStatic: !!contract.callStatic,
-    hasWithdrawFn: typeof (contract as any).withdraw === "function"
-  });
+  const contract = new Contract(
+    ENTRYPOINT_ADDRESS,
+    entrypointAbi,
+    actor
+  );
 
   return contract;
 }
@@ -146,20 +120,20 @@ export async function deposit(_token: string, _amount: string) {
     const vaultAddr = await entrypointRead.getVault(tokenAddress);
     console.log("Vault (read):", vaultAddr);
 
-    const vaultContract = new Contract(vaultAddr, nativeVaultAbiJson.abi as any, provider);
+    const vaultContract = new Contract(vaultAddr, vaultAbi, provider);
     const merkleTreeAddress: string = await vaultContract.merkleTree();
     console.log("MerkleTree address:", merkleTreeAddress);
 
-    const depositLog = (receipt.logs || [])
-      .filter((l: Log) => l.address.toLowerCase() === merkleTreeAddress.toLowerCase())
-      .map((l: Log | EventLog) => {
+    const depositLog = receipt.logs
+      .filter((l): l is Log => l.address.toLowerCase() === merkleTreeAddress.toLowerCase())
+      .map(l => {
         try {
           return merkleTreeInterface.parseLog(l);
-        } catch (err) {
+        } catch {
           return null;
         }
       })
-      .find((pl: any) => pl?.name === 'LeafInserted');
+      .find((pl): pl is ethers.LogDescription => pl?.name === 'LeafInserted');
 
     if (!depositLog) {
       console.error("All logs from receipt:", receipt.logs);
@@ -182,9 +156,10 @@ export async function deposit(_token: string, _amount: string) {
     console.log("Transaction hash:", receipt.hash ?? receipt.hash);
 
     return { success: true, executeTransaction: receipt.hash ?? receipt.hash };
-  } catch (err: any) {
-    console.error("Error during deposit:", err instanceof Error ? err.message : err);
-    return { success: false, error: err?.message ?? String(err) };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Error during deposit:", message);
+    return { success: false, error: message };
   }
 }
 
@@ -227,21 +202,22 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
 
     const tokenAddress = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
     const entrypoint = await getEntrypointContract(signer);
+    const withdrawFn = entrypoint.getFunction('withdraw');
 
     // 2) Check if nullifier is already spent
     try {
-      if ((entrypoint as any).isNullifierSpent) {
-        const spent = await (entrypoint as any).isNullifierSpent(withdrawalTxData.nullifierHash.toString());
+      if (entrypoint.isNullifierSpent) {
+        const spent = await entrypoint.isNullifierSpent(withdrawalTxData.nullifierHash.toString());
         console.log("isNullifierSpent:", spent);
         if (spent) {
           return { success: false, error: "Nullifier already spent" };
         }
-      } else if ((entrypoint as any).nullifiers) {
+      } else if (entrypoint.nullifiers) {
         try {
-          const spent = await (entrypoint as any).nullifiers(withdrawalTxData.nullifierHash.toString());
+          const spent = await entrypoint.nullifiers(withdrawalTxData.nullifierHash.toString());
           console.log("nullifiers mapping lookup:", spent);
           if (spent) return { success: false, error: "Nullifier already spent" };
-        } catch (e) {
+        } catch {
           console.log("nullifiers lookup not readable, continuing.");
         }
       } else {
@@ -254,7 +230,8 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
     // 3) Dry-run with staticCall
     try {
       console.log("Performing withdraw.staticCall (dry-run)...");
-      await entrypoint.withdraw.staticCall(
+
+      await withdrawFn.staticCall(
         tokenAddress,
         _recipient,
         withdrawalTxData.amount.toString(),
@@ -264,15 +241,16 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         withdrawalTxData.proof
       );
       console.log("withdraw.staticCall succeeded - proof validated on-chain (dry-run).");
-    } catch (err: any) {
-      console.error("withdraw.staticCall reverted:", err?.message ?? err);
-      return { success: false, error: `Static call failed: ${err?.message ?? err}` };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("withdraw.staticCall reverted:", message);
+      return { success: false, error: message };
     }
 
     // 4) Send actual withdrawal transaction
     try {
       console.log("Sending withdraw transaction...");
-      const tx: TransactionResponse = await (entrypoint as any).withdraw(
+      const tx = await withdrawFn(
         tokenAddress,
         _recipient,
         withdrawalTxData.amount.toString(),
@@ -280,7 +258,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         withdrawalTxData.nullifierHash.toString(),
         withdrawalTxData.newCommitment.toString(),
         withdrawalTxData.proof
-      );
+      ) as TransactionResponse;
       console.log("Withdraw tx sent:", tx.hash);
 
       const receipt = await tx.wait();
@@ -296,8 +274,8 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
             spent: true
           }));
           console.log("Marked local deposit as spent:", zkData.spentDepositKey);
-        } catch (e) {
-          console.warn("Failed to mark local deposit spent:", e);
+        } catch {
+          console.warn("Failed to mark local deposit spent:");
         }
       }
 
@@ -308,12 +286,14 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       }
 
       return { success: true, transactionHash: receipt.hash ?? receipt.hash };
-    } catch (err: any) {
-      console.error("Error during withdraw transaction:", err?.message ?? err);
-      return { success: false, error: err?.message ?? String(err) };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Error during withdraw transaction:", message);
+      return { success: false, error: message };
     }
-  } catch (err: any) {
-    console.error("Error during withdraw:", err?.message ?? err);
-    return { success: false, error: err?.message ?? String(err) };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Error during withdraw:", message);
+    return { success: false, error: message };
   }
 }

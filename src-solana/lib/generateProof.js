@@ -3,7 +3,7 @@
 import { buildPoseidon } from "circomlibjs";
 const WASM_PATH = '/zk/main.wasm';
 const ZKEY_PATH = '/zk/circuit.zkey';
-const snarkjs = require('snarkjs');
+import * as snarkjs from 'snarkjs';
 
 
 /**
