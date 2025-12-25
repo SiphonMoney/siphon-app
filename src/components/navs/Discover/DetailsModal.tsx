@@ -4,6 +4,9 @@ import React, { useRef } from "react";
 import { ReactFlow, ReactFlowProvider, Background, Node, Edge, Handle, Position, ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import "./Discover.css";
+import { createStrategy } from "../../../lib/strategy";
+import { generateZKData } from "../../../lib/zkHandler";
+
 
 interface NodeData {
   label?: string;
@@ -106,43 +109,136 @@ export default function DetailsModal({
     onClose();
   };
 
-  const handleExecute = () => {
-    if (isRunMode) {
-      console.log('Running strategy:', selectedStrategy.name, 'with values:', runModeValues);
-      
-      setIsFading(true);
-      
-      if (runningStrategies && setRunningStrategies && selectedStrategy) {
-        setTimeout(() => {
-          const newRunning = new Map(runningStrategies);
-          newRunning.set(selectedStrategy.name, { 
-            startTime: Date.now(), 
-            isRunning: true,
-            loop: false
-          });
-          setRunningStrategies(newRunning);
-          
-          setShowSuccessNotification(true);
-          setTimeout(() => {
-            setShowSuccessNotification(false);
-          }, 3000);
-          
-          handleClose();
-          setIsFading(false);
-        }, 300);
-      } else {
-        setTimeout(() => {
-          handleClose();
-          setIsFading(false);
-        }, 300);
-      }
-    } else {
+  const handleExecute = async () => {
+    if (!isRunMode) {
       setIsFading(true);
       setTimeout(() => {
         setIsRunMode(true);
         setRunModeValues({});
         setIsFading(false);
       }, 200);
+      return;
+    }
+
+    console.log('🚀 Preparing Strategy Payload...');
+
+    const depositNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'deposit');
+    const strategyNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'strategy');
+    const swapNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'swap');
+    const withdrawNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'withdraw');
+
+    const getValue = (nodeId: string | undefined, field: string, defaultVal: string = '') => {
+      if (!nodeId) return defaultVal;
+      if (runModeValues[nodeId] && runModeValues[nodeId][field]) {
+        return runModeValues[nodeId][field];
+      }
+      const node = modalStrategyNodes.find(n => n.id === nodeId);
+      return (node?.data as any)?.[field] || defaultVal;
+    };
+
+    const amountStr = getValue(depositNode?.id, 'amount', '0');
+    const assetIn = getValue(depositNode?.id, 'tokenA', (depositNode?.data as NodeData)?.coin);
+    const assetOut = getValue(swapNode?.id, 'coinB', (swapNode?.data as NodeData)?.toCoin) || 'ETH';
+    const priceGoalStr = getValue(strategyNode?.id, 'priceGoal', '0');
+    
+    const recipient = getValue(withdrawNode?.id, 'address');
+
+    const amount = parseFloat(amountStr);
+    const targetPrice = parseFloat(priceGoalStr);
+
+    if (amount <= 0) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+    if (targetPrice <= 0) {
+      alert("Please enter a valid Price Goal.");
+      return;
+    }
+
+    setIsFading(true);
+
+    try {
+      console.log("🔐 Generating ZK Proof...");
+      
+      const tokenMap: Record<string, { symbol: string; decimals: number; address: string }> = {
+        'ETH': { symbol: 'ETH', decimals: 18, address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" },
+        'USDC': { symbol: 'USDC', decimals: 6, address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" }
+      };
+
+      const tokenInfo = tokenMap[assetIn || 'USDC'];
+      if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
+
+      const vaultContractAddress = "0x046f21d540C438ea830E735540Ae20bc9b32aB28"; 
+
+      const zkResult = await generateZKData(
+        11155111, 
+        tokenInfo,
+        amountStr,
+        vaultContractAddress
+      );
+
+      if ('error' in zkResult) {
+        throw new Error(zkResult.error);
+      }
+
+      const { withdrawalTxData, newDeposit, newDepositKey, spentDepositKey } = zkResult;
+
+      const strategyPayload = {
+        user_id: "user_123",
+        strategy_type: "LIMIT_ORDER",
+        asset_in: assetIn || "USDC",
+        asset_out: assetOut,
+        amount: amount,
+        upper_bound: targetPrice,
+        lower_bound: 0.0,
+        recipient_address: recipient,
+        zk_proof: {
+          proof: withdrawalTxData.proof,
+          nullifierHash: withdrawalTxData.nullifierHash,
+          newCommitment: withdrawalTxData.newCommitment,
+          atomicAmount: withdrawalTxData.amount 
+        }
+      };
+
+      console.log("Sending Payload to Rust Backend:", strategyPayload);
+
+      const result = await createStrategy(strategyPayload);
+
+      if (result.success) {
+        console.log("✅ Backend Success:", result.data);
+
+        if (newDeposit && newDepositKey) {
+            localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
+        }
+        if (spentDepositKey) {
+            const oldData = JSON.parse(localStorage.getItem(spentDepositKey) || '{}');
+            oldData.spent = true;
+            localStorage.setItem(spentDepositKey, JSON.stringify(oldData));
+        }
+
+        setTimeout(() => {
+          if (runningStrategies && setRunningStrategies) {
+            const newRunning = new Map(runningStrategies);
+            newRunning.set(selectedStrategy.name, { 
+              startTime: Date.now(), 
+              isRunning: true, 
+              loop: false 
+            });
+            setRunningStrategies(newRunning);
+          }
+          setShowSuccessNotification(true);
+          setTimeout(() => setShowSuccessNotification(false), 3000);
+          handleClose();
+        }, 500);
+      } else {
+        console.error("Backend Error:", result.error);
+        alert(`Strategy generation failed: ${result.error}`);
+      }
+    } catch (error: any) {
+      console.error("Execution Exception:", error);
+      alert(`An error occurred: ${error.message}`);
+    } finally {
+      setIsFading(false);
     }
   };
 
@@ -770,4 +866,3 @@ export default function DetailsModal({
     </div>
   );
 }
-
