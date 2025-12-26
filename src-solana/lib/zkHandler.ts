@@ -2,13 +2,12 @@ import { ethers, Contract, Log } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
 import { prepareWithdrawalTransaction } from "./generateProof";
-import { getProvider, TOKEN_MAP } from './nexus';
+import { getProvider } from './nexus';
 import { getEntrypointContract } from './handler';
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
 
 // --------- Constants ----------
-const VAULT_CHAIN_ID = 11155111;
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const FIELD_SIZE = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const TREE_DEPTH = 32;

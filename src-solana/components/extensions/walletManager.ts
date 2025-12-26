@@ -54,7 +54,7 @@ class WalletManager {
                 blockExplorerUrls: ['https://sepolia.etherscan.io'],
               }],
             });
-          } catch (addError) {
+          } catch {
             return { success: false, error: 'Failed to add Sepolia network. Please add it manually in MetaMask.' };
           }
         } else {

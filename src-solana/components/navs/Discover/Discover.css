@@ -1,16 +1,18 @@
 /* Discover View Styles */
 .discover-view {
   width: calc(100% - 3rem);
-  height: fit-content;
+  height: 100%;
   max-width: 1400px;
   margin: 0px auto 0 auto;
-  padding: 0px 0 2rem 0;
+  padding: 0px 0 1rem 0;
   opacity: 0;
   transform: translateY(10px);
   transition: opacity 0.4s ease, transform 0.4s ease;
   box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 100vh;
 }
 
 .discover-content-wrapper {
@@ -18,6 +20,8 @@
   flex-direction: row;
   gap: 2rem;
   align-items: flex-start;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
 .discover-left-content {
@@ -25,6 +29,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  flex-shrink: 0;
 }
 
 .discover-view::-webkit-scrollbar {
@@ -39,10 +44,11 @@
 .discover-view.loaded {
   opacity: 1;
   transform: translateY(0);
-  height: fit-content;
+  height: 100%;
   margin-top: 0px;
   padding-top: 0px;
-  overflow: visible;
+  overflow: hidden;
+  max-height: 100vh;
 }
 
 .discover-featured-section {
@@ -56,6 +62,7 @@
   flex-direction: row;
   gap: 2rem;
   align-items: flex-start;
+  flex-shrink: 0;
 }
 
 .discover-left-block {
@@ -74,7 +81,8 @@
   flex-direction: row;
   gap: 2rem;
   align-items: flex-start;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
 }
 
 .discover-header {
@@ -243,11 +251,11 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  padding: 1.5rem;
-  padding-bottom: 1.5rem;
+  padding: 1.25rem;
+  padding-bottom: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.875rem;
   backdrop-filter: blur(10px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   align-self: flex-start;
@@ -255,8 +263,9 @@
   overflow: visible;
   min-height: 0;
   box-sizing: border-box;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
   z-index: 1;
+  flex-shrink: 0;
 }
 
 .strategy-slider-container {
@@ -519,8 +528,35 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1.25rem;
-  padding: 0 0 2rem 0;
+  padding: 0 0 1rem 0;
   margin-left: -0.5rem;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  max-height: calc(100vh - 400px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+  -webkit-overflow-scrolling: touch;
+}
+
+.discover-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.discover-grid::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.discover-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.discover-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .discover-grid.list-view {
@@ -616,6 +652,102 @@
   font-size: 10px;
 }
 
+/* Responsive adjustments for 1534x864 and similar resolutions */
+@media (max-width: 1600px) and (min-height: 800px) {
+  .discover-grid {
+    max-height: calc(100vh - 380px);
+  }
+}
+
+/* Specific adjustments for 1534x864 resolution */
+@media (min-width: 1530px) and (max-width: 1540px) and (min-height: 860px) and (max-height: 870px) {
+  .discover-view {
+    padding-bottom: 0.5rem;
+  }
+  
+  .discover-grid {
+    max-height: calc(100vh - 360px);
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+  }
+  
+  .discover-strategy-card {
+    padding: 0.875rem;
+    gap: 0.5rem;
+    max-height: 280px;
+  }
+  
+  .discover-card-description {
+    font-size: 9px;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    line-height: 1.3;
+  }
+  
+  .discover-card-meta {
+    gap: 0.5rem;
+    padding-top: 0.375rem;
+  }
+  
+  .discover-card-meta-item {
+    font-size: 9px;
+  }
+  
+  .discover-card-header {
+    margin-bottom: 0.25rem;
+  }
+  
+  .discover-card-categories {
+    margin: 0.25rem 0;
+  }
+  
+  .discover-card-category-label {
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+  }
+  
+  .discover-card-actions {
+    padding-top: 0.5rem;
+  }
+  
+  .discover-top-section {
+    margin-bottom: 1rem;
+  }
+  
+  .discover-strategy-of-week {
+    margin-bottom: 1rem;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 1600px) and (max-height: 900px) {
+  .discover-grid {
+    max-height: calc(100vh - 350px);
+    gap: 1rem;
+  }
+  
+  .discover-strategy-card {
+    padding: 0.875rem;
+    gap: 0.5rem;
+    max-height: 260px;
+  }
+  
+  .discover-card-description {
+    font-size: 9px;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  
+  .discover-card-meta {
+    gap: 0.5rem;
+    padding-top: 0.375rem;
+  }
+  
+  .discover-card-meta-item {
+    font-size: 9px;
+  }
+}
+
 @media (max-width: 1400px) {
   .discover-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -638,15 +770,18 @@
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
-  padding: 1.5rem;
+  padding: 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.625rem;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-height: fit-content;
+  height: auto;
+  max-height: 300px;
 }
 
 .discover-strategy-card::before {
@@ -720,7 +855,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.375rem;
+  flex-shrink: 0;
 }
 
 .discover-card-stats {
@@ -767,7 +903,7 @@
 }
 
 .discover-card-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: white;
   text-transform: uppercase;
@@ -792,17 +928,18 @@
 
 .discover-card-categories {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.375rem;
   flex-wrap: wrap;
-  margin: 0.5rem 0;
+  margin: 0.375rem 0;
+  flex-shrink: 0;
 }
 
 .discover-card-category-badge {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
-  padding: 0.25rem 0.625rem;
-  font-size: 9px;
+  padding: 0.2rem 0.5rem;
+  font-size: 8px;
   color: rgba(255, 255, 255, 0.8);
   font-family: var(--font-source-code), monospace;
   text-transform: uppercase;
@@ -824,9 +961,10 @@
 }
 
 .discover-card-category-label {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: 0.375rem;
+  padding-top: 0.375rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .discover-category-text {
@@ -839,27 +977,34 @@
 }
 
 .discover-card-description {
-  font-size: 12px;
+  font-size: 10px;
   color: rgba(255, 255, 255, 0.7);
   font-family: var(--font-source-code), monospace;
   margin: 0;
   line-height: 1.4;
   letter-spacing: 0.3px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .discover-card-meta {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
   padding-top: 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .discover-meta-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 11px;
+  font-size: 10px;
   color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -876,24 +1021,27 @@
 
 .discover-card-actions {
   margin-top: auto;
-  padding-top: 0.75rem;
+  padding-top: 0.625rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .discover-card-more-details {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.9);
   font-family: var(--font-source-code), monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.3s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .discover-card-more-details:hover {
@@ -949,12 +1097,21 @@
     max-height: 100%;
     margin: 0 auto;
     padding: 1rem 0 2rem 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .discover-content-wrapper {
     flex-direction: column;
+    flex-shrink: 0;
+  }
+  
+  .discover-grid {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
   }
 
   .discover-left-content {
