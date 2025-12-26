@@ -45,7 +45,6 @@ try {
   
    const nullifierHash = F.toString(poseidon([existingNullifier]));
    const existingPrecommitment = F.toString(poseidon([existingNullifier, existingSecret]));
-   const existingCommitment = F.toString(poseidon([existingValue, existingPrecommitment]));
    const remainingValue = existingValue - withdrawnValue;
    const newPrecommitment = F.toString(poseidon([newNullifier, newSecret]));
    const newCommitment = F.toString(poseidon([remainingValue, newPrecommitment]));

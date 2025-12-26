@@ -23,7 +23,7 @@ export default function DappPage() {
       position: 'relative'
     }}>
       {/* Hero text, logo and subtitle - behind everything */}
-      <div className={styles.heroContainer} style={{ zIndex: 1 }}>
+      <div className={styles.heroContainer} style={{ zIndex: 1, position: 'fixed', top: 0, left: 0, width: '100%', height: '100%' }}>
         {/* SVG Logo */}
         <svg 
           className={styles.logo}

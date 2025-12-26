@@ -16,6 +16,7 @@ interface NodeData {
   amount?: string;
   strategy?: string;
   chain?: string;
+  [key: string]: string | undefined;
 }
 
 interface StrategyMetadata {
@@ -47,7 +48,6 @@ interface DetailsModalProps {
   variableCost: number;
   fixedCost: number;
   totalCost: number;
-  coinPrices: Record<string, number>;
   isFading: boolean;
   setIsFading: (fading: boolean) => void;
   flowKey: number;
@@ -81,7 +81,6 @@ export default function DetailsModal({
   variableCost,
   fixedCost,
   totalCost,
-  coinPrices,
   isFading,
   setIsFading,
   flowKey,
@@ -133,7 +132,7 @@ export default function DetailsModal({
         return runModeValues[nodeId][field];
       }
       const node = modalStrategyNodes.find(n => n.id === nodeId);
-      return (node?.data as any)?.[field] || defaultVal;
+      return (node?.data as NodeData)?.[field] || defaultVal;
     };
 
     const amountStr = getValue(depositNode?.id, 'amount', '0');
@@ -234,9 +233,10 @@ export default function DetailsModal({
         console.error("Backend Error:", result.error);
         alert(`Strategy generation failed: ${result.error}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Execution Exception:", error);
-      alert(`An error occurred: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      alert(`An error occurred: ${errorMessage}`);
     } finally {
       setIsFading(false);
     }
@@ -305,24 +305,6 @@ export default function DetailsModal({
             <h2 className="strategy-modal-title">{selectedStrategy.name}</h2>
             <p className="strategy-modal-author">by {selectedStrategy.author}</p>
           </div>
-          {!isRunMode && (
-            <div className="strategy-modal-header-stats">
-              <div className="strategy-modal-stats-top">
-                <div className="strategy-modal-stat-item">
-                  <span className="strategy-modal-stat-label">Likes</span>
-                  <span className="strategy-modal-stat-value">{selectedStrategy.usage}</span>
-                </div>
-                <div className="strategy-modal-stat-item">
-                  <span className="strategy-modal-stat-label">Cost</span>
-                  <span className="strategy-modal-stat-value">$0.05</span>
-                </div>
-                <div className="strategy-modal-stat-item">
-                  <span className="strategy-modal-stat-label">Duration</span>
-                  <span className="strategy-modal-stat-value">~2 min</span>
-                </div>
-              </div>
-            </div>
-          )}
           <button 
             className="strategy-modal-close"
             onClick={handleClose}
@@ -643,9 +625,6 @@ export default function DetailsModal({
                     ? (depositNodes[0].data as NodeData).coin 
                     : 'USDC';
                   
-                  const hasLogic = strategyNodes.length > 0;
-                  const outputText = hasLogic ? `${inputCoin} + Logic` : inputCoin;
-                  
                   return (
                     <div className="strategy-modal-io-section">
                       <div className="strategy-modal-io-content">
@@ -696,9 +675,6 @@ export default function DetailsModal({
                           tags.push({ label: 'Chain', field: 'chain' });
                           tags.push({ label: 'Address', field: 'address' });
                         }
-                        
-                        const stepId = node.id;
-                        const stepValues = runModeValues[stepId] || {};
                         
                         return (
                           <div key={node.id} className="strategy-step-item">

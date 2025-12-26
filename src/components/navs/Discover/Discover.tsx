@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Node, Edge, Position, ReactFlowInstance } from '@xyflow/react';
+import React, { useState, useEffect } from "react";
+import { Node, Edge } from '@xyflow/react';
 import DetailsModal from "./DetailsModal";
 import "./Discover.css";
 import {
@@ -10,8 +10,6 @@ import {
   calculateVariableCost,
   calculateFixedCost,
   getTransactionOutputForCost,
-  getInitialBalance,
-  getInputCoin,
   fetchCoinPrices
 } from "./price_utils";
 import {
@@ -22,16 +20,6 @@ import {
   initializeLimitOrderStrategy,
   initializeDiscoverStrategies
 } from "./strategies";
-
-interface NodeData {
-  label?: string;
-  type?: 'deposit' | 'swap' | 'withdraw' | 'strategy';
-  coin?: string;
-  toCoin?: string;
-  amount?: string;
-  strategy?: string;
-  chain?: string;
-}
 
 interface DiscoverProps {
   isLoaded?: boolean;
@@ -79,8 +67,6 @@ export default function Discover({
   const [coinPrices, setCoinPrices] = useState<Record<string, number>>({});
   const [isFading, setIsFading] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
-  const flowRef = useRef<HTMLDivElement>(null);
-  const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
   
   // Execution time in seconds (fixed)
   const executionTime = 2;
@@ -855,7 +841,6 @@ export default function Discover({
           variableCost={variableCost}
           fixedCost={fixedCost}
           totalCost={totalCost}
-          coinPrices={coinPrices}
           isFading={isFading}
           setIsFading={setIsFading}
           flowKey={flowKey}
