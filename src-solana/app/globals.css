@@ -365,7 +365,12 @@ footer h1 {
     overflow: visible;
   }
 
-  /* First row: Logo, Docs/Dapp, and Wallet side by side */
+  /* Ensure nav-container doesn't interfere with grid */
+  nav .nav-container {
+    display: contents; /* Makes children direct grid items */
+  }
+
+  /* First row: Logo left, Wallet right */
   .logo {
     grid-row: 1;
     grid-column: 1;
@@ -432,7 +437,8 @@ footer h1 {
     justify-content: center;
     align-items: center;
     gap: 0.5rem;
-    margin-left: 0;
+    margin: 0;
+    padding: 0;
     box-sizing: border-box;
     overflow: visible;
   }
@@ -447,10 +453,15 @@ footer h1 {
 
   /* Show only the Discover/Build/Run selector */
   .nav-center .nav-mode-selector {
-    display: flex;
+    display: flex !important;
     gap: 0.5rem;
-    width: 100%;
+    width: auto;
     justify-content: center;
+    align-items: center;
+  }
+
+  .nav-center .nav-mode-btn {
+    flex-shrink: 0;
   }
 
   footer {

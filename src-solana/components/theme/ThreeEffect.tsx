@@ -117,13 +117,13 @@ export default function ThreeEffect() {
     if (cardLineRef.current) {
       populateCardLine();
       // Initialize position so cards start from right side, just before entering scanner
+      // Use window.innerWidth to match scanner canvas coordinate system
       const isMobile = window.innerWidth <= 480;
-        const scannerX = isMobile 
-          ? window.innerWidth / 2 + 75  // 75px to the right of center on mobile
-          : window.innerWidth / 2 + 65; // 65px to the right of center on desktop
+      const containerWidth = window.innerWidth; // Match scanner canvas width
+      const scannerContainerX = containerWidth / 2 + (isMobile ? 5 : 85);
       const initialOffset = isMobile 
-        ? window.innerWidth - 100  // Start from right side, just before scanner on mobile
-        : scannerX + 100; // Start almost before scanner on desktop (reduced from 250)
+        ? containerWidth - 100  // Start from right side, just before scanner on mobile
+        : scannerContainerX + 100; // Start almost before scanner on desktop
       positionRef.current = initialOffset;
       if (cardLineRef.current) {
         cardLineRef.current.style.transform = `translateX(${initialOffset}px)`;
@@ -613,31 +613,57 @@ export default function ThreeEffect() {
     }
   };
 
-  const updateCardClipping = () => {
-    // On mobile, align scanner towards center
+  // Helper function to get scanner position relative to card-stream container
+  // Returns position in pixels from the left edge of the card-stream
+  // Must match the scanner canvas lightBarX position exactly
+  const getScannerContainerX = () => {
     const isMobile = window.innerWidth <= 480;
-    const scannerX = isMobile 
-      ? window.innerWidth / 2 + 20// 75px to the right of center on mobile
-      : window.innerWidth / 2 + 85; // 85px to the right of center on desktop
-    const scannerWidth = isMobile ? 6 : 8; // Bigger on mobile
-    const scannerLeft = scannerX - scannerWidth / 2;
-    const scannerRight = scannerX + scannerWidth / 2;
+    // Both scanner canvas and card-stream are 100vw wide and positioned absolutely
+    // Scanner canvas draws at: window.innerWidth / 2 + offset (in canvas coords 0 to window.innerWidth)
+    // Card-stream also uses full window width, so positions align directly
+    // Return the same value as lightBarX in the scanner canvas
+    return window.innerWidth / 2 + (isMobile ? 5 : 85);
+  };
+
+  const updateCardClipping = () => {
+    // Calculate based on transform positions, not viewport coordinates
+    // This prevents jumps when scrolling or tab switching
+    if (!cardLineRef.current) return;
+    
+    const isMobile = window.innerWidth <= 480;
+    const scannerWidth = isMobile ? 6 : 8;
+    const scannerContainerX = getScannerContainerX();
+    const scannerLeft = scannerContainerX - scannerWidth / 2;
+    const scannerRight = scannerContainerX + scannerWidth / 2;
     let anyScanningActive = false;
 
-    document.querySelectorAll(".card-wrapper").forEach((wrapper) => {
-      const rect = wrapper.getBoundingClientRect();
-      const cardLeft = rect.left;
-      const cardRight = rect.right;
-      const cardWidth = rect.width;
+    // Use positionRef directly - it's always up to date and handles looping
+    const cardLineX = positionRef.current;
+
+    // Card dimensions
+    const cardWidth = 400;
+    const cardGap = 60;
+    const cardTotalWidth = cardWidth + cardGap;
+
+    document.querySelectorAll(".card-wrapper").forEach((wrapper, index) => {
+      // Calculate card position based on transform, not getBoundingClientRect
+      // positionRef already handles looping, so we just add the card offset
+      const cardStartX = cardLineX + (index * cardTotalWidth);
+      const cardEndX = cardStartX + cardWidth;
+      
       const normalCard = wrapper.querySelector(".card-normal");
       const asciiCard = wrapper.querySelector(".card-ascii");
 
-      if (cardLeft < scannerRight && cardRight > scannerLeft) {
+      if (cardStartX < scannerRight && cardEndX > scannerLeft) {
         anyScanningActive = true;
-        const scannerIntersectLeft = Math.max(scannerLeft - cardLeft, 0);
-        const scannerIntersectRight = Math.min(scannerRight - cardLeft, cardWidth);
-        const normalClipRight = (scannerIntersectLeft / cardWidth) * 100;
-        const asciiClipLeft = (scannerIntersectRight / cardWidth) * 100;
+        // Use scanner center for alignment - shift both layers to align with the visual scanner bar
+        const scannerCenterX = scannerContainerX - cardStartX;
+        // Shift both layers to the right to align with scanner bar center
+        const alignmentOffset = 15; // Shift both layers 15px to the right
+        const adjustedCenterX = scannerCenterX + alignmentOffset;
+        
+        const normalClipRight = Math.min(100, Math.max(0, (adjustedCenterX / cardWidth) * 100));
+        const asciiClipLeft = Math.min(100, Math.max(0, (adjustedCenterX / cardWidth) * 100));
 
         if (normalCard instanceof HTMLElement) {
           normalCard.style.setProperty("--clip-right", `${normalClipRight}%`);
@@ -647,6 +673,7 @@ export default function ThreeEffect() {
         }
 
         // Add scan effect animation when card first enters scanner
+        const scannerIntersectLeft = Math.max(scannerLeft - cardStartX, 0);
         if (!wrapper.hasAttribute("data-scanned") && scannerIntersectLeft > 0) {
           wrapper.setAttribute("data-scanned", "true");
           const scanEffect = document.createElement("div");
@@ -660,7 +687,7 @@ export default function ThreeEffect() {
         }
       } else {
         // Cards remain the same after scanning - no opacity changes
-        if (cardRight < scannerLeft) {
+        if (cardEndX < scannerLeft) {
           // Card is to the left of scanner - fully revealed
           if (normalCard instanceof HTMLElement) {
             normalCard.style.setProperty("--clip-right", "100%");
@@ -668,7 +695,7 @@ export default function ThreeEffect() {
           if (asciiCard instanceof HTMLElement) {
             asciiCard.style.setProperty("--clip-left", "100%");
           }
-        } else if (cardLeft > scannerRight) {
+        } else if (cardStartX > scannerRight) {
           // Card is to the right of scanner - fully hidden
           if (normalCard instanceof HTMLElement) {
             normalCard.style.setProperty("--clip-right", "0%");
@@ -719,7 +746,15 @@ export default function ThreeEffect() {
   const animateCards = () => {
     const animate = () => {
       const currentTime = performance.now();
-      const deltaTime = (currentTime - lastTimeRef.current) / 1000;
+      let deltaTime = (currentTime - lastTimeRef.current) / 1000;
+      
+      // Clamp delta time to prevent catch-up when tab becomes active again
+      // Max 1/30 second (33ms) to prevent large jumps
+      const maxDeltaTime = 1 / 30;
+      if (deltaTime > maxDeltaTime) {
+        deltaTime = maxDeltaTime;
+      }
+      
       lastTimeRef.current = currentTime;
 
       if (true) { // Always animate cards
@@ -731,15 +766,14 @@ export default function ThreeEffect() {
 
         positionRef.current += velocityRef.current * -1 * deltaTime; // Always move left
 
-        const containerWidth = cardStreamRef.current?.offsetWidth || window.innerWidth;
+        // Use window.innerWidth to match scanner canvas coordinate system
+        const containerWidth = window.innerWidth;
         const singleSetWidth = (400 + 60) * 30; // card width + gap * count for one set
         const isMobile = window.innerWidth <= 480;
-        const scannerX = isMobile 
-          ? window.innerWidth / 2 - 5  // 5px to the left of center on mobile (moved towards center)
-          : window.innerWidth / 2 + 65; // 65px to the right of center on desktop (moved right from 35px)
+        const scannerContainerX = containerWidth / 2 + (isMobile ? 5 : 85);
         const initialOffset = isMobile 
-          ? window.innerWidth - 100  // Start from right side, just before scanner on mobile
-          : scannerX + 100; // Start almost before scanner on desktop (reduced from 300)
+          ? containerWidth - 100  // Start from right side, just before scanner on mobile
+          : scannerContainerX + 100; // Start almost before scanner on desktop
 
         // Seamless infinite loop: when one set moves completely off screen, reset to show next set
         if (positionRef.current < -singleSetWidth) {
@@ -948,9 +982,10 @@ export default function ThreeEffect() {
     const maxParticles = 800;
     let intensity = 0.8;
     const isMobile = w <= 480;
+    // Initialize lightBarX - will be updated by updateLightBarPosition
     let lightBarX = isMobile 
-      ? w / 2 + 5  // 5px to the right of center on mobile
-      : w / 2 + 65; // 65px to the right of center on desktop
+      ? w / 2 + 20  // 20px to the right of center on mobile
+      : w / 2 + 85; // 85px to the right of center on desktop
     const lightBarWidth = 3;
     let fadeZone = 60;
     let scanningActive = false;
@@ -1259,20 +1294,31 @@ export default function ThreeEffect() {
       requestAnimationFrame(animate);
     };
 
-    // Check for scanning
+    // Check for scanning - use same transform-based calculation
     const checkScanning = () => {
+      if (!cardLineRef.current) {
+        requestAnimationFrame(checkScanning);
+        return;
+      }
+      
       const isMobile = window.innerWidth <= 480;
-      const scannerX = isMobile 
-        ? window.innerWidth / 2 + 75  // 75px to the right of center on mobile
-        : window.innerWidth / 2 + 65; // 65px to the right of center on desktop
-      const scannerWidth = isMobile ? 6 : 8; // Bigger on mobile
-      const scannerLeft = scannerX - scannerWidth / 2;
-      const scannerRight = scannerX + scannerWidth / 2;
+      const scannerWidth = isMobile ? 6 : 8;
+      const scannerContainerX = getScannerContainerX();
+      const scannerLeft = scannerContainerX - scannerWidth / 2;
+      const scannerRight = scannerContainerX + scannerWidth / 2;
+
+      // Use positionRef directly
+      const cardLineX = positionRef.current;
+
+      const cardWidth = 400;
+      const cardGap = 60;
+      const cardTotalWidth = cardWidth + cardGap;
 
       let anyScanning = false;
-      document.querySelectorAll(".card-wrapper").forEach((wrapper) => {
-        const rect = wrapper.getBoundingClientRect();
-        if (rect.left < scannerRight && rect.right > scannerLeft) {
+      document.querySelectorAll(".card-wrapper").forEach((wrapper, index) => {
+        const cardStartX = cardLineX + (index * cardTotalWidth);
+        const cardEndX = cardStartX + cardWidth;
+        if (cardStartX < scannerRight && cardEndX > scannerLeft) {
           anyScanning = true;
         }
       });
@@ -1284,18 +1330,33 @@ export default function ThreeEffect() {
     animate();
     checkScanning();
 
-    // Handle window resize
-    const handleResize = () => {
+    // Handle window resize and scroll
+    // Note: lightBarX should be in canvas coordinates (0 to w), not viewport coordinates
+    // The canvas is positioned absolutely within the container, so we use container width
+    const updateLightBarPosition = () => {
       w = window.innerWidth;
       const isMobile = w <= 480;
+      // Use canvas-relative coordinates (0 to w), not viewport coordinates
+      // Reduced mobile offset from 20 to 5
       lightBarX = isMobile 
-        ? w / 2 + 75  // 75px to the right of center on mobile
-        : w / 2 + 65; // 65px to the right of center on desktop
+        ? w / 2 + 5  // 5px to the right of center on mobile (reduced from 20)
+        : w / 2 + 85; // 85px to the right of center on desktop
+    };
+    
+    // Initialize position
+    updateLightBarPosition();
+    
+    const handleResize = () => {
+      w = window.innerWidth;
+      updateLightBarPosition();
       canvas.width = w;
       canvas.height = h;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
     };
+    
+    // No need to update on scroll - canvas is absolutely positioned and moves with container
+    // The lightBarX is in canvas coordinates, not viewport coordinates
 
     window.addEventListener("resize", handleResize);
 

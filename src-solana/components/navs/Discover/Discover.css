@@ -1,7 +1,8 @@
 /* Discover View Styles */
 .discover-view {
   width: calc(100% - 3rem);
-  height: 100%;
+  height: auto;
+  min-height: 100%;
   max-width: 1400px;
   margin: 0px auto 0 auto;
   padding: 0px 0 1rem 0;
@@ -9,10 +10,9 @@
   transform: translateY(10px);
   transition: opacity 0.4s ease, transform 0.4s ease;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  max-height: 100vh;
 }
 
 .discover-content-wrapper {
@@ -44,11 +44,12 @@
 .discover-view.loaded {
   opacity: 1;
   transform: translateY(0);
-  height: 100%;
+  height: auto;
+  min-height: 100%;
   margin-top: 0px;
   padding-top: 0px;
-  overflow: hidden;
-  max-height: 100vh;
+  overflow: visible;
+  max-height: none;
 }
 
 .discover-featured-section {
@@ -1093,25 +1094,48 @@
 @media (max-width: 768px) {
   .discover-view {
     width: calc(100% - 2rem);
-    height: 100%;
-    max-height: 100%;
+    height: auto;
+    min-height: 100%;
+    max-height: none;
     margin: 0 auto;
     padding: 1rem 0 2rem 0;
-    overflow: hidden;
+    overflow-y: visible;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
+    -webkit-overflow-scrolling: touch;
   }
 
   .discover-content-wrapper {
     flex-direction: column;
     flex-shrink: 0;
+    min-height: 0;
   }
   
   .discover-grid {
+    grid-template-columns: 1fr !important;
+    display: grid !important;
     flex: 1;
-    overflow-y: auto;
+    overflow-y: visible;
     overflow-x: hidden;
-    min-height: 0;
+    min-height: 200px;
+    max-height: none;
+    -webkit-overflow-scrolling: touch;
+    gap: 1rem;
+    padding: 0 0 1rem 0;
+    margin-left: 0;
+    width: 100%;
+    visibility: visible;
+    opacity: 1;
+  }
+  
+  .discover-strategy-card {
+    max-height: none;
+    height: auto;
+    display: flex !important;
+    visibility: visible;
+    opacity: 1;
+    width: 100%;
   }
 
   .discover-left-content {
