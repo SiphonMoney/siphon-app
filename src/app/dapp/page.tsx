@@ -109,8 +109,10 @@ export default function DappPage() {
             pointerEvents: 'auto',
             position: 'relative',
             marginTop: '0',
-            overflow: 'hidden',
-            minHeight: 0
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            minHeight: 0,
+            WebkitOverflowScrolling: 'touch'
           }}>
             {/* Content */}
             <Nexus isLoaded={true} />
