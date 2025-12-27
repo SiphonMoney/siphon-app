@@ -155,17 +155,34 @@ export async function generateZKData(
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
 
-  // 1) Find a spendable commitment in localStorage
+  // 1. FETCH LEAVES FIRST (Move this up!)
+  const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
+  // This ensures we know the "Truth" of the blockchain before we look at local files
+  let leaves: bigint[] = [];
+  try {
+      leaves = await getOnChainLeaves(tokenAddress);
+      console.log("Found leaves count:", leaves.length);
+  } catch (err) {
+      console.error("Failed to fetch on-chain leaves:", err);
+      return { error: "Failed to connect to blockchain to verify deposits." };
+  }
+
+  // 2. FIND A VALID SPENDABLE DEPOSIT
   let storedDeposit: CommitmentData | null = null;
   let spentDepositKey: string | null = null;
+  let leafIndex = -1;
 
   console.log("Scanning localStorage for spendable deposits...");
+  
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key) continue;
+    // Filter for keys matching this chain and token
     if (!key.startsWith(`${_chainId}-${_token.symbol}-`)) continue;
 
     const data = JSON.parse(localStorage.getItem(key) || '{}');
+    
+    // Check if data is locally valid and unspent
     if (data && data.commitment && data.amount && !data.spent) {
       try {
         const storedAmountBN = BigInt(
@@ -175,25 +192,41 @@ export async function generateZKData(
           ethers.parseUnits(_amount, _token.decimals).toString()
         );
 
+        // Check if amount is sufficient
         if (storedAmountBN >= requestedBN) {
-          storedDeposit = data;
-          spentDepositKey = key;
-          break;
+            // 🔍 CRITICAL CHECK: Does this commitment exist on-chain?
+            const localCommitment = BigInt(data.commitment);
+            
+            // Search for it in the leaves we just fetched
+            const foundIndex = leaves.findIndex(leaf => leaf === localCommitment);
+            
+            if (foundIndex !== -1) {
+                console.log("✅ Match found! Local commitment exists on-chain at index:", foundIndex);
+                storedDeposit = data;
+                spentDepositKey = key;
+                leafIndex = foundIndex; // Save the index now
+                break; // Stop looking, we found a good one
+            } else {
+                console.warn("⚠️ Ghost Deposit detected (exists locally but NOT on-chain):", key);
+                // We SKIP this key and continue the loop. 
+                // We do NOT crash here.
+            }
         }
       } catch (e) {
-        console.warn("Failed to compare amounts for key", key, e);
+        console.warn("Failed to process key", key, e);
       }
     }
   }
 
-  if (!storedDeposit || !spentDepositKey) {
-    console.error("No valid commitment found in localStorage to spend.");
-    return { error: "No spendable deposit found." };
+  // If after checking ALL keys, we still don't have a valid deposit:
+  if (!storedDeposit || !spentDepositKey || leafIndex === -1) {
+    console.error("No valid, confirmed deposit found.");
+    return { error: "No valid deposit found on-chain. Please deposit funds again or wait for confirmation." };
   }
 
-  console.log("Selected stored deposit:", { spentDepositKey, storedDeposit });
+  console.log("Selected stored deposit:", { spentDepositKey, leafIndex });
 
-  // 2) Reconstruct secrets and values
+  // 3) Reconstruct secrets and values
   const existingSecret = BigInt(storedDeposit.secret);
   const existingNullifier = BigInt(storedDeposit.nullifier);
   if (!storedDeposit.commitment) {throw new Error('Stored deposit is missing commitment');}
@@ -207,7 +240,7 @@ export async function generateZKData(
   console.log("existingValue:", existingValue.toString());
   console.log("withdrawnValue:", withdrawnValue.toString());
 
-  // 3) Derive new secrets for change output
+  // 4) Derive new secrets for change output
   const newSecret = BigInt(F.toObject(poseidon([existingSecret, 1n])));
   const newNullifier = BigInt(F.toObject(poseidon([existingNullifier, 1n])));
   const changeValue = existingValue - withdrawnValue;
@@ -216,27 +249,8 @@ export async function generateZKData(
   console.log("Derived newNullifier:", newNullifier.toString());
   console.log("Change Value:", changeValue.toString());
 
-  // 4) Get on-chain leaves and build Merkle tree
-  const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
-  const leaves = await getOnChainLeaves(tokenAddress);
-  console.log("Found leaves count:", leaves.length);
-
-  // 5) Find leaf index
-  let leafIndex = -1;
-  for (let i = 0; i < leaves.length; i++) {
-    if (leaves[i] === existingCommitment) {
-      leafIndex = i;
-      break;
-    }
-  }
-
-  console.log("Computed leafIndex for existingCommitment:", leafIndex);
-  if (leafIndex === -1) {
-    console.error("Commitment not found in on-chain Merkle tree:", existingCommitment.toString());
-    return { error: "Your deposit commitment was not found in the on-chain tree." };
-  }
-
-  // 6) Generate Merkle proof for fixed 32-level tree
+  // 5) Generate Merkle proof for fixed 32-level tree
+  // We already have 'leaves' and 'leafIndex' from Step 2
   const pathElements: bigint[] = [];
   const pathIndices: number[] = [];
 
@@ -301,14 +315,14 @@ export async function generateZKData(
   console.log("✅ Extracted pathIndices (length:", pathIndices.length, ")");
   console.log("✅ Computed root:", computedRoot.toString());
 
-  // 7) Generate new commitment
+  // 6) Generate new commitment
   const newPrecommitment = BigInt(F.toObject(poseidon([newNullifier, newSecret])));
   const newCommitment = BigInt(F.toObject(poseidon([changeValue, newPrecommitment])));
 
   console.log("newPrecommitment:", newPrecommitment.toString());
   console.log("newCommitment:", newCommitment.toString());
 
-  // 8) Call prepareWithdrawalTransaction to generate proof
+  // 7) Call prepareWithdrawalTransaction to generate proof
   console.log("Calling prepareWithdrawalTransaction() to produce proof...");
   const rawWithdrawalTxData = await prepareWithdrawalTransaction({
     existingValue: existingValue.toString(),
@@ -336,7 +350,7 @@ export async function generateZKData(
     publicSignals: withdrawalTxData.publicSignals ?? "none"
   });
 
-  // 9) Validate proof format
+  // 8) Validate proof format
   if (!Array.isArray(withdrawalTxData.proof)) {
     console.error("Proof is not array:", withdrawalTxData.proof);
     return { error: "Proof has invalid format" };
@@ -349,7 +363,7 @@ export async function generateZKData(
 
   console.log("Proof sample first 4 elements:", withdrawalTxData.proof.slice(0, 4));
 
-  // 10) Package ZK Data
+  // 9) Package ZK Data
   const zkData: ZKData = {
     withdrawalTxData: withdrawalTxData,
     changeValue: changeValue,

@@ -195,7 +195,8 @@ export default function DetailsModal({
           proof: withdrawalTxData.proof,
           nullifierHash: withdrawalTxData.nullifierHash,
           newCommitment: withdrawalTxData.newCommitment,
-          atomicAmount: withdrawalTxData.amount 
+          atomicAmount: withdrawalTxData.amount,
+          root: withdrawalTxData.stateRoot 
         }
       };
 
