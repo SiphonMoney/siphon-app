@@ -1,6 +1,7 @@
 export async function createStrategy(strategyData: unknown) {
   try {
-    const response = await fetch("http://localhost:5009/generatePayload", {
+    const BASE_URL = "https://6cd3347362a7.ngrok-free.app"
+    const response = await fetch(`${BASE_URL}/generatePayload`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
