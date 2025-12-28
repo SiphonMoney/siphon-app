@@ -155,9 +155,8 @@ export async function generateZKData(
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
 
-  // 1. FETCH LEAVES FIRST (Move this up!)
+  // 1. FETCH LEAVES FIRST 
   const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
-  // This ensures we know the "Truth" of the blockchain before we look at local files
   let leaves: bigint[] = [];
   try {
       leaves = await getOnChainLeaves(tokenAddress);
