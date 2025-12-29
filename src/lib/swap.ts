@@ -4,7 +4,7 @@ import { generateZKData, encodeProof } from './zkHandler';
 const SEPOLIA_CHAIN_ID = 11155111;
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
-const ENTRYPOINT_ADDRESS = '0x046f21d540C438ea830E735540Ae20bc9b32aB28';
+const ENTRYPOINT_ADDRESS = '0xDF59E7E6138Af536512D93527Dd0E24A5BA6321C'; // Updated with fee payment support
 const FEE = 3000;
 const MIN_AMOUNT_OUT = 0;
 
