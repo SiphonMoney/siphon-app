@@ -5,7 +5,7 @@ import entrypointArtifact from "../../contract/artifacts/src/Entrypoint.sol/Entr
 const SEPOLIA_CHAIN_ID = 11155111;
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
-const ENTRYPOINT_ADDRESS = '0x1565E62bfdAc6b2c6b81cc1C6c76367747D5FAB3';
+const ENTRYPOINT_ADDRESS = '0x8Be4A7A074468F571271192A0A0824cf6F08a1f6';
 const FEE = 3000;
 const MIN_AMOUNT_OUT = 0;
 

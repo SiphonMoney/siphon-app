@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { ReactFlow, ReactFlowProvider, Background, Node, Edge, Handle, Position, ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import "./Discover.css";
 import { createStrategy } from "../../../lib/strategy";
 import { generateZKData } from "../../../lib/zkHandler";
+import { walletManager } from "../../../lib/walletManager";
+import { payExecutionFee } from "../../../lib/handler";
+import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
 
 
 interface NodeData {
@@ -44,10 +47,6 @@ interface DetailsModalProps {
   setRunModeValues: (values: Record<string, Record<string, string>> | ((prev: Record<string, Record<string, string>>) => Record<string, Record<string, string>>)) => void;
   runDuration: string;
   setRunDuration: (duration: string) => void;
-  executionTime: number;
-  variableCost: number;
-  fixedCost: number;
-  totalCost: number;
   isFading: boolean;
   setIsFading: (fading: boolean) => void;
   flowKey: number;
@@ -61,8 +60,6 @@ interface DetailsModalProps {
   savedScenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>;
   setSavedScenes: (scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }> | ((scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>) => Array<{ name: string; nodes: Node[]; edges: Edge[] }>)) => void;
   setShowSuccessNotification: (show: boolean) => void;
-  calculateExchange: (inputAmount: number, coinA: string, coinB: string) => number;
-  formatAmount: (amount: number, coin?: string) => string;
 }
 
 export default function DetailsModal({
@@ -77,10 +74,6 @@ export default function DetailsModal({
   setRunModeValues,
   runDuration,
   setRunDuration,
-  executionTime,
-  variableCost,
-  fixedCost,
-  totalCost,
   isFading,
   setIsFading,
   flowKey,
@@ -93,12 +86,107 @@ export default function DetailsModal({
   setCurrentFileName,
   savedScenes,
   setSavedScenes,
-  setShowSuccessNotification,
-  calculateExchange,
-  formatAmount
+  setShowSuccessNotification
 }: DetailsModalProps) {
   const flowRef = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [coinPrices, setCoinPrices] = useState<Record<string, number>>({});
+  const [pricesLoaded, setPricesLoaded] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'loading' } | null>(null);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+
+  // Fetch prices once when modal opens
+  useEffect(() => {
+    if (isOpen && !pricesLoaded) {
+      const fetchPrices = async () => {
+        try {
+          const prices = await fetchCoinPrices();
+          if (Object.keys(prices).length > 0) {
+            setCoinPrices(prices);
+            setPricesLoaded(true);
+          } else {
+            // Fallback prices
+            console.warn('[DetailsModal] Using fallback prices');
+            setCoinPrices({
+              'ETH': 3000,
+              'USDC': 1,
+              'SOL': 192,
+              'BTC': 45000,
+            });
+            setPricesLoaded(true);
+          }
+        } catch (error) {
+          console.error('[DetailsModal] Error fetching prices:', error);
+          // Fallback prices
+          setCoinPrices({
+            'ETH': 3000,
+            'USDC': 1,
+            'SOL': 192,
+            'BTC': 45000,
+          });
+          setPricesLoaded(true);
+        }
+      };
+      fetchPrices();
+    }
+  }, [isOpen, pricesLoaded]);
+
+  // Reset prices when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setPricesLoaded(false);
+      setCoinPrices({});
+    }
+  }, [isOpen]);
+
+  // Local wrapper functions that use fetched prices
+  const calculateExchange = (inputAmount: number, coinA: string, coinB: string): number => {
+    return calculateExchangeUtil(inputAmount, coinA, coinB, coinPrices);
+  };
+
+  const formatAmount = (amount: number, coin?: string): string => {
+    return formatAmountUtil(amount, coin);
+  };
+
+  // Calculate costs using fetched prices (only when prices are loaded)
+  const transactionOutputUSD = pricesLoaded ? getTransactionOutputForCost(
+    modalStrategyNodes,
+    runModeValues,
+    coinPrices,
+    calculateExchangeUtil
+  ) : 0;
+  const executionTime = 2; // Fixed execution time
+  const variableCost = calculateVariableCost(runDuration);
+  const fixedCost = calculateFixedCost(transactionOutputUSD);
+  const totalCost = variableCost + fixedCost;
+
+  const addLog = (message: string) => {
+    setExecutionLogs(prev => [...prev, message]);
+  };
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'loading' = 'info') => {
+    setIsFadingOut(false);
+    setToast({ message, type });
+    if (type !== 'loading') {
+      setTimeout(() => {
+        setIsFadingOut(true);
+        setTimeout(() => {
+          setToast(null);
+          setIsFadingOut(false);
+        }, 300); // Match fade out animation duration
+      }, 3000);
+    }
+  };
+
+  // Auto-hide toast after 3 seconds (except loading toasts)
+  useEffect(() => {
+    if (toast && toast.type !== 'loading') {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   if (!isOpen) return null;
 
@@ -119,7 +207,9 @@ export default function DetailsModal({
       return;
     }
 
-    console.log('🚀 Preparing Strategy Payload...');
+    setIsExecuting(true);
+    setExecutionLogs([]);
+    addLog('Starting strategy execution...');
 
     const depositNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'deposit');
     const strategyNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'strategy');
@@ -146,18 +236,23 @@ export default function DetailsModal({
     const targetPrice = parseFloat(priceGoalStr);
 
     if (amount <= 0) {
-      alert("Please enter a valid amount.");
+      showToast("Please enter a valid amount.", 'error');
+      setIsExecuting(false);
       return;
     }
     if (targetPrice <= 0) {
-      alert("Please enter a valid Price Goal.");
+      showToast("Please enter a valid Price Goal.", 'error');
+      setIsExecuting(false);
       return;
     }
 
     setIsFading(true);
 
     try {
-      console.log("🔐 Generating ZK Proof...");
+      addLog('Scanning deposits...');
+      
+      // Small delay to show the scanning message
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       const tokenMap: Record<string, { symbol: string; decimals: number; address: string }> = {
         'ETH': { symbol: 'ETH', decimals: 18, address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" },
@@ -167,12 +262,89 @@ export default function DetailsModal({
       const tokenInfo = tokenMap[assetIn || 'USDC'];
       if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
 
-      const vaultContractAddress = "0x1565E62bfdAc6b2c6b81cc1C6c76367747D5FAB3"; 
+      // Calculate execution price in user's token
+      addLog('Calculating execution price...');
+      const tokenPrice = coinPrices[assetIn || 'USDC'] || (assetIn === 'ETH' ? 3000 : 1);
+      const executionPriceInToken = totalCost / tokenPrice;
+      
+      if (executionPriceInToken <= 0) {
+        throw new Error('Invalid execution price calculation');
+      }
 
+      // Round execution price to token's decimal places to avoid precision issues
+      const executionPriceRounded = parseFloat(executionPriceInToken.toFixed(tokenInfo.decimals));
+      const executionPriceStr = executionPriceRounded.toFixed(tokenInfo.decimals);
+
+      addLog(`Execution price: ${executionPriceStr} ${assetIn} ($${totalCost.toFixed(2)})`);
+
+      // Check if user has sufficient balance
+      const userBalance = parseFloat(amountStr);
+      if (userBalance < executionPriceRounded) {
+        throw new Error(`Insufficient balance. Need ${executionPriceStr} ${assetIn}, have ${userBalance} ${assetIn}`);
+      }
+
+      const remainingBalance = userBalance - executionPriceRounded;
+      const remainingBalanceStr = remainingBalance.toFixed(tokenInfo.decimals);
+      addLog(`Balance check: ${userBalance} ${assetIn} - ${executionPriceStr} ${assetIn} = ${remainingBalanceStr} ${assetIn} remaining`);
+
+      if (remainingBalance <= 0) {
+        throw new Error('Insufficient balance remaining for strategy execution after fee payment');
+      }
+
+      // Step 1: Pay execution fee
+      addLog('Paying execution fee...');
+      const vaultContractAddress = "0x8Be4A7A074468F571271192A0A0824cf6F08a1f6"; // Corrected Entrypoint address
+      
+      // Generate ZK proof for fee payment (deducting execution price from commitment)
+      const feeZkResult = await generateZKData(
+        11155111,
+        tokenInfo,
+        executionPriceStr, // Fee amount in user's token (properly formatted)
+        vaultContractAddress // Recipient is vault (we're updating commitment, not withdrawing)
+      );
+
+      if ('error' in feeZkResult) {
+        throw new Error(`Fee payment proof generation failed: ${feeZkResult.error}`);
+      }
+
+      addLog('Fee payment proof generated');
+      
+      const feePaymentResult = await payExecutionFee(
+        assetIn || 'USDC',
+        executionPriceStr, // Execution price in user's token (properly formatted)
+        executionPriceStr, // Amount for proof verification (must match the proof's withdrawnValue)
+        feeZkResult.withdrawalTxData.stateRoot || "0",
+        feeZkResult.withdrawalTxData.nullifierHash.toString(),
+        feeZkResult.withdrawalTxData.newCommitment.toString(),
+        feeZkResult.withdrawalTxData.proof
+      );
+
+      if (!feePaymentResult.success) {
+        throw new Error(`Fee payment failed: ${feePaymentResult.error}`);
+      }
+
+      addLog(`✅ Fee payment successful! Transaction: ${feePaymentResult.transactionHash}`);
+
+      // Save new commitment after fee payment to localStorage (so it can be used for strategy execution)
+      if (feeZkResult.newDeposit && feeZkResult.newDepositKey) {
+        localStorage.setItem(feeZkResult.newDepositKey, JSON.stringify({ ...feeZkResult.newDeposit, spent: false }));
+        addLog('Saved new commitment after fee payment for strategy execution');
+      }
+
+      // Mark fee payment deposit as spent
+      if (feeZkResult.spentDepositKey) {
+        const feeOldData = JSON.parse(localStorage.getItem(feeZkResult.spentDepositKey) || '{}');
+        feeOldData.spent = true;
+        localStorage.setItem(feeZkResult.spentDepositKey, JSON.stringify(feeOldData));
+      }
+
+      // Step 2: Generate ZK proof for strategy execution with remaining balance
+      // This will use the new commitment created after fee payment
+      addLog('Generating strategy execution proof with remaining balance...');
       const zkResult = await generateZKData(
         11155111, 
         tokenInfo,
-        amountStr,
+        remainingBalanceStr, // Use remaining balance after fee (properly formatted)
         vaultContractAddress
       );
 
@@ -180,8 +352,10 @@ export default function DetailsModal({
         throw new Error(zkResult.error);
       }
 
+      addLog('Strategy execution proof generated');
       const { withdrawalTxData, newDeposit, newDepositKey, spentDepositKey } = zkResult;
 
+      addLog('Building strategy payload...');
       const strategyPayload = {
         user_id: "user_123",
         strategy_type: "LIMIT_ORDER",
@@ -191,8 +365,8 @@ export default function DetailsModal({
         upper_bound: targetPrice,
         lower_bound: 0.0,
         recipient_address: recipient,
-        // TODO: This pool address needs to be dynamically determined based on asset_in, asset_out, and fee
-        // For now, using a hardcoded WETH/USDC 0.05% pool on Sepolia.
+        // This pool address needs to be dynamically determined based on asset_in, asset_out, and fee
+        // For now, using a hardcoded WETH/USDC 0.05% pool on Sepolia
         pool_address: "0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1",
         zk_proof: {
           proof: withdrawalTxData.proof,
@@ -203,22 +377,27 @@ export default function DetailsModal({
         }
       };
 
-      console.log("Sending Payload to Rust Backend:", strategyPayload);
-
+      addLog('Sending payload to backend...');
       const result = await createStrategy(strategyPayload);
 
       if (result.success) {
-        console.log("✅ Backend Success:", result.data);
+        addLog('Payload received, processing execution...');
+        addLog('Strategy execution completed!');
+        showToast('Strategy execution completed!', 'success');
 
+        // Handle strategy execution deposits (fee payment deposits already handled above)
         if (newDeposit && newDepositKey) {
             localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
+            addLog('Saved new commitment after strategy execution');
         }
         if (spentDepositKey) {
             const oldData = JSON.parse(localStorage.getItem(spentDepositKey) || '{}');
             oldData.spent = true;
             localStorage.setItem(spentDepositKey, JSON.stringify(oldData));
+            addLog('Marked strategy execution deposit as spent');
         }
 
+        addLog('Execution completed successfully!');
         setTimeout(() => {
           if (runningStrategies && setRunningStrategies) {
             const newRunning = new Map(runningStrategies);
@@ -231,16 +410,22 @@ export default function DetailsModal({
           }
           setShowSuccessNotification(true);
           setTimeout(() => setShowSuccessNotification(false), 3000);
+          setIsExecuting(false);
+          setExecutionLogs([]);
           handleClose();
-        }, 500);
+        }, 1500);
       } else {
-        console.error("Backend Error:", result.error);
-        alert(`Strategy generation failed: ${result.error}`);
+        addLog(`Error: ${result.error}`);
+        showToast(`Strategy generation failed: ${result.error}`, 'error');
+        setIsExecuting(false);
+        setTimeout(() => setExecutionLogs([]), 3000);
       }
     } catch (error: unknown) {
-      console.error("Execution Exception:", error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      alert(`An error occurred: ${errorMessage}`);
+      addLog(`Execution failed: ${errorMessage}`);
+      showToast(`An error occurred: ${errorMessage}`, 'error');
+      setIsExecuting(false);
+      setTimeout(() => setExecutionLogs([]), 3000);
     } finally {
       setIsFading(false);
     }
@@ -301,9 +486,31 @@ export default function DetailsModal({
     }
   };
 
+  // Get the latest log message for the central notification
+  const latestLog = executionLogs.length > 0 ? executionLogs[executionLogs.length - 1] : null;
+  const notificationMessage = toast?.message || latestLog || '';
+  const notificationType = toast?.type || (isExecuting ? 'loading' : 'info');
+
   return (
-    <div className="strategy-modal-overlay" onClick={handleClose}>
-      <div className="strategy-modal" onClick={(e) => e.stopPropagation()}>
+    <>
+      {(isExecuting || toast) && (
+        <div className={`strategy-toast strategy-toast-${notificationType} strategy-toast-central ${isFadingOut ? 'fade-out' : ''}`}>
+            <div className="strategy-toast-content">
+              {notificationType === 'loading' && (
+                <div className="strategy-toast-loader">
+                  <div className="strategy-toast-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              )}
+              <div className="strategy-toast-message">{notificationMessage}</div>
+            </div>
+        </div>
+      )}
+      <div className={`strategy-modal-overlay ${isExecuting ? 'darkened' : ''}`} onClick={handleClose}>
+        <div className="strategy-modal" onClick={(e) => e.stopPropagation()}>
         <div className="strategy-modal-header">
           <div className="strategy-modal-header-name">
             <h2 className="strategy-modal-title">{selectedStrategy.name}</h2>
@@ -410,52 +617,131 @@ export default function DetailsModal({
                         const stepId = node.id;
                         const stepValues = runModeValues[stepId] || {};
                         
+                        const handleMyWallet = () => {
+                          // Check both walletManager and localStorage for wallet connection
+                          const primaryWallet = walletManager.getPrimaryWallet();
+                          let walletAddress = primaryWallet?.address;
+                          
+                          // If not in walletManager, check localStorage
+                          if (!walletAddress) {
+                            try {
+                              const storedWallet = localStorage.getItem('siphon-connected-wallet');
+                              if (storedWallet) {
+                                const wallet = JSON.parse(storedWallet);
+                                walletAddress = wallet.address;
+                              }
+                            } catch (error) {
+                              console.error('Error reading wallet from localStorage:', error);
+                            }
+                          }
+                          
+                          if (walletAddress) {
+                            setRunModeValues(prev => ({
+                              ...prev,
+                              [stepId]: {
+                                ...prev[stepId],
+                                address: walletAddress
+                              }
+                            }));
+                            showToast('Wallet address filled successfully', 'success');
+                          } else {
+                            showToast('No wallet connected. Please connect a wallet first.', 'error');
+                          }
+                        };
+                        
                         return (
                           <div key={node.id} className="strategy-step-item">
                             <div className="strategy-step-number">{index + 1}</div>
                             <div className="strategy-step-content">
                               <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
                               <div className="strategy-step-details">
-                                {tags.map((tag, idx) => (
-                                  <div key={idx} className="strategy-step-input-wrapper">
-                                    {tag.options ? (
+                                {nodeData?.type === 'withdraw' ? (
+                                  <div className="strategy-step-withdraw-row">
+                                    <div className="strategy-step-input-wrapper">
                                       <select
                                         className="strategy-step-select"
-                                        value={stepValues[tag.field] || ''}
+                                        value={stepValues['chain'] || ''}
                                         onChange={(e) => {
                                           setRunModeValues(prev => ({
                                             ...prev,
                                             [stepId]: {
                                               ...prev[stepId],
-                                              [tag.field]: e.target.value
+                                              chain: e.target.value
                                             }
                                           }));
                                         }}
                                       >
-                                        <option value="">{tag.label}</option>
-                                        {tag.options.map(opt => (
-                                          <option key={opt} value={opt}>{opt}</option>
-                                        ))}
+                                        <option value="">Chain</option>
+                                        <option value="Sepolia">Sepolia</option>
                                       </select>
-                                    ) : (
+                                    </div>
+                                    <div className="strategy-step-input-wrapper">
                                       <input
                                         type="text"
                                         className="strategy-step-input"
-                                        placeholder={tag.label}
-                                        value={stepValues[tag.field] || ''}
+                                        placeholder="Address"
+                                        value={stepValues['address'] || ''}
                                         onChange={(e) => {
                                           setRunModeValues(prev => ({
                                             ...prev,
                                             [stepId]: {
                                               ...prev[stepId],
-                                              [tag.field]: e.target.value
+                                              address: e.target.value
                                             }
                                           }));
                                         }}
                                       />
-                                    )}
+                                    </div>
+                                    <button
+                                      className="strategy-step-my-wallet-btn"
+                                      onClick={handleMyWallet}
+                                      type="button"
+                                    >
+                                      My Wallet
+                                    </button>
                                   </div>
-                                ))}
+                                ) : (
+                                  tags.map((tag, idx) => (
+                                    <div key={idx} className="strategy-step-input-wrapper">
+                                      {tag.options ? (
+                                        <select
+                                          className="strategy-step-select"
+                                          value={stepValues[tag.field] || ''}
+                                          onChange={(e) => {
+                                            setRunModeValues(prev => ({
+                                              ...prev,
+                                              [stepId]: {
+                                                ...prev[stepId],
+                                                [tag.field]: e.target.value
+                                              }
+                                            }));
+                                          }}
+                                        >
+                                          <option value="">{tag.label}</option>
+                                          {tag.options.map(opt => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          type="text"
+                                          className="strategy-step-input"
+                                          placeholder={tag.label}
+                                          value={stepValues[tag.field] || ''}
+                                          onChange={(e) => {
+                                            setRunModeValues(prev => ({
+                                              ...prev,
+                                              [stepId]: {
+                                                ...prev[stepId],
+                                                [tag.field]: e.target.value
+                                              }
+                                            }));
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                  ))
+                                )}
                               </div>
                             </div>
                           </div>
@@ -467,7 +753,7 @@ export default function DetailsModal({
               </div>
               
               {/* Run Configuration Panel */}
-              <div className={`strategy-modal-run-config ${isFading ? 'fade-out' : 'fade-in'}`}>
+              <div className={`strategy-modal-run-config ${isFading ? 'fade-out' : 'fade-in'} ${isExecuting ? 'darkened' : ''}`}>
                 <h3 className="strategy-run-config-title">Run Configuration</h3>
                 
                 <div className="strategy-run-stats">
@@ -502,64 +788,27 @@ export default function DetailsModal({
                     </span>
                   </div>
                   <div className="strategy-run-stat-item">
-                    <span className="strategy-run-stat-label">Cost per Run</span>
+                    <span className="strategy-run-stat-label">Run Fee</span>
                     <span className="strategy-run-stat-value">
-                      ${variableCost.toFixed(4)} + ${fixedCost.toFixed(4)} = ${totalCost.toFixed(4)}
+                      ${totalCost.toFixed(4)} USD / {(totalCost / (coinPrices['ETH'] || 3000)).toFixed(6)} ETH
                     </span>
                   </div>
-                </div>
-                
-                <div className="strategy-run-balance-info">
-                  <div className="strategy-run-balance-header">
-                    <span className="strategy-run-balance-label">Expected Action</span>
-                  </div>
-                  <div className="strategy-run-action-log">
-                    {(() => {
-                      const depositNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'deposit');
-                      const swapNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'swap');
-                      const depositStepId = depositNodes.length > 0 ? depositNodes[0].id : null;
-                      const depositStepValues = depositStepId ? runModeValues[depositStepId] || {} : {};
-                      const inputAmount = depositStepValues['amount'] || '0';
-                      const inputCoinLocal = depositStepValues['tokenA'] || (depositNodes.length > 0 && (depositNodes[0].data as NodeData)?.coin 
-                        ? (depositNodes[0].data as NodeData).coin 
-                        : 'USDC');
-                      const swapStepId = swapNodes.length > 0 ? swapNodes[0].id : null;
-                      const swapStepValues = swapStepId ? runModeValues[swapStepId] || {} : {};
-                      const outputCoin = swapStepValues['coinB'] || (swapNodes.length > 0 && (swapNodes[0].data as NodeData)?.toCoin
-                        ? (swapNodes[0].data as NodeData).toCoin
-                        : inputCoinLocal);
-                      
-                      const inputAmountNum = parseFloat(inputAmount) || 0;
-                      const outputAmountNum = calculateExchange(
-                        inputAmountNum, 
-                        inputCoinLocal || 'USDC', 
-                        outputCoin || inputCoinLocal || 'USDC'
-                      );
-                      
-                      const formattedInputAmount = formatAmount(inputAmountNum, inputCoinLocal);
-                      const formattedOutputAmount = formatAmount(outputAmountNum, outputCoin || inputCoinLocal);
-                      
-                      return (
-                        <>
-                          <div className="strategy-run-action-item">
-                            <span className="strategy-run-action-time">T+0s</span>
-                            <span className="strategy-run-action-text">Instant Prepayment: ${totalCost.toFixed(4)}</span>
-                          </div>
-                          <div className="strategy-run-action-item">
-                            <span className="strategy-run-action-time">T+0s</span>
-                            <span className="strategy-run-action-text">Balance Usage: {formattedInputAmount} {inputCoinLocal}</span>
-                          </div>
-                          <div className="strategy-run-action-item">
-                            <span className="strategy-run-action-time">T+0s</span>
-                            <span className="strategy-run-action-text">Instant Spin-off: {formattedInputAmount} {inputCoinLocal} → {formattedOutputAmount} {outputCoin}</span>
-                          </div>
-                          <div className="strategy-run-action-item">
-                            <span className="strategy-run-action-time">T+2s</span>
-                            <span className="strategy-run-action-text">Execution Complete</span>
-                          </div>
-                        </>
-                      );
-                    })()}
+                  <div className="strategy-run-stat-item">
+                    <span className="strategy-run-stat-label">Deposit Used</span>
+                    <span className="strategy-run-stat-value">
+                      {(() => {
+                        const depositNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'deposit');
+                        const depositStepId = depositNodes.length > 0 ? depositNodes[0].id : null;
+                        const depositStepValues = depositStepId ? runModeValues[depositStepId] || {} : {};
+                        const inputAmount = depositStepValues['amount'] || '0';
+                        const inputCoinLocal = depositStepValues['tokenA'] || (depositNodes.length > 0 && (depositNodes[0].data as NodeData)?.coin 
+                          ? (depositNodes[0].data as NodeData).coin 
+                          : 'USDC');
+                        const inputAmountNum = parseFloat(inputAmount) || 0;
+                        const formattedInputAmount = formatAmount(inputAmountNum, inputCoinLocal);
+                        return `${formattedInputAmount} ${inputCoinLocal}`;
+                      })()}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -814,11 +1063,19 @@ export default function DetailsModal({
           <button 
             className="strategy-modal-btn strategy-modal-btn-run"
             onClick={handleExecute}
+            disabled={isExecuting}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            {isRunMode ? 'Execute' : 'Run'}
+            {isExecuting ? (
+              <svg className="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" />
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            )}
+            {isExecuting ? 'Processing...' : (isRunMode ? 'Pay & Run' : 'Run')}
           </button>
           <button 
             className="strategy-modal-btn strategy-modal-btn-edit"
@@ -844,5 +1101,6 @@ export default function DetailsModal({
         </div>
       </div>
     </div>
+    </>
   );
 }

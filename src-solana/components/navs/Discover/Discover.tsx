@@ -4,14 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Node, Edge } from '@xyflow/react';
 import DetailsModal from "./DetailsModal";
 import "./Discover.css";
-import {
-  formatAmount,
-  calculateExchange,
-  calculateVariableCost,
-  calculateFixedCost,
-  getTransactionOutputForCost,
-  fetchCoinPrices
-} from "./price_utils";
+// Price utilities are now handled in DetailsModal
 import {
   StrategyMetadata,
   StrategyData,
@@ -64,76 +57,8 @@ export default function Discover({
   const [isRunMode, setIsRunMode] = useState(false);
   const [runModeValues, setRunModeValues] = useState<Record<string, Record<string, string>>>({});
   const [runDuration, setRunDuration] = useState<string>('1h');
-  const [coinPrices, setCoinPrices] = useState<Record<string, number>>({});
   const [isFading, setIsFading] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
-  
-  // Execution time in seconds (fixed)
-  const executionTime = 2;
-  
-  // Wrapper for calculateExchange that uses coinPrices from state
-  const calculateExchangeWithPrices = (
-    inputAmount: number,
-    coinA: string,
-    coinB: string
-  ): number => {
-    return calculateExchange(inputAmount, coinA, coinB, coinPrices);
-  };
-  
-  // Fetch coin prices from Pyth Network API - only once on mount
-  useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        const prices = await fetchCoinPrices();
-        if (Object.keys(prices).length > 0) {
-          setCoinPrices(prices);
-        } else {
-          // Fallback prices
-          console.warn('[Discover] Using fallback prices');
-          setCoinPrices({
-            'ETH': 3000,
-            'USDC': 1,
-            'SOL': 192,
-            'BTC': 45000,
-          });
-        }
-      } catch (error) {
-        console.error('[Discover] Error fetching prices:', error);
-        // Fallback prices
-        console.warn('[Discover] Using fallback prices');
-        setCoinPrices({
-          'ETH': 3000,
-          'USDC': 1,
-          'SOL': 192,
-          'BTC': 45000,
-        });
-      }
-    };
-    fetchPrices();
-  }, []);
-  
-  // Log when coin prices change
-  useEffect(() => {
-    if (Object.keys(coinPrices).length > 0) {
-      console.log('[Discover] Coin prices updated:', coinPrices);
-      if (coinPrices.ETH) {
-        console.log('[Discover] ✓ Ethereum price available:', coinPrices.ETH, 'USD');
-      } else {
-        console.warn('[Discover] ⚠ Ethereum price not available');
-      }
-    }
-  }, [coinPrices]);
-  
-  // Calculate costs using utility functions
-  const transactionOutputUSD = getTransactionOutputForCost(
-    modalStrategyNodes,
-    runModeValues,
-    coinPrices,
-    calculateExchangeWithPrices
-  );
-  const variableCost = calculateVariableCost(runDuration);
-  const fixedCost = calculateFixedCost(transactionOutputUSD);
-  const totalCost = variableCost + fixedCost;
   
   // Initialize Limit Order strategy in localStorage
   useEffect(() => {
@@ -837,10 +762,6 @@ export default function Discover({
           setRunModeValues={setRunModeValues}
           runDuration={runDuration}
           setRunDuration={setRunDuration}
-          executionTime={executionTime}
-          variableCost={variableCost}
-          fixedCost={fixedCost}
-          totalCost={totalCost}
           isFading={isFading}
           setIsFading={setIsFading}
           flowKey={flowKey}
@@ -854,8 +775,6 @@ export default function Discover({
           savedScenes={savedScenes}
           setSavedScenes={setSavedScenes}
           setShowSuccessNotification={setShowSuccessNotification}
-          calculateExchange={calculateExchangeWithPrices}
-          formatAmount={formatAmount}
         />
       )}
       
