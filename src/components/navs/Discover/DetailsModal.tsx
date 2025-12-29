@@ -167,7 +167,7 @@ export default function DetailsModal({
       const tokenInfo = tokenMap[assetIn || 'USDC'];
       if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
 
-      const vaultContractAddress = "0x046f21d540C438ea830E735540Ae20bc9b32aB28"; 
+      const vaultContractAddress = "0x1565E62bfdAc6b2c6b81cc1C6c76367747D5FAB3"; 
 
       const zkResult = await generateZKData(
         11155111, 
@@ -191,12 +191,15 @@ export default function DetailsModal({
         upper_bound: targetPrice,
         lower_bound: 0.0,
         recipient_address: recipient,
+        // TODO: This pool address needs to be dynamically determined based on asset_in, asset_out, and fee
+        // For now, using a hardcoded WETH/USDC 0.05% pool on Sepolia.
+        pool_address: "0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1",
         zk_proof: {
           proof: withdrawalTxData.proof,
           nullifierHash: withdrawalTxData.nullifierHash,
           newCommitment: withdrawalTxData.newCommitment,
-          atomicAmount: withdrawalTxData.amount,
-          root: withdrawalTxData.stateRoot 
+          atomicAmount: withdrawalTxData.amount, // This is `_amountIn` for the `publicInputs`
+          root: withdrawalTxData.stateRoot
         }
       };
 

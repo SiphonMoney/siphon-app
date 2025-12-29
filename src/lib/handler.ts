@@ -8,7 +8,7 @@ import merkleTreeAbiJson from './abi/MerkleTree.json';
 // --------- Constants ----------
 const VAULT_CHAIN_ID = 11155111; // Sepolia id
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const ENTRYPOINT_ADDRESS = '0x046f21d540C438ea830E735540Ae20bc9b32aB28';
+const ENTRYPOINT_ADDRESS = '0x1565E62bfdAc6b2c6b81cc1C6c76367747D5FAB3';
 
 // --------- ABIs & interface helpers ----------
 const entrypointAbi = entrypointArtifact.abi as ethers.InterfaceAbi;

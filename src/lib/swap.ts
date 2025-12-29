@@ -1,10 +1,11 @@
 import { ethers } from 'ethers';
-import { generateZKData, encodeProof } from './zkHandler';
+import { generateZKData } from './zkHandler'; // Removed encodeProof as it's not needed
+import entrypointArtifact from "../../contract/artifacts/src/Entrypoint.sol/Entrypoint.json";
 
 const SEPOLIA_CHAIN_ID = 11155111;
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
-const ENTRYPOINT_ADDRESS = '0x046f21d540C438ea830E735540Ae20bc9b32aB28';
+const ENTRYPOINT_ADDRESS = '0x1565E62bfdAc6b2c6b81cc1C6c76367747D5FAB3';
 const FEE = 3000;
 const MIN_AMOUNT_OUT = 0;
 
@@ -22,63 +23,10 @@ const TOKENS = {
     }
 };
 
-const ENTRYPOINT_ABI = [
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "_srcToken",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "_dstToken",
-                "type": "address"
-            },
-            {
-                "internalType": "address payable",
-                "name": "_recipient",
-                "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_amountIn",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_minAmountOut",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint24",
-                "name": "_fee",
-                "type": "uint24"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_nullifier",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_newCommitment",
-                "type": "uint256"
-            },
-            {
-                "internalType": "bytes",
-                "name": "_proof",
-                "type": "bytes"
-            }
-        ],
-        "name": "swap",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    }
-];
+const ENTRYPOINT_ABI = entrypointArtifact.abi as ethers.InterfaceAbi;
 
 export async function instantSwap(
+    _pool: string, // New parameter
     _srcToken: string,
     _dstToken: string,
     _amount: string,
@@ -119,21 +67,31 @@ export async function instantSwap(
             amount: string;
             nullifierHash: string;
             newCommitment: string;
-            proof: string[];
+            proof: (string | bigint)[]; // proof can be string[] or bigint[]
             publicSignals: string[];
+            stateRoot: string; // stateRoot is now part of withdrawalTxData
         };
 
+        const zkProofStruct = {
+            stateRoot: withdrawalTxData.stateRoot,
+            nullifier: withdrawalTxData.nullifierHash,
+            newCommitment: withdrawalTxData.newCommitment,
+            // Ensure proof elements are BigInts for ethers
+            proof: withdrawalTxData.proof.map(p => typeof p === 'string' ? BigInt(p) : p)
+        };
+
+
         const contract = new ethers.Contract(ENTRYPOINT_ADDRESS, ENTRYPOINT_ABI, signer);
+        // Corrected txParams for the new Entrypoint.swap signature
         const txParams = [
+            _pool,
             srcToken.address,
             dstToken.address,
             _recipient,
             srcAmount,
             MIN_AMOUNT_OUT,
             FEE,
-            withdrawalTxData.nullifierHash,
-            withdrawalTxData.newCommitment,
-            encodeProof(withdrawalTxData.proof)
+            zkProofStruct // Pass the ZKProof struct
         ];
 
         // swap transaction
@@ -189,6 +147,7 @@ export async function getEthersProviderAndSigner() {
 }
 
 export async function executeSwap(
+    _pool: string, // New parameter
     srcToken: string,
     dstToken: string,
     amount: string,
@@ -196,7 +155,8 @@ export async function executeSwap(
 ) {
     try {
         const { provider, signer } = await getEthersProviderAndSigner();
-        const result = await instantSwap(srcToken, dstToken, amount, recipient, provider, signer);
+        // Pass _pool to instantSwap
+        const result = await instantSwap(_pool, srcToken, dstToken, amount, recipient, provider, signer);
         return result;
     } catch (error) {
         console.error("Error executing swap:", error);

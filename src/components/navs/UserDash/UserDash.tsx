@@ -232,7 +232,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                     </div>
                   ))
               ) : (
-                <div className="userdash-balance-loading">Loading...</div>
+                <div className="userdash-balance-loading">No funds detected</div>
               )}
             </div>
             <div className="userdash-balance-description">
