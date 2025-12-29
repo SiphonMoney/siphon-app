@@ -8,7 +8,7 @@ import merkleTreeAbiJson from './abi/MerkleTree.json';
 // --------- Constants ----------
 const VAULT_CHAIN_ID = 11155111; // Sepolia id
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const ENTRYPOINT_ADDRESS = '0x046f21d540C438ea830E735540Ae20bc9b32aB28';
+const ENTRYPOINT_ADDRESS = '0xDF59E7E6138Af536512D93527Dd0E24A5BA6321C'; // Updated with fee payment support
 
 // --------- ABIs & interface helpers ----------
 const entrypointAbi = entrypointArtifact.abi as ethers.InterfaceAbi;
@@ -34,6 +34,34 @@ export async function getEntrypointContract(
   );
 
   return contract;
+}
+
+// --------- Check Fee Payment Status ----------
+export async function checkFeePaymentStatus(_nullifier: string): Promise<{ paid: boolean; amount: string | null }> {
+  console.log("🔍 checkFeePaymentStatus() called for nullifier:", _nullifier.substring(0, 20) + "...");
+  
+  try {
+    const provider = getProvider();
+    if (!provider) {
+      console.error("❌ Provider not found");
+      return { paid: false, amount: null };
+    }
+
+    const contract = await getEntrypointContract(provider);
+    const paidAmount = await contract.feePayments(_nullifier);
+    
+    if (paidAmount > 0n) {
+      console.log("✅ Fee already paid:", paidAmount.toString());
+      return { paid: true, amount: paidAmount.toString() };
+    } else {
+      console.log("ℹ️ No fee paid for this nullifier");
+      return { paid: false, amount: null };
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("❌ Error checking fee payment status:", message);
+    return { paid: false, amount: null };
+  }
 }
 
 // --------- Deposit Implementation ----------
@@ -198,6 +226,160 @@ export async function deposit(_token: string, _amount: string) {
   }
 }
 
+
+// --------- Pay Execution Fee Implementation ----------
+export async function payExecutionFee(
+  _token: string,
+  _executionPrice: string,
+  _amount: string,
+  _stateRoot: string,
+  _nullifier: string,
+  _newCommitment: string,
+  _proof: (string | bigint)[]
+) {
+  console.log("💳 payExecutionFee() called", { 
+    _token, 
+    _executionPrice, 
+    _amount,
+    _nullifier: _nullifier.substring(0, 20) + "..."
+  });
+
+  const signer = getSigner();
+  if (!signer) {
+    console.error("❌ Wallet not connected");
+    return { success: false, error: 'Wallet not connected' };
+  }
+
+  const token = TOKEN_MAP[_token.toUpperCase()];
+  if (!token) {
+    console.error("❌ Token not supported:", _token);
+    return { success: false, error: `Token not supported: ${_token.toUpperCase()}` };
+  }
+
+  try {
+    const tokenAddress = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
+    const decExecutionPrice = ethers.parseUnits(_executionPrice, token.decimals);
+    const decAmount = ethers.parseUnits(_amount, token.decimals);
+    
+    console.log("📊 Fee payment details:", {
+      token: token.symbol,
+      executionPrice: _executionPrice,
+      executionPriceWei: decExecutionPrice.toString(),
+      amount: _amount,
+      amountWei: decAmount.toString()
+    });
+
+    const contract = await getEntrypointContract(signer);
+    const payFeeFn = contract.getFunction('payExecutionFee');
+
+    // Check if fee already paid for this nullifier
+    try {
+      console.log("🔍 Checking if fee already paid for nullifier...");
+      const paidAmount = await contract.feePayments(_nullifier);
+      if (paidAmount > 0n) {
+        console.error("❌ Fee already paid for this operation:", paidAmount.toString());
+        return { 
+          success: false, 
+          error: `Fee already paid: ${ethers.formatUnits(paidAmount, token.decimals)} ${token.symbol}` 
+        };
+      }
+      console.log("✅ Nullifier not used, proceeding with payment");
+    } catch (e) {
+      console.warn("⚠️ Could not check fee payment status, continuing:", e);
+    }
+
+    // Dry-run with staticCall
+    try {
+      console.log("🧪 Performing payExecutionFee.staticCall (dry-run)...");
+      await payFeeFn.staticCall(
+        tokenAddress,
+        decExecutionPrice.toString(),
+        decAmount.toString(),
+        _stateRoot || "0",
+        _nullifier,
+        _newCommitment,
+        _proof
+      );
+      console.log("✅ payExecutionFee.staticCall succeeded - proof validated (dry-run)");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("❌ payExecutionFee.staticCall reverted:", message);
+      return { success: false, error: `Proof validation failed: ${message}` };
+    }
+
+    // Send actual fee payment transaction
+    try {
+      console.log("📤 Sending payExecutionFee transaction...");
+      const tx = await payFeeFn(
+        tokenAddress,
+        decExecutionPrice.toString(),
+        decAmount.toString(),
+        _stateRoot || "0",
+        _nullifier,
+        _newCommitment,
+        _proof
+      ) as TransactionResponse;
+      console.log("✅ Fee payment tx sent:", tx.hash);
+
+      const receipt = await tx.wait();
+      if (!receipt) throw new Error("Fee payment tx was not mined (receipt null)");
+      console.log("✅ Fee payment tx mined:", receipt.hash);
+
+      // Parse ExecutionFeePaid event
+      const provider = getProvider();
+      if (provider) {
+        const entrypointRead = await getEntrypointContract(provider);
+        const iface = entrypointRead.interface;
+        const feePaidEvent = receipt.logs
+          .map(log => {
+            try {
+              return iface.parseLog(log);
+            } catch {
+              return null;
+            }
+          })
+          .find((parsed): parsed is ethers.LogDescription => 
+            parsed?.name === 'ExecutionFeePaid'
+          );
+
+        if (feePaidEvent) {
+          console.log("💰 ExecutionFeePaid event:", {
+            asset: feePaidEvent.args.asset,
+            executionPrice: feePaidEvent.args.executionPrice.toString(),
+            nullifier: feePaidEvent.args.nullifier.toString(),
+            newCommitment: feePaidEvent.args.newCommitment.toString()
+          });
+        }
+      }
+
+      console.log("✅ Fee payment successful!");
+      return { success: true, transactionHash: receipt.hash };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("❌ Error during fee payment transaction:", message);
+      
+      // Parse common errors
+      if (message.includes("Fee already paid") || message.includes("FeeAlreadyPaid")) {
+        return { success: false, error: "Fee already paid for this operation" };
+      }
+      if (message.includes("InvalidZKProof") || message.includes("Invalid ZK proof")) {
+        return { success: false, error: "Invalid ZK proof - commitment verification failed" };
+      }
+      if (message.includes("VaultNotFound")) {
+        return { success: false, error: "Vault not found for this asset" };
+      }
+      if (message.includes("NullifierAlreadySpent")) {
+        return { success: false, error: "Nullifier already spent - commitment already used" };
+      }
+      
+      return { success: false, error: message };
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("❌ Error during payExecutionFee:", message);
+    return { success: false, error: message };
+  }
+}
 
 // --------- Withdraw Implementation ----------
 export async function withdraw(_token: string, _amount: string, _recipient: string) {
