@@ -1,6 +1,6 @@
 export async function createStrategy(strategyData: unknown) {
   try {
-    const BASE_URL = "https://b76c86979df6.ngrok-free.app"
+    const BASE_URL = "https://release-slope-uniform-student.trycloudflare.com";
     const response = await fetch(`${BASE_URL}/generatePayload`, {
       method: "POST",
       headers: {
