@@ -1,6 +1,6 @@
 export async function createStrategy(strategyData: unknown) {
   try {
-    const BASE_URL = "https://release-slope-uniform-student.trycloudflare.com";
+    const BASE_URL = "http://3.27.8.121:5009";
     const response = await fetch(`${BASE_URL}/generatePayload`, {
       method: "POST",
       headers: {
