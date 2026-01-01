@@ -1,6 +1,6 @@
 export async function createStrategy(strategyData: unknown) {
   try {
-    const BASE_URL = "http://3.27.8.121:5009";
+    const BASE_URL = "https://extrametrical-audibly-michel.ngrok-free.dev";
     const response = await fetch(`${BASE_URL}/generatePayload`, {
       method: "POST",
       headers: {
