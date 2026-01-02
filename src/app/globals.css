@@ -727,6 +727,37 @@ canvas {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+.wallet-connected-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-connected-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.wallet-info-block {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wallet-balance-text {
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .wallet-menu {
   position: absolute;
   top: calc(100% + 0.5rem);

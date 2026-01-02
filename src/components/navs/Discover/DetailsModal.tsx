@@ -96,6 +96,7 @@ export default function DetailsModal({
   const [pricesLoaded, setPricesLoaded] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'loading' } | null>(null);
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [isWalletConnected, setIsWalletConnected] = useState(false);
 
   // Fetch prices once when modal opens
   useEffect(() => {
@@ -139,6 +140,52 @@ export default function DetailsModal({
       setPricesLoaded(false);
       setCoinPrices({});
     }
+  }, [isOpen]);
+
+  // Check wallet connection status
+  useEffect(() => {
+    const checkWalletConnection = () => {
+      const wallets = walletManager.getConnectedWallets();
+      const hasConnectedWallet = wallets.length > 0;
+      
+      // Also check localStorage as fallback
+      if (!hasConnectedWallet) {
+        try {
+          const storedWallet = localStorage.getItem('siphon-connected-wallet');
+          if (storedWallet) {
+            const wallet = JSON.parse(storedWallet);
+            if (wallet && wallet.address) {
+              setIsWalletConnected(true);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('Error reading wallet from localStorage:', error);
+        }
+      }
+      
+      setIsWalletConnected(hasConnectedWallet);
+    };
+
+    // Check on mount and when modal opens
+    checkWalletConnection();
+
+    // Listen for wallet connection/disconnection events
+    const handleWalletConnected = () => {
+      setIsWalletConnected(true);
+    };
+
+    const handleWalletDisconnected = () => {
+      setIsWalletConnected(false);
+    };
+
+    window.addEventListener('walletConnected', handleWalletConnected);
+    window.addEventListener('walletDisconnected', handleWalletDisconnected);
+
+    return () => {
+      window.removeEventListener('walletConnected', handleWalletConnected);
+      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
+    };
   }, [isOpen]);
 
   // Local wrapper functions that use fetched prices
@@ -196,7 +243,18 @@ export default function DetailsModal({
     onClose();
   };
 
+  const handleConnectWallet = () => {
+    // Trigger the topbar ConnectButton to open wallet selector
+    window.dispatchEvent(new CustomEvent('triggerWalletConnection'));
+  };
+
   const handleExecute = async () => {
+    // Check wallet connection first
+    if (!isWalletConnected) {
+      await handleConnectWallet();
+      return;
+    }
+
     if (!isRunMode) {
       setIsFading(true);
       setTimeout(() => {
@@ -1061,7 +1119,7 @@ export default function DetailsModal({
         
         <div className={`strategy-modal-actions ${isFading ? 'fade-out' : 'fade-in'}`}>
           <button 
-            className="strategy-modal-btn strategy-modal-btn-run"
+            className={`strategy-modal-btn strategy-modal-btn-run ${!isWalletConnected ? 'disabled' : ''}`}
             onClick={handleExecute}
             disabled={isExecuting}
           >
@@ -1070,12 +1128,18 @@ export default function DetailsModal({
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" />
                 <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeLinecap="round" />
               </svg>
+            ) : !isWalletConnected ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12v-2a5 5 0 0 0-5-5H8a5 5 0 0 0-5 5v2" />
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 1v6m0 6v6" />
+              </svg>
             ) : (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
             )}
-            {isExecuting ? 'Processing...' : (isRunMode ? 'Pay & Run' : 'Run')}
+            {isExecuting ? 'Processing...' : (!isWalletConnected ? 'Connect Wallet' : (isRunMode ? 'Pay & Run' : 'Run'))}
           </button>
           <button 
             className="strategy-modal-btn strategy-modal-btn-edit"
