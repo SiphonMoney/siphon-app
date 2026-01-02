@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
-import { getSiphonVaultTotalBalance, TOKEN_MAP, getUnifiedBalances } from '../../../lib/nexus';
+import { getSiphonVaultTotalBalance, TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit } from '../../../lib/nexus';
 
 interface UnifiedBalance {
   symbol: string;
@@ -47,12 +47,37 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   useEffect(() => {
     const checkWalletAndFetchBalances = async () => {
       try {
+        // First check walletManager
         const wallets = walletManager.getConnectedWallets();
-        const metamaskWallet = wallets.find(w => w.id === 'metamask');
+        let metamaskWallet = wallets.find(w => w.id === 'metamask');
+        
+        // If not found in walletManager, check localStorage
+        if (!metamaskWallet) {
+          try {
+            const storedWallet = localStorage.getItem('siphon-connected-wallet');
+            if (storedWallet) {
+              const walletData = JSON.parse(storedWallet);
+              if (walletData && walletData.address) {
+                metamaskWallet = walletData;
+              }
+            }
+          } catch (error) {
+            console.error('Error reading wallet from localStorage:', error);
+          }
+        }
         
         if (metamaskWallet) {
           setWallet(metamaskWallet);
-          setTransactionInput(prev => ({...prev, recipient: metamaskWallet.address}));
+          setTransactionInput(prev => ({...prev, recipient: metamaskWallet!.address}));
+          
+          // Ensure ethers is initialized before fetching balances
+          if (!isInitialized() && window.ethereum) {
+            try {
+              await initializeWithProvider(window.ethereum);
+            } catch (error) {
+              console.error('Failed to initialize ethers:', error);
+            }
+          }
           
           const balances = await getUnifiedBalances();
           setWalletBalances(balances);
@@ -64,15 +89,45 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
     checkWalletAndFetchBalances();
     
-    // Refresh wallet balance every 10 seconds
+    // Listen for wallet connection/disconnection events
+    const handleWalletConnected = () => {
+      checkWalletAndFetchBalances();
+    };
+
+    const handleWalletDisconnected = () => {
+      setWallet(null);
+      setWalletBalances(null);
+    };
+
+    window.addEventListener('walletConnected', handleWalletConnected);
+    window.addEventListener('walletDisconnected', handleWalletDisconnected);
+
+    return () => {
+      window.removeEventListener('walletConnected', handleWalletConnected);
+      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
+    };
+  }, []);
+
+  // Separate effect for balance refresh
+  useEffect(() => {
+    if (!wallet) return;
+    
     const interval = setInterval(async () => {
-      if (wallet) {
-        try {
-          const balances = await getUnifiedBalances();
-          setWalletBalances(balances);
-        } catch (error) {
-          console.error('Error refreshing wallet balances:', error);
+      try {
+        // Ensure ethers is initialized before fetching balances
+        if (!isInitialized() && window.ethereum) {
+          try {
+            await initializeWithProvider(window.ethereum);
+          } catch (error) {
+            console.error('Failed to initialize ethers:', error);
+            return;
+          }
         }
+        
+        const balances = await getUnifiedBalances();
+        setWalletBalances(balances);
+      } catch (error) {
+        console.error('Error refreshing wallet balances:', error);
       }
     }, 10000);
 
@@ -82,6 +137,22 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const formatAddress = (address: string) => {
     if (address.length <= 10) return address;
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const handleLogout = () => {
+    if (wallet) {
+      console.log(`Disconnecting ${wallet.id} wallet...`);
+      walletManager.disconnectWallet(wallet.id);
+      setWallet(null);
+      window.dispatchEvent(new Event('walletDisconnected'));
+      deinit();
+      // Clear persisted wallet connection
+      localStorage.removeItem('siphon-connected-wallet');
+      // Navigate back to discover view
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'discover' }));
+      }
+    }
   };
 
   const handleConfirm = async () => {
@@ -155,7 +226,21 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     <div className={`userdash-view ${isLoaded ? 'loaded' : ''}`}>
       <div className="userdash-content-wrapper">
         <div className="userdash-header">
-          <h1 className="userdash-title">User Dashboard</h1>
+          <div className="userdash-header-top">
+            <h1 className="userdash-title">User Dashboard</h1>
+            <button
+              className="userdash-logout-button"
+              onClick={handleLogout}
+              title="Disconnect wallet"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Logout
+            </button>
+          </div>
           <div className="userdash-address">
             <span className="userdash-address-label">Address:</span>
             <span className="userdash-address-value">{formatAddress(wallet.address)}</span>

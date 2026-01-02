@@ -25,14 +25,32 @@ const walletOptions: WalletOption[] = [
 interface WalletSelectorProps {
   onWalletSelect: (walletId: string) => void;
   className?: string;
+  shouldOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export default function WalletSelector({ onWalletSelect, className }: WalletSelectorProps) {
+export default function WalletSelector({ onWalletSelect, className, shouldOpen, onOpenChange }: WalletSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const walletSelectorRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (shouldOpen !== undefined && shouldOpen) {
+      setIsOpen(true);
+      // Reset the shouldOpen flag after opening
+      if (onOpenChange) {
+        // Use a small delay to ensure the state update happens
+        setTimeout(() => {
+          onOpenChange(false);
+        }, 50);
+      }
+    }
+  }, [shouldOpen, onOpenChange]);
+
   const handleWalletClick = async (walletId: string) => {
     setIsOpen(false);
+    if (onOpenChange) {
+      onOpenChange(false);
+    }
     onWalletSelect(walletId);
   };
 
@@ -57,7 +75,13 @@ export default function WalletSelector({ onWalletSelect, className }: WalletSele
     <div ref={walletSelectorRef} className={`wallet-selector ${className}`}>
       <button 
         className="wallet-selector-trigger"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          const newState = !isOpen;
+          setIsOpen(newState);
+          if (onOpenChange) {
+            onOpenChange(newState);
+          }
+        }}
       >
         <span className="wallet-icon"></span>
         <span className="wallet-text">Connect Wallet</span>

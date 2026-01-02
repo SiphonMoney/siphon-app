@@ -155,8 +155,9 @@ export default function Discover({
                   >
                     {featuredStrategies.map((strategy, index) => {
                       // const isLiked = likedStrategies.has(strategy.title); // Removed unused variable
+                      const isActive = index === featuredStrategyIndex;
                       return (
-                        <div key={index} className="strategy-slide">
+                        <div key={index} className={`strategy-slide ${isActive ? 'active' : 'inactive'}`}>
                           <div className="strategy-of-week-content">
                             <h3 className="strategy-of-week-title">{strategy.title}</h3>
                             <p className="strategy-of-week-description">{strategy.description}</p>
@@ -285,10 +286,11 @@ export default function Discover({
                   >
                     {featuredStrategies.map((strategy, index) => {
                       // const isLiked = likedStrategies.has(strategy.title); // Removed unused variable
+                      const isActive = index === featuredStrategyIndex;
                       return (
                         <div 
                           key={index} 
-                          className="strategy-slide"
+                          className={`strategy-slide ${isActive ? 'active' : 'inactive'}`}
                           onClick={() => {
                             // Create a mock strategy object for the modal
                             const mockStrategy = {
@@ -688,7 +690,7 @@ export default function Discover({
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                   </svg>
                   <span>{strategy.nodes} steps</span>
-                  <span style={{ marginLeft: '0.5rem' }}>{strategy.usage} users</span>
+                  <span style={{ marginLeft: '0.5rem' }}>{strategy.category.charAt(0).toUpperCase() + strategy.category.slice(1)}</span>
                 </div>
               </div>
               <div className="discover-card-actions">

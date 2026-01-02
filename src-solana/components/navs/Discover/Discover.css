@@ -254,7 +254,7 @@
   border-radius: 12px;
   padding: 1.25rem;
   padding-bottom: 1.25rem;
-  display: flex;
+  display: none; /* Hidden for now - can be restored later */
   flex-direction: column;
   gap: 0.875rem;
   backdrop-filter: blur(10px);
@@ -271,7 +271,7 @@
 
 .strategy-slider-container {
   position: relative;
-  display: flex;
+  display: none; /* Hidden for now - can be restored later */
   flex-direction: column;
   gap: 1rem;
   overflow: visible;
@@ -290,6 +290,14 @@
   will-change: transform;
 }
 
+.strategy-slider-track .strategy-slide {
+  pointer-events: none;
+}
+
+.strategy-slider-track .strategy-slide.active {
+  pointer-events: auto;
+}
+
 .strategy-slide {
   min-width: 100%;
   max-width: 100%;
@@ -303,11 +311,31 @@
   box-sizing: border-box;
   padding-bottom: 1.5rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1), filter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Default: all slides are blurred */
+  filter: blur(6px);
+  opacity: 0.4;
+}
+
+.strategy-slide.inactive {
+  filter: blur(6px);
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.strategy-slide.active {
+  filter: blur(0) !important;
+  opacity: 1 !important;
+  transform: scale(1);
 }
 
 .strategy-slide:hover {
   opacity: 0.95;
+}
+
+.strategy-slide.inactive:hover {
+  opacity: 0.4;
+  filter: blur(6px);
 }
 
 .strategy-of-week-header {
@@ -716,6 +744,7 @@
   }
   
   .discover-strategy-of-week {
+    display: none; /* Hidden for now - can be restored later */
     margin-bottom: 1rem;
     padding: 1rem;
   }
@@ -812,6 +841,8 @@
 .discover-strategy-card.inactive {
   opacity: 0.5;
   cursor: default;
+  filter: blur(1.5px);
+  transition: filter 0.3s ease, opacity 0.3s ease;
 }
 
 .discover-strategy-card.inactive:hover {
@@ -1168,6 +1199,7 @@
 
   /* Reduce card height on mobile since badge is removed */
   .discover-featured-section-mobile .discover-strategy-of-week {
+    display: none; /* Hidden for now - can be restored later */
     padding: 1rem;
     padding-bottom: 1rem;
     margin-bottom: 1.5rem;
@@ -2448,11 +2480,28 @@
   color: rgba(34, 197, 94, 0.9);
 }
 
-.strategy-modal-btn-run:hover {
+.strategy-modal-btn-run:hover:not(:disabled) {
   background: rgba(34, 197, 94, 0.15);
   border-color: rgba(34, 197, 94, 0.6);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.strategy-modal-btn-run.disabled,
+.strategy-modal-btn-run:disabled {
+  background: rgba(100, 100, 100, 0.1);
+  border-color: rgba(100, 100, 100, 0.3);
+  color: rgba(150, 150, 150, 0.7);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.strategy-modal-btn-run.disabled:hover,
+.strategy-modal-btn-run:disabled:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(100, 100, 100, 0.1);
+  border-color: rgba(100, 100, 100, 0.3);
 }
 
 .strategy-modal-btn-edit {
