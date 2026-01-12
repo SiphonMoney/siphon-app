@@ -1,11 +1,21 @@
 export async function createStrategy(strategyData: unknown) {
   try {
-    const BASE_URL = "https://54.252.143.26.sslip.io";
+    // Use localhost instead of 0.0.0.0 (browsers can't connect to 0.0.0.0)
+    const BASE_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "http://localhost:5009";
+    // Get API token from environment (for production)
+    const apiToken = process.env.NEXT_PUBLIC_API_TOKEN || "";
+    
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    
+    if (apiToken) {
+      headers["X-API-TOKEN"] = apiToken;
+    }
+    
     const response = await fetch(`${BASE_URL}/generatePayload`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(strategyData),
     });
 
