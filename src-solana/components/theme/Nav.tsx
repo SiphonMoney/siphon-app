@@ -19,6 +19,7 @@ export default function Nav({ onWalletConnected }: NavProps) {
   const isDarkPool = pathname === "/dapp/darkpool";
   const isSwaps = pathname === "/dapp/swaps";
   const isPro = pathname === "/dapp" || pathname === "/dapp/pro";
+  const isStrategies = isPro; // Strategies is active when on /dapp or /dapp/pro
   
   const [proViewMode, setProViewMode] = useState<'blueprint' | 'run' | 'discover'>('discover');
 
@@ -52,9 +53,10 @@ export default function Nav({ onWalletConnected }: NavProps) {
       {/* Center: Menu Buttons (only for dapp pages) */}
       {isDappPage && (
         <div className="nav-center">
-          {/* Darkpools button */}
-          <div 
-            className={`nav-single-btn nav-single-btn-disabled ${isDarkPool ? 'active' : ''}`}
+          {/* Dark button */}
+          <Link 
+            href="/dapp/darkpool"
+            className={`nav-single-btn ${isDarkPool ? 'active' : ''}`}
           >
             <div className="nav-single-btn-content">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -63,9 +65,8 @@ export default function Nav({ onWalletConnected }: NavProps) {
               </svg>
               Darkpools
             </div>
-            <span className="nav-soon-tag">soon</span>
-          </div>
-          {/* Single button for Swap */}
+          </Link>
+          {/* Swap button */}
           <div 
             className={`nav-single-btn nav-single-btn-disabled ${isSwaps ? 'active' : ''}`}
           >
@@ -77,40 +78,55 @@ export default function Nav({ onWalletConnected }: NavProps) {
             </div>
             <span className="nav-soon-tag">soon</span>
           </div>
-          {/* Vertical divider */}
-          <div className="nav-divider"></div>
-          {/* Trio selector for Discover/Build/Run - always visible on dapp pages */}
-          <div className="nav-mode-selector">
-            <button
-              className={`nav-mode-btn ${proViewMode === 'discover' ? 'active' : ''}`}
-              onClick={() => handleProViewModeChange('discover')}
+          {/* Strategies button - expands to show Discover/Build/Run */}
+          <div className={`nav-strategies-container ${isStrategies ? 'expanded' : ''}`}>
+            <Link 
+              href="/dapp"
+              className={`nav-single-btn ${isStrategies ? 'active' : ''}`}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              Discover
-            </button>
-            <button
-              className={`nav-mode-btn ${proViewMode === 'blueprint' ? 'active' : ''}`}
-              onClick={() => handleProViewModeChange('blueprint')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                <line x1="12" y1="22.08" x2="12" y2="12" />
-              </svg>
-              Build
-            </button>
-            <button
-              className={`nav-mode-btn ${proViewMode === 'run' ? 'active' : ''}`}
-              onClick={() => handleProViewModeChange('run')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              Run
-            </button>
+              <div className="nav-single-btn-content">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+                Strategies
+              </div>
+            </Link>
+            {/* Expanded Discover/Build/Run buttons - only visible when Strategies is active */}
+            {isStrategies && (
+              <div className="nav-strategies-expanded">
+                <button
+                  className={`nav-mode-btn ${proViewMode === 'discover' ? 'active' : ''}`}
+                  onClick={() => handleProViewModeChange('discover')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                  Discover
+                </button>
+                <button
+                  className={`nav-mode-btn ${proViewMode === 'blueprint' ? 'active' : ''}`}
+                  onClick={() => handleProViewModeChange('blueprint')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
+                  </svg>
+                  Build
+                </button>
+                <button
+                  className={`nav-mode-btn ${proViewMode === 'run' ? 'active' : ''}`}
+                  onClick={() => handleProViewModeChange('run')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                  Run
+                </button>
+              </div>
+            )}
           </div>
           {/* Vertical divider */}
           <div className="nav-divider"></div>

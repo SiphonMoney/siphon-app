@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Node, Edge } from '@xyflow/react';
 import StratDetails from "@/components/navs/Run/StratDetails";
+import TransactionHistory from "@/components/navs/Run/TransactionHistory";
 import "./Run.css";
 
 interface RunProps {
@@ -38,6 +39,7 @@ export default function Run({
   const [selectedStrategy, setSelectedStrategy] = useState<{ name: string; nodes: Node[]; edges: Edge[] } | null>(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
   const [publishedStrategies, setPublishedStrategies] = useState<Set<string>>(new Set());
+  const [contentView, setContentView] = useState<'saved' | 'transactions'>('saved');
 
   // Load published strategies from localStorage
   useEffect(() => {
@@ -202,27 +204,58 @@ export default function Run({
       <div className="run-mode-header">
         <div className="run-mode-header-content">
           <div>
-            <h2 className="run-mode-title">Strategies</h2>
-            <p className="run-mode-subtitle">Run and monitor your saved trading strategies</p>
+            <h2 className="run-mode-title">
+              {contentView === 'saved' ? 'Strategies' : 'Transaction History'}
+            </h2>
+            <p className="run-mode-subtitle">
+              {contentView === 'saved' 
+                ? 'Run and monitor your saved trading strategies'
+                : 'All vault transactions indexed from the blockchain'}
+            </p>
           </div>
           <div className="run-mode-header-right">
-          
             <div className="run-mode-controls-stack">
-              <button
-                className={`run-mode-favorites-toggle ${showFavoritesOnly ? 'active' : ''}`}
-                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-                title={showFavoritesOnly ? 'Show all strategies' : 'Show favorites only'}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill={showFavoritesOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </button>
-         
+              {contentView === 'saved' && (
+                <button
+                  className={`run-mode-favorites-toggle ${showFavoritesOnly ? 'active' : ''}`}
+                  onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                  title={showFavoritesOnly ? 'Show all strategies' : 'Show favorites only'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill={showFavoritesOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>
+        
+        <div className="run-mode-content-toggle">
+          <button
+            className={`run-mode-content-toggle-btn ${contentView === 'saved' ? 'active' : ''}`}
+            onClick={() => setContentView('saved')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+            Saved
+          </button>
+          <button
+            className={`run-mode-content-toggle-btn ${contentView === 'transactions' ? 'active' : ''}`}
+            onClick={() => setContentView('transactions')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+            Past Transactions
+          </button>
+        </div>
       </div>
-      <div className={`run-mode-list ${strategyViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
+      
+      {contentView === 'saved' ? (
+        <div className={`run-mode-list ${strategyViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
         {savedScenes.length === 0 ? (
           <div className="run-mode-empty">
             <p className="run-mode-empty-title">No strategies saved</p>
@@ -398,7 +431,10 @@ export default function Run({
               );
             })
         )}
-      </div>
+        </div>
+      ) : (
+        <TransactionHistory isLoaded={isLoaded} />
+      )}
       
       {/* Strategy Details Modal */}
       <StratDetails

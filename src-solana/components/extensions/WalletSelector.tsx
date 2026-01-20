@@ -13,11 +13,19 @@ interface WalletOption {
 
 const walletOptions: WalletOption[] = [
   {
+    id: 'phantom',
+    name: 'Phantom',
+    icon: '',
+    chain: 'Solana',
+    description: 'Recommended for Solana',
+    active: true
+  },
+  {
     id: 'metamask',
     name: 'MetaMask',
-    icon: 'MM',
-    chain: 'EVM',
-    description: '',
+    icon: '',
+    chain: 'Solana/EVM',
+    description: 'Supports Solana & EVM',
     active: true
   }
 ];

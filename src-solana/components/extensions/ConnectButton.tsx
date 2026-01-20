@@ -77,8 +77,8 @@ export default function ConnectButton({ className, onConnected }: { className?: 
   }, [connectedWallet]);
 
   useEffect(() => {
-    // Fetch Siphon Vault balance when wallet is connected
-    const fetchBalance = () => {
+    // Fetch balance when wallet is connected
+    const fetchBalance = async () => {
       if (connectedWallet && connectedWallet.id === 'metamask') {
         try {
           const VAULT_CHAIN_ID = 11155111; // Sepolia id
@@ -91,6 +91,57 @@ export default function ConnectButton({ className, onConnected }: { className?: 
         } catch (error) {
           console.error('Failed to fetch Siphon Vault balance:', error);
           setBalance(0);
+        }
+      } else if (connectedWallet && (connectedWallet.id === 'phantom' || connectedWallet.id === 'solflare' || connectedWallet.id === 'solana')) {
+        // Fetch Solana balance for Phantom/Solana wallets
+        try {
+          const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
+          
+          // Try to use wallet provider's connection first (Phantom)
+          let connection: InstanceType<typeof Connection> | null = null;
+          if (connectedWallet.id === 'phantom' && (window as any).solana?.connection) {
+            connection = (window as any).solana.connection;
+          }
+          
+          // If we have a wallet connection, use it
+          if (connection) {
+            const publicKey = new PublicKey(connectedWallet.address);
+            const balance = await connection.getBalance(publicKey);
+            const solBalance = balance / LAMPORTS_PER_SOL;
+            setBalance(solBalance);
+          } else {
+            // Use public RPC endpoints with fallback
+            const rpcEndpoints = [
+              'https://rpc.ankr.com/solana',
+              'https://solana-api.projectserum.com',
+              'https://api.mainnet-beta.solana.com',
+            ];
+            
+            // Try endpoints until one works
+            let lastError: Error | null = null;
+            for (const endpoint of rpcEndpoints) {
+              try {
+                const testConnection = new Connection(endpoint, 'confirmed');
+                const publicKey = new PublicKey(connectedWallet.address);
+                const balance = await testConnection.getBalance(publicKey);
+                const solBalance = balance / LAMPORTS_PER_SOL;
+                setBalance(solBalance);
+                return; // Success, exit early
+              } catch (err) {
+                lastError = err as Error;
+                console.warn(`Failed to fetch balance from ${endpoint}:`, err);
+                continue; // Try next endpoint
+              }
+            }
+            
+            // If all endpoints failed, log error but don't crash
+            console.error('All RPC endpoints failed:', lastError);
+            setBalance(null);
+          }
+        } catch (error) {
+          console.error('Failed to fetch Solana balance:', error);
+          // Don't set balance to 0, keep it null so it shows as "0.0000 SOL" but doesn't hide the button
+          setBalance(null);
         }
       } else {
         setBalance(null);
@@ -116,15 +167,17 @@ export default function ConnectButton({ className, onConnected }: { className?: 
         setConnectedWallet(result.wallet);
         onConnected?.(result.wallet);
         window.dispatchEvent(new Event('walletConnected'));
-        if (!window.ethereum) {
-        throw new Error('No Ethereum provider found');
+        
+        // Only initialize ethers provider for MetaMask (EVM wallets)
+        if (walletId === 'metamask' && window.ethereum) {
+          await initializeWithProvider(window.ethereum);
         }
-        await initializeWithProvider(window.ethereum);
+        
         // Persist wallet connection
         localStorage.setItem('siphon-connected-wallet', JSON.stringify(result.wallet));
       } else {
         console.error(`Failed to connect ${walletId} wallet:`, result.error);
-        alert(`MetaMask connection failed: ${result.error}`);
+        alert(`${walletId === 'phantom' ? 'Phantom' : walletId === 'metamask' ? 'MetaMask' : 'Wallet'} connection failed: ${result.error}`);
       }
     } catch (error: unknown) {
       console.error(`Connection error for ${walletId}:`, error);
@@ -156,7 +209,9 @@ export default function ConnectButton({ className, onConnected }: { className?: 
               <path d="M12 1v6m0 6v6" />
             </svg>
             <span className="wallet-balance-text">
-              {balance !== null ? `${balance.toFixed(4)} ETH` : `0.0000 ETH`}
+              {connectedWallet.chain === 'Solana' 
+                ? (balance !== null ? `${balance.toFixed(4)} SOL` : `0.0000 SOL`)
+                : balance !== null ? `${balance.toFixed(4)} ETH` : `0.0000 ETH`}
             </span>
           </div>
         </button>
