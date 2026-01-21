@@ -9,7 +9,7 @@ import DepositModal from './DepositModal';
 import WithdrawModal from './WithdrawModal';
 import OrderForm from './OrderForm';
 import OrderList from './OrderList';
-// import PriceChart from './PriceChart'; // Temporarily disabled - chart causing page blocking
+import PriceChart from './PriceChart';
 import ManageLiquidity from './ManageLiquidity';
 import { WalletInfo } from '@/components/extensions/walletManager';
 import './darkpool.css';
@@ -244,9 +244,8 @@ export default function DarkPoolInterface({
               </span>
             </div>
           </div>
-          {/* Chart temporarily disabled - causing page blocking */}
-          <div className="chart-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255, 255, 255, 0.5)' }}>
-            <span>Chart temporarily disabled</span>
+          <div className="chart-container">
+            <PriceChart pair={selectedPair} timeframe={timeframe} />
           </div>
         </div>
 

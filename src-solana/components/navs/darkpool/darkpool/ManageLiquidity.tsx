@@ -21,7 +21,7 @@ export default function ManageLiquidity({
   return (
     <div className="manage-liquidity">
       <div className="info-box">
-        <span>Add funds to start trading. Withdraw anytime to your wallet.</span>
+        <span>Add funds to start trading. Withdraw anytime to your wallet. </span>
       </div>
 
       <BalanceDisplay

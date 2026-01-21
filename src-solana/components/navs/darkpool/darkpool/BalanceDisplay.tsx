@@ -150,7 +150,6 @@ export default function BalanceDisplay({
       </div>
 
       <div className="balance-footer">
-        <span className="encryption-badge">Encrypted on-chain</span>
         <span className="last-update">
           Updated: {lastUpdate.toLocaleTimeString()}
         </span>
