@@ -1,0 +1,117 @@
+.heroContainer {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  z-index: 3;
+  pointer-events: none;
+  font-family: 'Source Code Pro', monospace;
+  padding: 4em 5em;
+  padding-top:650px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.heroTagline {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #ffffff;
+  margin: 0;
+  font-family: 'Source Code Pro', monospace;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  max-width: 800px;
+}
+
+.heroTitle {
+  font-size: 200px;
+  font-weight: bold;
+  line-height: 1;
+  color: #ffffff;
+  margin: 0;
+  font-family: 'Source Code Pro', monospace;
+}
+
+.heroSubtitle {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  margin-left: 10px;
+  margin-top: 1rem;
+  font-family: 'Source Code Pro', monospace;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+
+.heroTextContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.logo {
+  flex-shrink: 0;
+  width: 120px;
+  height: 98px;
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .heroContainer {
+    padding-top: 30vh;
+    padding-left: 2em;
+    padding-right: 2em;
+  }
+
+  .heroTagline {
+    font-size: 48px;
+  }
+
+  .heroSubtitle {
+    font-size: 18px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .heroContainer {
+    padding: 3em 2em;
+    padding-top: 70vh;
+  }
+
+  .heroTagline {
+    font-size: 36px;
+    max-width: 100%;
+  }
+
+  .heroSubtitle {
+    font-size: 16px;
+    margin-top: 0.75rem;
+  }
+}
+
+/* Small mobile */
+@media (max-width: 480px) {
+  .heroContainer {
+    padding: 2em 1.5em;
+    padding-top: 70vh; /* Increased by 40% from 20vh (20vh * 1.4 = 28vh) */
+  }
+
+  .heroTagline {
+    font-size: 30px;
+    max-width: 100%;
+  }
+
+  .heroSubtitle {
+    font-size: 14px;
+    margin-top: 0.5rem;
+  }
+}
+
