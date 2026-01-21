@@ -5,10 +5,21 @@ import { useOrders } from './useOrders';
 import './darkpool.css';
 
 interface OrderListProps {
-  walletAddress: string;
+  walletAddress: string | null;
 }
 
 export default function OrderList({ walletAddress }: OrderListProps) {
+  // Don't render if no wallet address
+  if (!walletAddress) {
+    return (
+      <div className="order-list">
+        <div className="empty-state">
+          <p>Connect wallet to view orders</p>
+        </div>
+      </div>
+    );
+  }
+
   const { orders, loading, error, fetchOrders } = useOrders(walletAddress);
 
   if (loading && orders.length === 0) {

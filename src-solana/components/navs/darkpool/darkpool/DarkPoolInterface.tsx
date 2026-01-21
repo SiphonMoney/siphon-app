@@ -9,7 +9,7 @@ import DepositModal from './DepositModal';
 import WithdrawModal from './WithdrawModal';
 import OrderForm from './OrderForm';
 import OrderList from './OrderList';
-import PriceChart from './PriceChart';
+// import PriceChart from './PriceChart'; // Temporarily disabled - chart causing page blocking
 import ManageLiquidity from './ManageLiquidity';
 import { WalletInfo } from '@/components/extensions/walletManager';
 import './darkpool.css';
@@ -244,8 +244,9 @@ export default function DarkPoolInterface({
               </span>
             </div>
           </div>
-          <div className="chart-container">
-            <PriceChart pair={selectedPair} timeframe={timeframe} />
+          {/* Chart temporarily disabled - causing page blocking */}
+          <div className="chart-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255, 255, 255, 0.5)' }}>
+            <span>Chart temporarily disabled</span>
           </div>
         </div>
 
@@ -253,18 +254,24 @@ export default function DarkPoolInterface({
         <div className="order-form-section">
           <div className="order-form-header">
             <div className="view-toggle">
-              <span 
+              <button
+                type="button"
                 className={`view-toggle-text ${orderView === 'place' ? 'active' : ''}`}
-                onClick={() => setOrderView('place')}
+                onClick={() => {
+                  setOrderView('place');
+                }}
               >
                 Place Order
-              </span>
-              <span 
+              </button>
+              <button
+                type="button"
                 className={`view-toggle-text ${orderView === 'liquidity' ? 'active' : ''}`}
-                onClick={() => setOrderView('liquidity')}
+                onClick={() => {
+                  setOrderView('liquidity');
+                }}
               >
                 Manage Liquidity
-              </span>
+              </button>
             </div>
           </div>
           

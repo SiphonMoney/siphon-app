@@ -456,10 +456,10 @@
 
 /* Balance Display */
 .balance-card {
-  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.8) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   margin-bottom: 24px;
 }
 
@@ -471,7 +471,7 @@
 }
 
 .balance-header h3 {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   color: #ffffff;
   margin: 0;
@@ -502,17 +502,17 @@
 }
 
 .balance-items {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
 .balance-item {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 12px;
 }
 
 .balance-item-header {
@@ -522,7 +522,7 @@
 .token-name {
   font-weight: 600;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .balance-amounts {
@@ -540,23 +540,23 @@
 
 .balance-primary .label {
   color: #b8b8b8;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .balance-primary .amount {
   color: #ffffff;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .balance-secondary .label {
   color: #888;
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .balance-secondary .amount {
   color: #b8b8b8;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .balance-footer {
@@ -570,6 +570,15 @@
 
 .encryption-badge {
   color: #4caf50;
+  font-size: 11px;
+  font-family: var(--font-source-code), monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.order-encryption-badge {
+  margin-top: 16px;
+  margin-bottom: 0;
 }
 
 .last-update {
@@ -578,10 +587,10 @@
 
 /* Order Form */
 .order-form {
-  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.8) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .order-form h3 {
@@ -666,10 +675,10 @@
 
 /* Order List */
 .order-list {
-  background: linear-gradient(135deg, rgba(26, 26, 46, 0.8) 0%, rgba(22, 33, 62, 0.8) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .order-list-header {
@@ -1642,7 +1651,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: rgba(0, 0, 0, 0.3);
+  background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 20px;
@@ -1767,7 +1776,7 @@
 .order-form-section {
   display: flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.3);
+  background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 20px;
@@ -1783,9 +1792,13 @@
 
 .view-toggle {
   display: flex;
-  gap: 16px;
+  gap: 8px;
   position: relative;
   z-index: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 4px;
 }
 
 .view-toggle-text {
@@ -1797,25 +1810,85 @@
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  font-family: var(--font-source-code), monospace;
 }
 
 .view-toggle-text:hover {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .view-toggle-text.active {
   color: #ffffff;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
-  padding-bottom: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  padding-bottom: 8px;
 }
 
 .order-form-content {
   flex: 1;
 }
 
+.manage-liquidity {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.liquidity-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.liquidity-action-btn {
+  flex: 1;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-source-code), monospace;
+}
+
+.liquidity-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.liquidity-action-btn.add {
+  background: rgba(76, 175, 80, 0.2);
+  border-color: rgba(76, 175, 80, 0.4);
+  color: #4caf50;
+}
+
+.liquidity-action-btn.add:hover {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: rgba(76, 175, 80, 0.5);
+}
+
+.liquidity-action-btn.withdraw {
+  background: rgba(244, 67, 54, 0.2);
+  border-color: rgba(244, 67, 54, 0.4);
+  color: #f44336;
+}
+
+.liquidity-action-btn.withdraw:hover {
+  background: rgba(244, 67, 54, 0.3);
+  border-color: rgba(244, 67, 54, 0.5);
+}
+
 .order-history-section {
   margin-top: 24px;
-  background: rgba(0, 0, 0, 0.3);
+  background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 20px;

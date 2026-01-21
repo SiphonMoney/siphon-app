@@ -18,19 +18,15 @@ export default function ManageLiquidity({
   onDeposit,
   onWithdraw
 }: ManageLiquidityProps) {
-  const [balanceKey, setBalanceKey] = useState(0);
-
-  const handleRefresh = () => {
-    setBalanceKey(prev => prev + 1);
-  };
-
   return (
     <div className="manage-liquidity">
+      <div className="info-box">
+        <span>Add funds to start trading. Withdraw anytime to your wallet.</span>
+      </div>
+
       <BalanceDisplay
-        key={balanceKey}
         walletAddress={walletAddress}
         signMessage={signMessage}
-        onRefresh={handleRefresh}
       />
 
       <div className="liquidity-actions">
@@ -46,10 +42,6 @@ export default function ManageLiquidity({
         >
           Withdraw
         </button>
-      </div>
-
-      <div className="info-box">
-        <span>Add funds to start trading. Withdraw anytime to your wallet.</span>
       </div>
     </div>
   );

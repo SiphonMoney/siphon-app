@@ -99,6 +99,10 @@ export default function OrderForm({
 
   return (
     <div className="order-form">
+      <div className="info-box order-form-info">
+        <span>Enter price and amount to place your order. Orders are matched privately.</span>
+      </div>
+
       <div className="order-type-selector">
         <button
           className={`order-type-btn ${orderType === 'buy' ? 'active buy' : ''}`}
@@ -153,8 +157,8 @@ export default function OrderForm({
         />
       </div>
 
-      <div className="info-box">
-        <span>Your order details are encrypted end-to-end. Only MPC can see them for matching.</span>
+      <div className="encryption-badge order-encryption-badge">
+        Your order details are encrypted end-to-end.
       </div>
 
       {error && (

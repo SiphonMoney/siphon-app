@@ -1,7 +1,7 @@
 // BalanceDisplay.tsx - Display encrypted balance with client-side decryption
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBalance } from './useBalance';
 import { getOrCreateUserKeys } from './encryption';
 import { USDC_DECIMALS } from './constants';
@@ -20,6 +20,7 @@ export default function BalanceDisplay({
 }: BalanceDisplayProps) {
   const { balance, loading, error, refreshBalance } = useBalance(walletAddress);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const hasLoadedRef = useRef(false);
 
   const handleRefresh = useCallback(async () => {
     try {
@@ -36,11 +37,32 @@ export default function BalanceDisplay({
     }
   }, [walletAddress, signMessage, refreshBalance, onRefresh]);
 
+  // Only load once when walletAddress is set
   useEffect(() => {
-    // Only refresh when wallet address changes, not when callbacks change
-    if (walletAddress) {
-      handleRefresh();
+    if (!walletAddress) {
+      hasLoadedRef.current = false;
+      return;
     }
+    
+    // Only load if we haven't loaded for this wallet address yet
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      let mounted = true;
+      const timeoutId = setTimeout(() => {
+        if (mounted) {
+          handleRefresh().catch(err => {
+            console.error('Error in handleRefresh:', err);
+            // Don't block the UI if refresh fails
+          });
+        }
+      }, 100);
+      
+      return () => {
+        mounted = false;
+        clearTimeout(timeoutId);
+      };
+    }
+    // Only depend on walletAddress to prevent infinite loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletAddress]);
 
