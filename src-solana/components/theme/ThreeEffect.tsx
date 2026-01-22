@@ -273,7 +273,7 @@ export default function ThreeEffect() {
     { 
       name: "Liquidity Sniping", 
       type: "STRATEGY",
-      command: "openio snipe --token 0x... --amount 5ETH --gas-price",
+      command: "openio snipe --token 0x... --amount 10SOL --gas-price",
       description: "Front-run new liquidity pools",
       badges: ["priority: high", "maxGas: 500000", "retries: 3"],
       color: "#ff6b6b",
@@ -287,9 +287,9 @@ export default function ThreeEffect() {
       type: "COMMAND",
       command: "openio protect --tx-hash 0x... --max-slippage",
       description: "Protect transactions from MEV attacks",
-      badges: ["method: private-pool", "cost: 0.01ETH", "delay: 100ms"],
+      badges: ["method: private-pool", "cost: 2SOL", "delay: 100ms"],
       color: "#ffd93d",
-      leftData: "0.01ETH",
+      leftData: "30SOL",
       rightData: "LOW",
       leftLabel: "COST",
       rightLabel: "RISK"
@@ -297,7 +297,7 @@ export default function ThreeEffect() {
     { 
       name: "Arbitrage", 
       type: "STRATEGY",
-      command: "openio arbitrage --pair WETH/DAI --amount 5000",
+      command: "openio arbitrage --pair SOL/DAI --amount 5000",
       description: "Exploit price differences across exchanges",
       badges: ["minProfit: 0.5%", "timeout: 30s", "gasLimit: 300000"],
       color: "#6bcf7f",
@@ -333,9 +333,9 @@ export default function ThreeEffect() {
     { 
       name: "Flash Loans", 
       type: "COMMAND",
-      command: "openio flash --amount 100ETH --strategy arbitrage",
+      command: "openio flash --amount 100SOL --strategy arbitrage",
       description: "Instant capital leverage without collateral",
-      badges: ["fee: 0.09%", "maxAmount: 1000ETH", "chains: 5"],
+      badges: ["fee: 0.09%", "maxAmount: 1000SOL", "chains: 5"],
       color: "#e74c3c",
       leftData: "0.09%",
       rightData: "HIGH",
