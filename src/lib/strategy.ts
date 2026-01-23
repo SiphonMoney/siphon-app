@@ -1,7 +1,7 @@
 export async function createStrategy(strategyData: unknown) {
   try {
     // Use localhost instead of 0.0.0.0 (browsers can't connect to 0.0.0.0)
-    const BASE_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "http://localhost:5009";
+    const BASE_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "https://54.252.143.26.sslip.io";
     // Get API token from environment (for production)
     const apiToken = process.env.NEXT_PUBLIC_API_TOKEN || "";
     
