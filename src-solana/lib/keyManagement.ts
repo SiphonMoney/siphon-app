@@ -2,10 +2,14 @@
 // Based on X25519_KEY_MANAGEMENT_SPEC.md
 
 import { PublicKey } from '@solana/web3.js';
+import { x25519 as nobleX25519 } from '@noble/curves/ed25519.js';
 
 /**
  * DECISION 1: Using Web Crypto API for HKDF instead of @noble/hashes
  * Reason: Reduces bundle size, native browser support, same security guarantees
+ * 
+ * Using @noble/curves/x25519 for proper x25519 scalar multiplication
+ * This is the correct cryptographic operation for deriving public keys
  */
 
 export interface X25519Keys {
@@ -28,8 +32,13 @@ const CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
  * DECISION 2: Signature message format
  * - Includes domain for phishing protection
  * - Includes wallet address for account binding
- * - Includes timestamp for replay prevention
+ * - Deterministic (NO timestamp) to ensure same signature derives same keys
  * - Clear warning for user education
+ * 
+ * IMPORTANT: This message MUST be deterministic (no timestamps, no random values)
+ * so that signing it multiple times produces the same signature, which derives
+ * the same x25519 keys. This allows users to decrypt their encrypted balances
+ * and orders consistently across sessions.
  */
 export function createSignatureMessage(walletPubkey: PublicKey): string {
   return `Dark Pool DEX - Viewing Key Derivation
@@ -41,7 +50,6 @@ Purpose: Decrypt your encrypted balance and orders
 ⚠️ WARNING: Only sign this message on the official Dark Pool DEX site.
 This signature cannot move your funds but will allow viewing your private balance.
 
-Timestamp: ${Date.now()}
 Version: ${KEY_VERSION}`;
 }
 
@@ -87,20 +95,26 @@ async function hkdf(
 
 /**
  * DECISION 4: Deterministic x25519 key derivation
- * Uses HKDF-SHA256 to derive 32-byte seed from signature
+ * Uses HKDF-SHA256 to derive 32-byte private key seed from signature
+ * Then uses proper x25519 scalar multiplication to derive public key
  * 
- * NOTE: For now, this creates a "placeholder" x25519 keypair since we don't have
- * the @arcium-hq/client library yet. In production, use x25519.getPublicKey()
+ * Flow:
+ * 1. Ed25519 signature (64 bytes) → HKDF → x25519 private key (32 bytes) ✅ Deterministic
+ * 2. x25519 private key → scalar multiplication → x25519 public key (32 bytes) ✅ Correct crypto
  * 
- * @param signature - Ed25519 signature from wallet
- * @param walletPubkey - User's Solana public key
+ * @param signature - Ed25519 signature from wallet (64 bytes)
+ * @param walletPubkey - User's Solana public key (for HKDF info parameter)
  */
 async function deriveX25519FromSignature(
   signature: Uint8Array,
   walletPubkey: PublicKey
 ): Promise<X25519Keys> {
   
-  console.log('📝 Deriving x25519 keypair from wallet signature...');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('📝 DERIVING x25519 KEYPAIR FROM WALLET SIGNATURE');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('   Wallet Address:', walletPubkey.toBase58());
+  console.log('   Signature length:', signature.length, 'bytes');
   
   // Derive 32-byte seed using HKDF
   const privateKey = await hkdf(
@@ -111,36 +125,35 @@ async function deriveX25519FromSignature(
   );
   
   /**
-   * DECISION 5: Placeholder x25519 public key derivation
-   * TODO: Replace with @arcium-hq/client's x25519.getPublicKey(privateKey)
-   * 
-   * For now, we derive it deterministically from the private key
-   * This is NOT the correct x25519 curve multiplication, just a placeholder
+   * DECISION 5: Proper x25519 public key derivation
+   * Uses @noble/curves/x25519 for correct scalar multiplication on Curve25519
+   * This is the standard cryptographic operation: publicKey = privateKey * G
+   * where G is the base point on Curve25519
    */
-  const publicKey = await derivePublicKeyPlaceholder(privateKey);
+  const publicKey = nobleX25519.getPublicKey(privateKey);
   
   console.log('✅ x25519 keypair derived successfully');
-  console.log('   Private key length:', privateKey.length);
-  console.log('   Public key length:', publicKey.length);
+  console.log('   Private key length:', privateKey.length, 'bytes');
+  console.log('   Public key length:', publicKey.length, 'bytes');
+  
+  // TEMPORARY: Log the x25519 public key for debugging
+  const publicKeyHex = Array.from(publicKey)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  const publicKeyBase64 = btoa(String.fromCharCode(...publicKey));
+  
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('🔑 x25519 PUBLIC KEY (HEX):');
+  console.log('   ', publicKeyHex);
+  console.log('🔑 x25519 PUBLIC KEY (Base64):');
+  console.log('   ', publicKeyBase64);
+  console.log('🔑 x25519 PUBLIC KEY (First 16 bytes for quick check):');
+  console.log('   ', publicKeyHex.substring(0, 32) + '...');
+  console.log('═══════════════════════════════════════════════════════');
   
   return { privateKey, publicKey };
 }
 
-/**
- * PLACEHOLDER: Derive public key deterministically
- * TODO: Replace with proper x25519 scalar multiplication
- * 
- * In production, use: x25519.getPublicKey(privateKey) from @arcium-hq/client
- */
-async function derivePublicKeyPlaceholder(privateKey: Uint8Array): Promise<Uint8Array> {
-  // Derive public key using HKDF for determinism (NOT REAL X25519!)
-  return await hkdf(
-    privateKey,
-    'darkpool_pubkey_v1',
-    new TextEncoder().encode('placeholder'),
-    32
-  );
-}
 
 /**
  * DECISION 6: Encrypted caching in localStorage
@@ -297,7 +310,10 @@ export async function getOrDeriveX25519Keys(
   signMessage: (message: Uint8Array) => Promise<Uint8Array>
 ): Promise<X25519Keys> {
   
-  console.log('🔑 Starting x25519 key derivation process...');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('🔑 STARTING x25519 KEY DERIVATION PROCESS');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('   Wallet:', walletPubkey.toBase58());
   
   // Create deterministic signature message
   const message = createSignatureMessage(walletPubkey);
@@ -313,8 +329,23 @@ export async function getOrDeriveX25519Keys(
     const cached = await getCachedX25519Key(signature, walletPubkey);
     
     if (cached) {
-      // Cache hit - derive public key and return
-      const publicKey = await derivePublicKeyPlaceholder(cached);
+      // Cache hit - derive public key using proper x25519 scalar multiplication
+      const publicKey = nobleX25519.getPublicKey(cached);
+      
+      // TEMPORARY: Log the x25519 public key for debugging (cache hit)
+      const publicKeyHex = Array.from(publicKey)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      const publicKeyBase64 = btoa(String.fromCharCode(...publicKey));
+      
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅ CACHE HIT - Using cached private key');
+      console.log('🔑 x25519 PUBLIC KEY FROM CACHE (HEX):');
+      console.log('   ', publicKeyHex);
+      console.log('🔑 x25519 PUBLIC KEY FROM CACHE (Base64):');
+      console.log('   ', publicKeyBase64);
+      console.log('═══════════════════════════════════════════════════════');
+      
       return { privateKey: cached, publicKey };
     }
     
@@ -365,7 +396,7 @@ export async function rotateX25519Keys(walletPubkey: PublicKey): Promise<X25519K
   
   // Generate NEW random keypair (not derived)
   const privateKey = crypto.getRandomValues(new Uint8Array(32));
-  const publicKey = await derivePublicKeyPlaceholder(privateKey);
+  const publicKey = nobleX25519.getPublicKey(privateKey);
   
   // Store with special marker (not cached with signature)
   const storageKey = `x25519_rotated_${walletPubkey.toBase58()}`;

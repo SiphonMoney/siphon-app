@@ -37,7 +37,7 @@ export default function DarkPoolInterface({
   // 🎭 DEMO MODE: Bypass initialization for testing/demo
   // Set to true to skip ledger check and go straight to main interface
   // TODO: Remove this before production launch
-  const DEMO_MODE = true;
+  const DEMO_MODE = false;
   
   console.log('🎭 DEMO MODE:', DEMO_MODE ? 'ENABLED' : 'DISABLED');
 

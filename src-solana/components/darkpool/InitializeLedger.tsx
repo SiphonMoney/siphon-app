@@ -35,26 +35,117 @@ export default function InitializeLedger({ walletAddress, onComplete, onCancel }
       const solflare = typeof window !== 'undefined' ? (window as any).solflare : null;
       const provider = solflare?.isSolflare ? solflare : solana;
       
-      if (!provider || !provider.signMessage) {
-        throw new Error('Wallet does not support message signing');
+      if (!provider) {
+        throw new Error('No wallet provider found. Please connect your wallet first.');
+      }
+      
+      if (!provider.signMessage) {
+        throw new Error('Wallet does not support message signing. Please use Phantom or Solflare wallet.');
+      }
+      
+      // Ensure wallet is connected
+      if (!provider.publicKey && provider.connect) {
+        console.log('Wallet not connected, attempting to connect...');
+        await provider.connect();
+      }
+      
+      if (!provider.publicKey) {
+        throw new Error('Wallet is not connected. Please connect your wallet and try again.');
+      }
+      
+      // Verify the connected wallet matches the expected address
+      const connectedAddress = provider.publicKey.toString();
+      if (connectedAddress !== walletAddress) {
+        throw new Error(`Wallet address mismatch. Expected ${walletAddress}, got ${connectedAddress}`);
       }
       
       let x25519Keys: X25519Keys;
       
       try {
-        setProgress('Deriving encryption keys from signature...');
-        
         // This will:
         // 1. Request signature from wallet (user approves in wallet popup)
         // 2. Derive x25519 keys using HKDF-SHA256
         // 3. Cache encrypted keys in localStorage
+        
+        // Update progress before requesting signature (this is when user sees the prompt)
+        setProgress('Requesting wallet signature... Please approve in your wallet popup.');
+        
+        // Get the message text for display in wallet
+        const { createSignatureMessage } = await import('@/lib/keyManagement');
+        const messageText = createSignatureMessage(publicKey);
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('🔑 MESSAGE TEXT:');
+        console.log('   ', messageText);
+        console.log('═══════════════════════════════════════════════════════');
+        
         x25519Keys = await getOrDeriveX25519Keys(
           publicKey,
           async (message: Uint8Array) => {
-            const signature = await provider.signMessage(message, 'utf8');
+            console.log('📝 Requesting signature from wallet...');
+            console.log('   Message length:', message.length, 'bytes');
+            console.log('   Message preview:', messageText.substring(0, 100) + '...');
+            console.log('   Provider type:', solflare?.isSolflare ? 'Solflare' : 'Phantom/Other');
+            
+            // Solana wallet providers return { signature: Uint8Array }
+            // Handle both Phantom and Solflare APIs
+            let result: { signature: Uint8Array } | Uint8Array;
+            
+            try {
+              // Try Phantom/Solflare API with display option: signMessage({ message: Uint8Array, display?: string })
+              console.log('   Attempting wallet API: signMessage({ message, display })');
+              result = await provider.signMessage({
+                message,
+                display: messageText
+              });
+              console.log('   ✅ Wallet API with display succeeded');
+            } catch (displayError) {
+              console.log('   ⚠️ Display API failed, trying simple message API...');
+              try {
+                // Try Phantom API: signMessage(message: Uint8Array)
+                result = await provider.signMessage(message);
+                console.log('   ✅ Simple message API succeeded');
+              } catch (simpleError) {
+                console.log('   ⚠️ Simple API failed, trying object-based API...');
+                // Try object-based API without display
+                try {
+                  result = await provider.signMessage({ message });
+                  console.log('   ✅ Object-based API succeeded');
+                } catch (objectError) {
+                  console.error('❌ All signMessage attempts failed:', { 
+                    displayError, 
+                    simpleError, 
+                    objectError 
+                  });
+                  throw new Error(
+                    `Failed to sign message: ${displayError instanceof Error ? displayError.message : 'Unknown error'}. ` +
+                    'Please ensure your wallet is connected and try again. If the issue persists, try refreshing the page.'
+                  );
+                }
+              }
+            }
+            
+            // Extract signature from result
+            // Some wallets return the signature directly, others return { signature }
+            let signature: Uint8Array;
+            if (result instanceof Uint8Array) {
+              signature = result;
+            } else if (result && typeof result === 'object' && 'signature' in result) {
+              signature = result.signature;
+            } else {
+              console.error('❌ Invalid signature response:', result);
+              throw new Error('Invalid signature response from wallet. Expected Uint8Array or { signature: Uint8Array }');
+            }
+            
+            if (!signature || signature.length === 0) {
+              throw new Error('Received empty signature from wallet');
+            }
+            
+            console.log('✅ Signature received, length:', signature.length);
             return signature;
           }
         );
+        
+        setProgress('Keys derived successfully. Creating ledger...');
         
         console.log('✅ x25519 keys derived successfully');
         console.log('   Public key:', Buffer.from(x25519Keys.publicKey).toString('hex').slice(0, 16) + '...');
