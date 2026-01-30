@@ -18,14 +18,13 @@ import {
   TransactionResult,
   TOKEN_MINTS,
 } from './types';
-import { getRelayerCore, getPoolVaultPDA } from './relayer-core';
+import { getRelayerCore } from './relayer-core';
 import { getZkPoolClient } from './zk-pool-client';
 import {
   addUtxo,
   markUtxoSpent,
   getUnspentUtxos,
   getTotalBalance,
-  type StoredUtxo,
 } from './utxo-storage';
 
 export interface NoirZkConfig {
@@ -312,6 +311,7 @@ export class NoirZkClient {
     return this.depositSPL({ amount, mintAddress: TOKEN_MINTS.USDC });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async withdrawUSDC(amount: number, recipientAddress: string, utxos?: any[]): Promise<TransactionResult> {
     return this.withdrawSPL({ amount, mintAddress: TOKEN_MINTS.USDC, recipientAddress, utxos });
   }
@@ -325,6 +325,7 @@ export class NoirZkClient {
     return this.depositSPL({ amount, mintAddress: TOKEN_MINTS.USDT });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async withdrawUSDT(amount: number, recipientAddress: string, utxos?: any[]): Promise<TransactionResult> {
     return this.withdrawSPL({ amount, mintAddress: TOKEN_MINTS.USDT, recipientAddress, utxos });
   }

@@ -1,4 +1,4 @@
-import { PublicKey, Connection, SystemProgram, Transaction } from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { AnchorProvider, BN } from '@coral-xyz/anchor';
 import { getAssociatedTokenAddress, createSyncNativeInstruction, createCloseAccountInstruction, getAccount, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
 import { SiphonClient } from './siphon/client';

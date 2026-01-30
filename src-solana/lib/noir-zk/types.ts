@@ -71,11 +71,24 @@ export interface PrivateBalanceSPL {
   mintAddress: PublicKey;
 }
 
+export interface Utxo {
+  commitment: string;
+  nullifier: string;
+  secret: string;
+  value: string;
+  leafIndex: number;
+  encryptedOutput: string;
+  spent: boolean;
+  tokenType: 'SOL' | 'SPL';
+  mint?: string;
+}
+
 export interface TransactionResult {
   success: boolean;
   signature?: string;
   error?: string;
   proof?: string; // hex-encoded proof for on-chain verification
+  utxo?: Utxo;
 }
 
 // --- Siphon Vault Types ---

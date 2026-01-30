@@ -94,6 +94,7 @@ export interface LocalMerkleTree {
 class RelayerCore {
   private connection: Connection | null = null;
   private executorKeypair: Keypair | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private poseidonWasm: any = null;
 
   // Commitment index
@@ -130,6 +131,7 @@ class RelayerCore {
 
     this.connection = new Connection(rpcUrl, {
       commitment: 'confirmed',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       fetch: fetchWithRetry as any,
     });
 

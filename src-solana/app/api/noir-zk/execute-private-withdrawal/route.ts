@@ -10,11 +10,11 @@ import {
   createCloseAccountInstruction,
   getAccount,
 } from '@solana/spl-token';
-import { AnchorProvider, Program, Wallet, Idl, BN } from '@coral-xyz/anchor';
+import { AnchorProvider, Program, Wallet, Idl } from '@coral-xyz/anchor';
 import { initializeBackendClient, getBackendClient } from '@/lib/noir-zk/client';
 import bs58 from 'bs58';
 import idlJson from '@/lib/siphon/idl.json';
-import { SIPHON_PROGRAM_ID, NATIVE_SOL_MINT, CONFIG_SEED, VAULT_SEED, VAULT_TOKEN_SEED, WITHDRAWAL_SEED } from '@/lib/siphon/constants';
+import { SIPHON_PROGRAM_ID, NATIVE_SOL_MINT, CONFIG_SEED, VAULT_SEED, WITHDRAWAL_SEED } from '@/lib/siphon/constants';
 
 function getExecutorKeypair(): Keypair {
   const privateKey = process.env.EXECUTOR_PRIVATE_KEY;
@@ -71,10 +71,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let recipientPubkey: PublicKey;
     let ownerPubkey: PublicKey;
     try {
-      recipientPubkey = new PublicKey(recipientAddress);
+      new PublicKey(recipientAddress); // Validate recipient address format
       ownerPubkey = new PublicKey(ownerAddress);
     } catch {
       return NextResponse.json(
@@ -204,7 +203,6 @@ export async function POST(request: NextRequest) {
       if (!idl.address) {
         idl.address = SIPHON_PROGRAM_ID.toBase58();
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const program = new Program(idl as Idl, SIPHON_PROGRAM_ID, provider);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

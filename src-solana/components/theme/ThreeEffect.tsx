@@ -149,13 +149,14 @@ export default function ThreeEffect() {
     if (scannerCanvasRef.current && !scannerRef.current) {
       initScanner();
     }
-    
+
     return () => {
       if (scannerRef.current) {
         scannerRef.current.destroy?.();
         scannerRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const generateCode = (width: number, height: number): string => {

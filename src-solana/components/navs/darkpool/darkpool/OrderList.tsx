@@ -9,6 +9,9 @@ interface OrderListProps {
 }
 
 export default function OrderList({ walletAddress }: OrderListProps) {
+  // Always call hooks at the top level, before any conditional returns
+  const { orders, loading, error, fetchOrders } = useOrders(walletAddress || '');
+
   // Don't render if no wallet address
   if (!walletAddress) {
     return (
@@ -19,8 +22,6 @@ export default function OrderList({ walletAddress }: OrderListProps) {
       </div>
     );
   }
-
-  const { orders, loading, error, fetchOrders } = useOrders(walletAddress);
 
   if (loading && orders.length === 0) {
     return (

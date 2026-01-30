@@ -9,8 +9,8 @@ export interface X25519Keys {
 }
 
 export async function getOrDeriveX25519Keys(
-  publicKey: PublicKey,
-  signMessage: (message: Uint8Array) => Promise<Uint8Array>
+  _publicKey: PublicKey,
+  _signMessage: (message: Uint8Array) => Promise<Uint8Array>
 ): Promise<X25519Keys> {
   // TODO: Implement actual x25519 key derivation using HKDF-SHA256
   // For now, return mock keys

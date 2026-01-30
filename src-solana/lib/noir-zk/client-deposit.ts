@@ -21,7 +21,6 @@ import {
   getMerkleTreePDA,
   getPoolConfigPDA,
   getPoolVaultPDA,
-  getPoolTokenAccountPDA,
   getCommitmentRecordPDA,
 } from './relayer-core';
 import {
@@ -33,6 +32,7 @@ import {
 } from '@solana/spl-token';
 
 // Import Poseidon hasher
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let poseidonWasm: any = null;
 
 async function ensurePoseidon() {
@@ -113,7 +113,7 @@ export async function depositSOLClientSide(
     console.log(`[Client Deposit] Depositing ${lamports / LAMPORTS_PER_SOL} SOL`);
 
     // Generate commitment/nullifier client-side
-    const { commitment, nullifier, secret, precommitment } = await generateCommitment(BigInt(lamports));
+    const { commitment, nullifier, secret } = await generateCommitment(BigInt(lamports));
 
     // Convert commitment to bytes
     const commitmentBN = new BN(commitment);
@@ -216,9 +216,10 @@ export async function depositSOLClientSide(
         skipPreflight: false,
         preflightCommitment: 'confirmed',
       });
-    } catch (sendError: any) {
+    } catch (sendError: unknown) {
       // Check if error is "already processed" - might indicate success
-      if (sendError.message?.includes('already been processed')) {
+      const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
+      if (errorMessage.includes('already been processed')) {
         console.log('[Client Deposit] Transaction may have already succeeded, checking on-chain state...');
 
         // Check if commitment was recorded on-chain
@@ -319,7 +320,7 @@ export async function depositSPLClientSide(
       await getAccount(connection, poolTokenAccount);
       poolTokenAccountExists = true;
       console.log('[Client Deposit SPL] Pool token account exists');
-    } catch (error) {
+    } catch {
       console.log('[Client Deposit SPL] Pool token account does not exist, will create');
       poolTokenAccountExists = false;
     }
@@ -433,9 +434,10 @@ export async function depositSPLClientSide(
         skipPreflight: false,
         preflightCommitment: 'confirmed',
       });
-    } catch (sendError: any) {
+    } catch (sendError: unknown) {
       // Check if error is "already processed" - might indicate success
-      if (sendError.message?.includes('already been processed')) {
+      const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
+      if (errorMessage.includes('already been processed')) {
         console.log('[Client Deposit SPL] Transaction may have already succeeded, checking on-chain state...');
 
         // Check if commitment was recorded on-chain

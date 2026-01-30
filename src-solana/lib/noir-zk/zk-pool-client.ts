@@ -11,9 +11,7 @@ import {
   Keypair,
   Transaction,
   SystemProgram,
-  TransactionInstruction,
   VersionedTransaction,
-  TransactionMessage,
   ComputeBudgetProgram,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
@@ -30,7 +28,6 @@ import {
   getMerkleTreePDA,
   getPoolConfigPDA,
   getPoolVaultPDA,
-  getPoolTokenAccountPDA,
   getNullifierPDA,
   getCommitmentRecordPDA,
 } from './relayer-core';
@@ -39,8 +36,7 @@ import { TransactionResult } from './types';
 // Import the IDL
 import idl from '../siphon/zk-pool-idl.json';
 
-// Fee recipient (same as in create-alt.js)
-const FEE_RECIPIENT = new PublicKey('DTqtRSGtGf414yvMPypCv2o1P8trwb9SJXibxLgAWYhw');
+// Fee recipient constant removed - now read from PoolConfig on-chain
 
 export interface DepositResult {
   success: boolean;
@@ -72,6 +68,7 @@ export class ZkPoolClient {
     // Create a wallet adapter for Anchor
     const wallet: Wallet = {
       publicKey: executorKeypair.publicKey,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signTransaction: async (tx: any) => {
         if (tx instanceof VersionedTransaction) {
           tx.sign([executorKeypair]);
@@ -80,6 +77,7 @@ export class ZkPoolClient {
         }
         return tx;
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signAllTransactions: async (txs: any[]) => {
         return txs.map(tx => {
           if (tx instanceof VersionedTransaction) {
@@ -98,7 +96,7 @@ export class ZkPoolClient {
       preflightCommitment: 'confirmed',
     });
 
-    // @ts-ignore - IDL type compatibility
+    // @ts-expect-error - IDL type compatibility
     this.program = new Program(idl, ZK_POOL_PROGRAM_ID, provider);
   }
 
@@ -120,7 +118,7 @@ export class ZkPoolClient {
       console.log(`[ZkPoolClient] Depositing ${lamports / LAMPORTS_PER_SOL} SOL, leaf index: ${nextIndex}`);
 
       // Generate commitment
-      const { commitment, nullifier, secret, precommitment } = await relayer.generateCommitment(BigInt(lamports));
+      const { commitment, nullifier, secret } = await relayer.generateCommitment(BigInt(lamports));
 
       // Convert commitment to bytes
       const commitmentBN = new BN(commitment);

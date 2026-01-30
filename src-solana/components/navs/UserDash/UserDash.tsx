@@ -21,7 +21,7 @@ interface WalletBalance {
 
 export default function UserDash({ isLoaded = true, walletConnected }: UserDashProps) {
   const wallet = useWallet();
-  const { publicKey, disconnect, connected } = wallet;
+  const { publicKey, disconnect } = wallet;
   const { connection } = useConnection();
 
   const [walletBalances, setWalletBalances] = useState<WalletBalance[] | null>(null);

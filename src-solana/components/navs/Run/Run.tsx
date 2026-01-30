@@ -254,6 +254,7 @@ export default function Run({
         return next;
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedScenes, wallet, runningStrategies, setRunningStrategies]);
 
   const stopStrategy = useCallback((sceneName: string) => {

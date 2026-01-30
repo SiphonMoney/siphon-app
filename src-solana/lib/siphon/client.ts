@@ -62,7 +62,6 @@ export class SiphonClient {
       idl.address = SIPHON_PROGRAM_ID.toBase58();
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.program = new Program(idl as Idl, SIPHON_PROGRAM_ID, provider);
   }
 

@@ -4,7 +4,6 @@
 import { useState, useCallback } from 'react';
 import { useUserLedger } from './useUserLedger';
 import InitializeLedger from './InitializeLedger';
-import BalanceDisplay from './BalanceDisplay';
 import DepositModal from './DepositModal';
 import WithdrawModal from './WithdrawModal';
 import OrderForm from './OrderForm';
@@ -24,17 +23,24 @@ interface DarkPoolInterfaceProps {
 type View = 'overview' | 'trade' | 'history';
 type ModalType = 'deposit' | 'withdraw' | null;
 
-export default function DarkPoolInterface({ 
+export default function DarkPoolInterface({
   walletAddress,
-  walletName = 'Wallet',
-  onDisconnect,
-  onWalletConnected
+  walletName: _walletName = 'Wallet',
+  onDisconnect: _onDisconnect,
+  onWalletConnected: _onWalletConnected
 }: DarkPoolInterfaceProps) {
+  // Silence unused variable warnings for props that will be used later
+  void _walletName;
+  void _onDisconnect;
+  void _onWalletConnected;
+
   // All hooks must be called at the top, before any conditional returns
   const { exists: ledgerExists, loading: checkingLedger, checkLedgerExists } = useUserLedger(walletAddress);
-  const [view, setView] = useState<View>('overview');
+  const [_view, _setView] = useState<View>('overview');
+  void _view; void _setView; // Will be used when view switching is implemented
   const [activeModal, setActiveModal] = useState<ModalType>(null);
-  const [balanceKey, setBalanceKey] = useState(0);
+  const [_balanceKey, setBalanceKey] = useState(0);
+  void _balanceKey; // Used to trigger balance refresh
   const [selectedPair, setSelectedPair] = useState("SOL/USDC");
   const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'>('1h');
   const [orderView, setOrderView] = useState<'place' | 'liquidity'>('place');

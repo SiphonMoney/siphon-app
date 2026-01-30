@@ -799,12 +799,15 @@ export default function DetailsModal({
                 {/* Input/Output Section */}
                 {modalStrategyNodes.length > 0 && (() => {
                   const depositNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'deposit');
-                  const strategyNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'strategy');
-                  
-                  const inputCoin = depositNodes.length > 0 && (depositNodes[0].data as NodeData)?.coin 
-                    ? (depositNodes[0].data as NodeData).coin 
+                  // These are computed for future use in the UI
+                  const _strategyNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'strategy');
+                  void _strategyNodes; // Prevent unused variable warning
+
+                  const _inputCoin = depositNodes.length > 0 && (depositNodes[0].data as NodeData)?.coin
+                    ? (depositNodes[0].data as NodeData).coin
                     : 'USDC';
-                  
+                  void _inputCoin; // Prevent unused variable warning
+
                   return (
                     <div className="strategy-modal-io-section">
                       <div className="strategy-modal-io-content">

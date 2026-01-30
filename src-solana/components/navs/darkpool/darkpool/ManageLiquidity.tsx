@@ -1,7 +1,6 @@
 // ManageLiquidity.tsx - Component for managing liquidity (deposit/withdraw)
 "use client";
 
-import { useState } from 'react';
 import BalanceDisplay from './BalanceDisplay';
 import './darkpool.css';
 

@@ -7,8 +7,8 @@ export interface UserKeys {
 }
 
 export async function getOrCreateUserKeys(
-  walletAddress: string,
-  signMessage: (message: Uint8Array) => Promise<Uint8Array>
+  _walletAddress: string,
+  _signMessage: (message: Uint8Array) => Promise<Uint8Array>
 ): Promise<UserKeys> {
   // TODO: Implement actual key derivation
   // For now, return mock keys
@@ -19,10 +19,14 @@ export async function getOrCreateUserKeys(
 }
 
 export async function encryptOrderData(
-  orderData: unknown,
-  publicKey: Uint8Array
-): Promise<Uint8Array> {
-  // TODO: Implement actual encryption
+  _orderData: unknown,
+  _privateKey: Uint8Array,
+  _mxePublicKey: Uint8Array
+): Promise<{ encrypted: Uint8Array; nonce: bigint }> {
+  // TODO: Implement actual encryption using x25519-xsalsa20-poly1305
   // For now, return mock encrypted data
-  return new Uint8Array(64).fill(0);
+  return {
+    encrypted: new Uint8Array(64).fill(0),
+    nonce: BigInt(0)
+  };
 }

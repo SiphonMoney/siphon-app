@@ -83,7 +83,7 @@ async function hkdf(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: new TextEncoder().encode(salt),
+      salt: new Uint8Array(new TextEncoder().encode(salt)),
       info: info as BufferSource,
     },
     key,

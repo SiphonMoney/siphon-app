@@ -34,11 +34,9 @@ export default function InitializeLedger({
 
       // Get signMessage function from wallet
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const solana =
-        typeof window !== "undefined" ? (window as any).solana : null;
+      const solana = typeof window !== "undefined" ? (window as any).solana : null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const solflare =
-        typeof window !== "undefined" ? (window as any).solflare : null;
+      const solflare = typeof window !== "undefined" ? (window as any).solflare : null;
       const provider = solflare?.isSolflare ? solflare : solana;
 
       if (!provider) {

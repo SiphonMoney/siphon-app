@@ -15,7 +15,7 @@ interface UseBalanceResult {
   refreshBalance: (privateKey: Uint8Array) => Promise<void>;
 }
 
-export function useBalance(walletAddress: string): UseBalanceResult {
+export function useBalance(_walletAddress: string): UseBalanceResult {
   const [balance, setBalance] = useState<{ 
     base_available: bigint;
     base_total: bigint;
@@ -25,7 +25,7 @@ export function useBalance(walletAddress: string): UseBalanceResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refreshBalance = useCallback(async (privateKey: Uint8Array) => {
+  const refreshBalance = useCallback(async (_privateKey: Uint8Array) => {
     setLoading(true);
     setError(null);
     try {

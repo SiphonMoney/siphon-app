@@ -64,7 +64,8 @@ export default function ConnectButton({ className, onConnected }: { className?: 
     if (!connected) {
       lastAddressRef.current = null;
     }
-  }, [connected, publicKey, wallet]); // Remove onConnected from deps to prevent infinite loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, publicKey, wallet]); // Note: onConnected intentionally excluded to prevent infinite loop
 
   const handleConnect = () => {
     setVisible(true);
