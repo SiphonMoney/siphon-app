@@ -29,11 +29,16 @@ function loadUtxos(): StoredUtxo[] {
   }
 }
 
-// Save UTXOs to localStorage
+// Save UTXOs to localStorage and dispatch event for UI updates
 function saveUtxos(utxos: StoredUtxo[]): void {
   try {
     localStorage.setItem(UTXO_STORAGE_KEY, JSON.stringify(utxos));
     console.log('[ZK Pool] Saved UTXOs to localStorage:', utxos.length, 'total');
+
+    // Dispatch event so UI components can refresh balances immediately
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zkPoolBalanceChanged'));
+    }
   } catch (e) {
     console.error('[ZK Pool] Failed to save UTXOs:', e);
   }
@@ -81,7 +86,11 @@ export function getZkPoolBalance(tokenSymbol: string): number {
   // Get unspent UTXOs for this specific token
   const unspent = getUnspentUtxos(tokenType, mint);
   const totalAmount = unspent.reduce((sum, u) => sum + BigInt(u.value), 0n);
-  return Number(totalAmount) / Math.pow(10, token.decimals);
+  const balance = Number(totalAmount) / Math.pow(10, token.decimals);
+
+  console.log(`[ZK Pool] getZkPoolBalance(${tokenSymbol}): ${unspent.length} unspent UTXOs, total=${balance}`);
+
+  return balance;
 }
 
 // Mark UTXO as spent

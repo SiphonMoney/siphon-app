@@ -107,7 +107,17 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       fetchZkPoolBalances();
     }, 10000);
 
-    return () => clearInterval(interval);
+    // Listen for ZK pool balance changes (from strategy execution, etc.)
+    const handleBalanceChange = () => {
+      console.log('[UserDash] ZK pool balance changed, refreshing...');
+      fetchZkPoolBalances();
+    };
+    window.addEventListener('zkPoolBalanceChanged', handleBalanceChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('zkPoolBalanceChanged', handleBalanceChange);
+    };
   }, [fetchWalletBalances, fetchZkPoolBalances]);
 
   const formatAddress = (address: string) => {

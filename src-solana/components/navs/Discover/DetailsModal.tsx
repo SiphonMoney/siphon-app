@@ -5,7 +5,7 @@ import { ReactFlow, ReactFlowProvider, Background, Node, Edge, Handle, Position,
 import '@xyflow/react/dist/style.css';
 import "./Discover.css";
 import { createStrategy } from "../../../lib/strategy";
-import { payStrategyFee, getZkPoolBalance, calculateStrategyCost as calculateExecutionCost } from "../../../lib/zkPoolHandler";
+import { payStrategyFee, getZkPoolBalance, calculateStrategyCost as calculateExecutionCost, reserveFundsForStrategy } from "../../../lib/zkPoolHandler";
 import { useWallet } from '@solana/wallet-adapter-react';
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
 
@@ -308,7 +308,19 @@ export default function DetailsModal({
       }
       addLog(`Remaining balance: ${feeResult.remainingBalance?.toFixed(6)} ${assetIn}`);
 
-      // Step 5: Build strategy payload for FHE backend
+      // Step 5: Reserve strategy amount (mark UTXOs as spent)
+      addLog(`Reserving ${amount} ${assetIn} for strategy...`);
+      const reserveResult = reserveFundsForStrategy(assetIn, amount);
+
+      if (!reserveResult.success) {
+        throw new Error(`Failed to reserve funds: ${reserveResult.error}`);
+      }
+      addLog(`✅ Reserved ${reserveResult.reservedCommitments.length} UTXO(s)`);
+      if (reserveResult.changeAmount && reserveResult.changeAmount > 0) {
+        addLog(`Change UTXO: ${reserveResult.changeAmount.toFixed(6)} ${assetIn}`);
+      }
+
+      // Step 6: Build strategy payload for FHE backend
       addLog('Building encrypted strategy payload...');
       const strategyPayload = {
         user_id: wallet.publicKey.toBase58(),

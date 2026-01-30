@@ -23,6 +23,7 @@ import BuildNav from "./BuildNav";
 import { CustomNode } from "./BuildNodes";
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createStrategy } from '@/lib/strategy';
+import { reserveFundsForStrategy } from '@/lib/zkPoolHandler';
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -218,7 +219,7 @@ export default function Build({
     const amount = parseFloat(String(depositNode.data.amount));
     const priceGoal = parseFloat(String(strategyNode.data.priceGoal));
 
-    console.log('[Strategy] Parsed parameters:', {
+    console.log('[Build] Parsed parameters:', {
       assetIn,
       assetOut,
       amount,
@@ -226,11 +227,25 @@ export default function Build({
       recipient: wallet.publicKey.toBase58(),
     });
 
+    // Reserve strategy amount (mark UTXOs as spent, create change UTXO)
+    console.log('[Build] Reserving strategy amount:', amount, assetIn);
+    const reserveResult = reserveFundsForStrategy(assetIn, amount);
+
+    if (!reserveResult.success) {
+      alert(`Failed to reserve funds: ${reserveResult.error}`);
+      console.error('[Build] Reserve funds failed:', reserveResult.error);
+      return;
+    }
+    console.log('[Build] Reserved UTXOs:', reserveResult.reservedCommitments);
+    if (reserveResult.changeAmount && reserveResult.changeAmount > 0) {
+      console.log('[Build] Change UTXO created:', reserveResult.changeAmount, assetIn);
+    }
+
     // Create strategy via FHE + executor backend
-    console.log('[Strategy] Creating encrypted strategy...');
+    console.log('[Build] Creating encrypted strategy...');
     const result = await createStrategy({
       user_id: wallet.publicKey.toBase58(),
-      strategy_type: 'LIMIT_ORDER',  // FHE engine expects: LIMIT_ORDER, LIMIT_BUY_DIP, LIMIT_SELL_RALLY, BRACKET_ORDER_SHORT
+      strategy_type: 'LIMIT_ORDER',
       asset_in: assetIn,
       asset_out: assetOut,
       amount: amount,
@@ -240,10 +255,10 @@ export default function Build({
 
     if (result.success) {
       alert(`Strategy created successfully! ID: ${result.data?.strategy_id || 'unknown'}\n\nThe executor will monitor prices and execute when ${assetIn} reaches $${priceGoal}.`);
-      console.log('[Strategy] Created:', result.data);
+      console.log('[Build] Strategy created:', result.data);
     } else {
       alert(`Strategy creation failed: ${result.error}`);
-      console.error('[Strategy] Failed:', result.error);
+      console.error('[Build] Strategy failed:', result.error);
     }
   }, [nodes, wallet]);
   
