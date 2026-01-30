@@ -21,11 +21,7 @@ interface ProvidersProps {
 
 // Get network from environment
 const getNetwork = (): SolanaNetwork => {
-  const network = NEXT_PUBLIC_SOLANA_NETWORK;
-  if (network === 'mainnet-beta' || network === 'devnet' || network === 'testnet') {
-    return network;
-  }
-  return 'devnet'; // Default to devnet for development
+  return NEXT_PUBLIC_SOLANA_NETWORK;
 };
 
 export const Providers: FC<ProvidersProps> = ({ children }) => {

@@ -254,7 +254,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">Wallet Balance</h2>
-              <span className="userdash-balance-network">{NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}</span>
+              <span className="userdash-balance-network">{'Devnet'}</span>
             </div>
             <div className="userdash-balance-content-multi">
               {walletBalances !== null && walletBalances.length > 0 ? (
@@ -278,7 +278,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               )}
             </div>
             <div className="userdash-balance-description">
-              Your balance on Solana {NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}
+              Your balance on Solana {'Devnet'}
             </div>
           </div>
 

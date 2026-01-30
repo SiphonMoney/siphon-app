@@ -35,6 +35,7 @@ async function ensureNoirZkInitialized() {
     return getBackendClient();
   }
 
+  const privateKey = process.env.EXECUTOR_PRIVATE_KEY;
   const rpcUrl = NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
   const relayerUrl = process.env.NEXT_PUBLIC_RELAYER_API_URL || 'http://localhost:4000';
 
