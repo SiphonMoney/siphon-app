@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PublicKey } from '@solana/web3.js';
 import { initializeBackendClient, getBackendClient } from '@/lib/noir-zk/client';
+import { NEXT_PUBLIC_SOLANA_RPC_URL } from '@/lib/config';
 
 let isInitialized = false;
 
@@ -10,7 +11,7 @@ async function ensureInitialized() {
   }
 
   const privateKey = process.env.EXECUTOR_PRIVATE_KEY;
-  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+  const rpcUrl = NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 
   if (!privateKey) {
     throw new Error('EXECUTOR_PRIVATE_KEY not configured');

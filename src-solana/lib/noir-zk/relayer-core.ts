@@ -8,10 +8,11 @@
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
 import bs58 from 'bs58';
+import { NEXT_PUBLIC_ZK_POOL_PROGRAM_ID, NEXT_PUBLIC_SOLANA_RPC_URL } from '../config';
 
 // Program ID for siphon-zk-pool (deployed to devnet)
 export const ZK_POOL_PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_ZK_POOL_PROGRAM_ID || '3CVsp1zayXhNsT8Ktrh85rTewvBJxWy8VcUtQAKdnQMb'
+  NEXT_PUBLIC_ZK_POOL_PROGRAM_ID || '3CVsp1zayXhNsT8Ktrh85rTewvBJxWy8VcUtQAKdnQMb'
 );
 
 // Merkle tree configuration
@@ -642,7 +643,7 @@ export async function getRelayerCore(): Promise<RelayerCore> {
   if (!relayerCoreInstance) {
     relayerCoreInstance = new RelayerCore();
 
-    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+    const rpcUrl = NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
     const executorKey = process.env.EXECUTOR_PRIVATE_KEY;
 
     await relayerCoreInstance.initialize(rpcUrl, executorKey);

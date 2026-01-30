@@ -5,6 +5,7 @@ import {
   Keypair,
   Transaction,
 } from '@solana/web3.js';
+import { NEXT_PUBLIC_SOLANA_RPC_URL } from '@/lib/config';
 import {
   getAssociatedTokenAddress,
   createCloseAccountInstruction,
@@ -34,8 +35,7 @@ async function ensureNoirZkInitialized() {
     return getBackendClient();
   }
 
-  const privateKey = process.env.EXECUTOR_PRIVATE_KEY;
-  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+  const rpcUrl = NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
   const relayerUrl = process.env.NEXT_PUBLIC_RELAYER_API_URL || 'http://localhost:4000';
 
   if (!privateKey) {
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+    const rpcUrl = NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
     const executor = getExecutorKeypair();
 

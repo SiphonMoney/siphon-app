@@ -21,6 +21,13 @@ import { initializeRangeClient } from '../lib/range';
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
 
+import {
+  NEXT_PUBLIC_RANGE_API_KEY,
+  NEXT_PUBLIC_RANGE_API_URL,
+  NEXT_PUBLIC_HELIUS_API_KEY,
+  NEXT_PUBLIC_SOLANA_RPC_URL
+} from '../lib/config';
+
 // Network configuration
 export type SolanaNetwork = 'mainnet-beta' | 'devnet' | 'testnet';
 
@@ -32,8 +39,8 @@ interface SolanaProviderProps {
 
 // Initialize Range compliance client on module load
 const initializeComplianceClient = () => {
-  const rangeApiKey = process.env.NEXT_PUBLIC_RANGE_API_KEY;
-  const rangeApiUrl = process.env.NEXT_PUBLIC_RANGE_API_URL || 'https://api.range.org/v1';
+  const rangeApiKey = NEXT_PUBLIC_RANGE_API_KEY;
+  const rangeApiUrl = NEXT_PUBLIC_RANGE_API_URL || 'https://api.range.org/v1';
 
   if (rangeApiKey) {
     initializeRangeClient({
@@ -63,14 +70,14 @@ export const SolanaProvider: FC<SolanaProviderProps> = ({
     if (customRpcUrl) return customRpcUrl;
 
     // Priority 2: Helius RPC from environment variable
-    const heliusApiKey = process.env.NEXT_PUBLIC_HELIUS_API_KEY;
+    const heliusApiKey = NEXT_PUBLIC_HELIUS_API_KEY;
     if (heliusApiKey) {
       const heliusNetwork = network === 'mainnet-beta' ? 'mainnet' : network;
       return `https://${heliusNetwork}.helius-rpc.com/?api-key=${heliusApiKey}`;
     }
 
     // Priority 3: Generic RPC URL from environment
-    const envRpc = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+    const envRpc = NEXT_PUBLIC_SOLANA_RPC_URL;
     if (envRpc) return envRpc;
 
     // Priority 4: Fall back to default cluster URL (rate limited)

@@ -3,6 +3,7 @@
 import { FC, ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SolanaProvider, SolanaNetwork } from './SolanaProvider';
+import { NEXT_PUBLIC_SOLANA_NETWORK, NEXT_PUBLIC_SOLANA_RPC_URL } from '../lib/config';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -20,7 +21,7 @@ interface ProvidersProps {
 
 // Get network from environment
 const getNetwork = (): SolanaNetwork => {
-  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK;
+  const network = NEXT_PUBLIC_SOLANA_NETWORK;
   if (network === 'mainnet-beta' || network === 'devnet' || network === 'testnet') {
     return network;
   }
@@ -29,7 +30,7 @@ const getNetwork = (): SolanaNetwork => {
 
 export const Providers: FC<ProvidersProps> = ({ children }) => {
   const network = getNetwork();
-  const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+  const rpcUrl = NEXT_PUBLIC_SOLANA_RPC_URL;
 
   return (
     <QueryClientProvider client={queryClient}>

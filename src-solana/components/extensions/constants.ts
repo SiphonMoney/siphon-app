@@ -1,10 +1,11 @@
 // constants.ts - Environment and configuration constants
 import { PublicKey } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
+import { NEXT_PUBLIC_SOLANA_RPC_URL, NEXT_PUBLIC_PROGRAM_ID } from '../../lib/config';
 
 // Environment variables
-export const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com';
-export const PROGRAM_ID = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID || '8ndLKjoaUcjDTrL6Bsw3xkyafTV87ZC5XPUgf6AFJP6N');
+export const SOLANA_RPC = NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+export const PROGRAM_ID = new PublicKey(NEXT_PUBLIC_PROGRAM_ID || '8ndLKjoaUcjDTrL6Bsw3xkyafTV87ZC5XPUgf6AFJP6N');
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 export const CLUSTER = process.env.NEXT_PUBLIC_CLUSTER || 'devnet';
 
