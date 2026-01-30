@@ -15,17 +15,17 @@ const walletOptions: WalletOption[] = [
   {
     id: 'phantom',
     name: 'Phantom',
-    icon: '',
+    icon: '👻',
     chain: 'Solana',
     description: 'Recommended for Solana',
     active: true
   },
   {
-    id: 'metamask',
-    name: 'MetaMask',
-    icon: '',
-    chain: 'Solana/EVM',
-    description: 'Supports Solana & EVM',
+    id: 'solflare',
+    name: 'Solflare',
+    icon: '🔥',
+    chain: 'Solana',
+    description: 'Solana wallet',
     active: true
   }
 ];
@@ -81,7 +81,7 @@ export default function WalletSelector({ onWalletSelect, className, shouldOpen, 
 
   return (
     <div ref={walletSelectorRef} className={`wallet-selector ${className}`}>
-      <button 
+      <button
         className="wallet-selector-trigger"
         onClick={() => {
           const newState = !isOpen;
@@ -119,4 +119,3 @@ export default function WalletSelector({ onWalletSelect, className, shouldOpen, 
     </div>
   );
 }
-

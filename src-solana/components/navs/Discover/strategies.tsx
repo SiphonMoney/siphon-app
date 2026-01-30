@@ -56,10 +56,10 @@ export const strategyList: StrategyMetadata[] = [
     profit: '+5.2%', 
     description: 'Set your desired price and wait for the market to reach it. Execute trades at your specified price level for better control.', 
     category: 'trading', 
-    chains: ['base', 'ethereum', 'solana', 'btc'], 
-    networks: ['Base', 'Ethereum', 'Solana', 'Bitcoin'],
-    activeNetworks: ['Sepolia'], // Only Sepolia (Ethereum) is active
-    isActive: true 
+    chains: ['solana'],
+    networks: ['Solana'],
+    activeNetworks: ['Devnet'],
+    isActive: true
   },
   { 
     name: 'Buy High - Sell Low', 
@@ -69,9 +69,9 @@ export const strategyList: StrategyMetadata[] = [
     profit: '-99.9%', 
     description: 'The ultimate contrarian strategy. Buy at peaks, sell at valleys. Maximum loss, maximum style.', 
     category: 'trading', 
-    chains: ['arbitrage', 'ethereum'], 
-    networks: ['Ethereum', 'Base'], 
-    isActive: false 
+    chains: ['solana'],
+    networks: ['Solana'],
+    isActive: false
   },
   { 
     name: 'DCA to Oblivion', 
@@ -81,9 +81,9 @@ export const strategyList: StrategyMetadata[] = [
     profit: '+0.0%', 
     description: 'Dollar-cost average forever. Never stop buying. Never check the price. Just keep going.', 
     category: 'trading', 
-    chains: ['yields', 'base'], 
-    networks: ['Solana', 'Ethereum'], 
-    isActive: false 
+    chains: ['solana'],
+    networks: ['Solana'],
+    isActive: false
   },
 ];
 
@@ -111,7 +111,7 @@ export const featuredStrategies: FeaturedStrategy[] = [
       users: '3,456',
       risk: 'Medium'
     },
-    networks: ['Ethereum', 'Polygon', 'Arbitrum']
+    networks: ['Solana']
   },
   {
     badge: 'Most Used Strategy',
@@ -140,7 +140,7 @@ export const createLimitOrderStrategy = (): { nodes: Node[]; edges: Edge[] } => 
         type: 'deposit',
         coin: 'USDC',
         amount: '1000',
-        chain: 'Ethereum'
+        chain: 'Solana'
       },
       style: {
         background: 'rgba(255, 255, 255, 0.12)',
@@ -167,7 +167,7 @@ export const createLimitOrderStrategy = (): { nodes: Node[]; edges: Edge[] } => 
         label: 'Limit Order',
         type: 'strategy',
         strategy: 'Limit Order',
-        priceGoal: '1.05',
+        priceGoal: '250',
         intervals: '1h'
       },
       style: {
@@ -195,9 +195,9 @@ export const createLimitOrderStrategy = (): { nodes: Node[]; edges: Edge[] } => 
         label: 'Swap',
         type: 'swap',
         coin: 'USDC',
-        toCoin: 'ETH',
+        toCoin: 'SOL',
         amount: '1000',
-        dex: 'Uniswap'
+        dex: 'Jupiter'
       },
       style: {
         background: 'rgba(255, 255, 255, 0.12)',
@@ -223,9 +223,9 @@ export const createLimitOrderStrategy = (): { nodes: Node[]; edges: Edge[] } => 
       data: {
         label: 'Withdraw',
         type: 'withdraw',
-        coin: 'ETH',
-        amount: '0.5',
-        wallet: '0x...'
+        coin: 'SOL',
+        amount: '4',
+        wallet: ''
       },
       style: {
         background: 'rgba(255, 255, 255, 0.12)',
@@ -291,9 +291,9 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           type: 'custom',
           position: { x: 100, y: 200 },
           data: {
-            label: 'Deposit from Ethereum',
+            label: 'Deposit from Solana',
             type: 'deposit',
-            chain: 'Ethereum',
+            chain: 'Solana',
             dex: null,
             strategy: null
           },
@@ -312,7 +312,7 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           data: {
             label: 'Buy High',
             type: 'strategy',
-            chain: 'Ethereum',
+            chain: 'Solana',
             dex: null,
             strategy: 'buy-high'
           },
@@ -331,7 +331,7 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           data: {
             label: 'Sell Low',
             type: 'swap',
-            chain: 'Ethereum',
+            chain: 'Solana',
             dex: null,
             strategy: null
           },
@@ -348,9 +348,9 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           type: 'custom',
           position: { x: 1000, y: 200 },
           data: {
-            label: 'Withdraw to Ethereum',
+            label: 'Withdraw to Solana',
             type: 'withdraw',
-            chain: 'Ethereum',
+            chain: 'Solana',
             dex: null,
             strategy: null
           },
@@ -554,8 +554,8 @@ export const initializeLimitOrderStrategy = (): void => {
       usage: 25,
       profit: '+5.2%',
       category: 'trading',
-      chains: ['base', 'ethereum', 'solana', 'btc'],
-      networks: ['Base', 'Ethereum', 'Solana', 'Bitcoin']
+      chains: ['solana'],
+      networks: ['Solana']
     };
     
     localStorage.setItem(discoverStrategiesKey, JSON.stringify(discoverStrategies));

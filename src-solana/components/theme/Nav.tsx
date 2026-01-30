@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import ConnectButton from "../extensions/ConnectButton";
-import { WalletInfo } from "../extensions/walletManager";
+import ConnectButton from "@/components/extensions/ConnectButton";
+import { WalletInfo } from "@/lib/walletManager";
 
 interface NavProps {
   onWalletConnected?: (wallet: WalletInfo) => void;

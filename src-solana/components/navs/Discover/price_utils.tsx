@@ -78,8 +78,6 @@ export const calculateExchange = (
     return 0;
   }
   
-  // Calculate: outputAmount = inputAmount * (priceA / priceB)
-  // Example: 1 ETH * (3000 USD / 1 USD) = 3000 USDC
   const exchangeRate = priceA / priceB;
   const outputAmount = inputAmount * exchangeRate;
   
@@ -189,6 +187,15 @@ export const getInputCoin = (
   return 'USDC';
 };
 
+// Default fallback prices (used when API fails)
+const FALLBACK_PRICES: Record<string, number> = {
+  'SOL': 250,
+  'ETH': 3500,
+  'BTC': 105000,
+  'USDC': 1,
+  'USDT': 1,
+};
+
 /**
  * Fetch coin prices from Pyth Network API
  */
@@ -198,30 +205,32 @@ export const fetchCoinPrices = async (): Promise<Record<string, number>> => {
     const response = await fetch('/api/pyth_price?coin=all');
     if (response.ok) {
       const data = await response.json();
-      if (data.prices) {
+      if (data.prices && Object.keys(data.prices).length > 0) {
         console.log('[PriceUtils] ✓ Received Pyth prices:', data.prices);
         // Log each price
         Object.entries(data.prices).forEach(([coin, price]) => {
           console.log(`[PriceUtils]   ${coin}: $${price}`);
         });
-        // Verify Ethereum price is present
-        if (data.prices.ETH && data.prices.ETH > 0) {
-          console.log('[PriceUtils] ✓ Ethereum price verified:', data.prices.ETH, 'USD');
+        // Verify SOL price is present
+        if (data.prices.SOL && data.prices.SOL > 0) {
+          console.log('[PriceUtils] SOL price verified:', data.prices.SOL, 'USD');
         } else {
-          console.warn('[PriceUtils] ⚠ Ethereum price missing or zero:', data.prices.ETH);
+          console.warn('[PriceUtils] SOL price missing or zero, using fallback');
+          data.prices.SOL = FALLBACK_PRICES.SOL;
         }
-        return data.prices;
+        // Ensure all required coins have prices (merge with fallback)
+        return { ...FALLBACK_PRICES, ...data.prices };
       } else {
-        console.error('[PriceUtils] Invalid price data format:', data);
-        return {};
+        console.error('[PriceUtils] Invalid price data format, using fallback:', data);
+        return FALLBACK_PRICES;
       }
     } else {
       console.error('[PriceUtils] Failed to fetch prices:', response.status, response.statusText);
-      return {};
+      return FALLBACK_PRICES;
     }
   } catch (error) {
     console.error('[PriceUtils] Error fetching prices:', error);
-    return {};
+    return FALLBACK_PRICES;
   }
 };
 

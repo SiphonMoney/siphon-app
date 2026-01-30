@@ -20,7 +20,7 @@ interface NodeData {
 }
 
 
-const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
+const tokens = ['SOL', 'USDC', 'USDT', 'WBTC', 'ETH', 'XMR'];
 
 interface CustomNodeProps {
   data: NodeData;

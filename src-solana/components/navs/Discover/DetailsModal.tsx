@@ -5,10 +5,12 @@ import { ReactFlow, ReactFlowProvider, Background, Node, Edge, Handle, Position,
 import '@xyflow/react/dist/style.css';
 import "./Discover.css";
 import { createStrategy } from "../../../lib/strategy";
-import { generateZKData } from "../../../lib/zkHandler";
-import { walletManager } from "../../../lib/walletManager";
-import { payExecutionFee } from "../../../lib/handler";
+import { payStrategyFee, getZkPoolBalance, calculateStrategyCost as calculateExecutionCost } from "../../../lib/zkPoolHandler";
+import { useWallet } from '@solana/wallet-adapter-react';
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
+
+// Fee recipient address (protocol treasury)
+const FEE_RECIPIENT = process.env.NEXT_PUBLIC_FEE_RECIPIENT || 'DTqtRSGtGf414yvMPypCv2o1P8trwb9SJXibxLgAWYhw';
 
 
 interface NodeData {
@@ -88,6 +90,7 @@ export default function DetailsModal({
   setSavedScenes,
   setShowSuccessNotification
 }: DetailsModalProps) {
+  const wallet = useWallet();
   const flowRef = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -108,13 +111,14 @@ export default function DetailsModal({
             setCoinPrices(prices);
             setPricesLoaded(true);
           } else {
-            // Fallback prices
-            console.warn('[DetailsModal] Using fallback prices');
+            // Fallback prices (fetchCoinPrices now returns fallback automatically)
+            console.warn('[DetailsModal] Using fallback prices from fetchCoinPrices');
             setCoinPrices({
-              'ETH': 3000,
+              'SOL': 250,
+              'ETH': 3500,
+              'BTC': 105000,
               'USDC': 1,
-              'SOL': 192,
-              'BTC': 45000,
+              'USDT': 1,
             });
             setPricesLoaded(true);
           }
@@ -122,10 +126,11 @@ export default function DetailsModal({
           console.error('[DetailsModal] Error fetching prices:', error);
           // Fallback prices
           setCoinPrices({
-            'ETH': 3000,
+            'SOL': 250,
+            'ETH': 3500,
+            'BTC': 105000,
             'USDC': 1,
-            'SOL': 192,
-            'BTC': 45000,
+            'USDT': 1,
           });
           setPricesLoaded(true);
         }
@@ -142,51 +147,10 @@ export default function DetailsModal({
     }
   }, [isOpen]);
 
-  // Check wallet connection status
+  // Check wallet connection status using Solana wallet adapter
   useEffect(() => {
-    const checkWalletConnection = () => {
-      const wallets = walletManager.getConnectedWallets();
-      const hasConnectedWallet = wallets.length > 0;
-      
-      // Also check localStorage as fallback
-      if (!hasConnectedWallet) {
-        try {
-          const storedWallet = localStorage.getItem('siphon-connected-wallet');
-          if (storedWallet) {
-            const wallet = JSON.parse(storedWallet);
-            if (wallet && wallet.address) {
-              setIsWalletConnected(true);
-              return;
-            }
-          }
-        } catch (error) {
-          console.error('Error reading wallet from localStorage:', error);
-        }
-      }
-      
-      setIsWalletConnected(hasConnectedWallet);
-    };
-
-    // Check on mount and when modal opens
-    checkWalletConnection();
-
-    // Listen for wallet connection/disconnection events
-    const handleWalletConnected = () => {
-      setIsWalletConnected(true);
-    };
-
-    const handleWalletDisconnected = () => {
-      setIsWalletConnected(false);
-    };
-
-    window.addEventListener('walletConnected', handleWalletConnected);
-    window.addEventListener('walletDisconnected', handleWalletDisconnected);
-
-    return () => {
-      window.removeEventListener('walletConnected', handleWalletConnected);
-      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
-    };
-  }, [isOpen]);
+    setIsWalletConnected(wallet.connected && !!wallet.publicKey);
+  }, [wallet.connected, wallet.publicKey, isOpen]);
 
   // Local wrapper functions that use fetched prices
   const calculateExchange = (inputAmount: number, coinA: string, coinB: string): number => {
@@ -250,7 +214,7 @@ export default function DetailsModal({
 
   const handleExecute = async () => {
     // Check wallet connection first
-    if (!isWalletConnected) {
+    if (!isWalletConnected || !wallet.publicKey) {
       await handleConnectWallet();
       return;
     }
@@ -284,11 +248,11 @@ export default function DetailsModal({
     };
 
     const amountStr = getValue(depositNode?.id, 'amount', '0');
-    const assetIn = getValue(depositNode?.id, 'tokenA', (depositNode?.data as NodeData)?.coin);
-    const assetOut = getValue(swapNode?.id, 'coinB', (swapNode?.data as NodeData)?.toCoin) || 'ETH';
+    const assetIn = getValue(depositNode?.id, 'tokenA', (depositNode?.data as NodeData)?.coin) || 'SOL';
+    const assetOut = getValue(swapNode?.id, 'coinB', (swapNode?.data as NodeData)?.toCoin) || 'USDC';
     const priceGoalStr = getValue(strategyNode?.id, 'priceGoal', '0');
-    
-    const recipient = getValue(withdrawNode?.id, 'address');
+
+    const recipientAddress = getValue(withdrawNode?.id, 'address') || wallet.publicKey.toBase58();
 
     const amount = parseFloat(amountStr);
     const targetPrice = parseFloat(priceGoalStr);
@@ -307,162 +271,70 @@ export default function DetailsModal({
     setIsFading(true);
 
     try {
-      addLog('Scanning deposits...');
-      
+      addLog('Checking ZK pool balance...');
+
       // Small delay to show the scanning message
       await new Promise(resolve => setTimeout(resolve, 300));
-      
-      const tokenMap: Record<string, { symbol: string; decimals: number; address: string }> = {
-        'ETH': { symbol: 'ETH', decimals: 18, address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" },
-        'USDC': { symbol: 'USDC', decimals: 6, address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" }
-      };
 
-      const tokenInfo = tokenMap[assetIn || 'USDC'];
-      if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
+      // Step 1: Calculate execution cost
+      const { totalCost } = calculateExecutionCost(runDuration);
+      addLog(`Execution cost: $${totalCost.toFixed(4)} USD`);
 
-      // Calculate execution price in user's token
-      addLog('Calculating execution price...');
-      const tokenPrice = coinPrices[assetIn || 'USDC'] || (assetIn === 'ETH' ? 3000 : 1);
-      const executionPriceInToken = totalCost / tokenPrice;
-      
-      if (executionPriceInToken <= 0) {
-        throw new Error('Invalid execution price calculation');
+      // Step 2: Get token price from Pyth
+      const tokenPrice = coinPrices[assetIn] || (assetIn === 'SOL' ? 250 : 1);
+      const feeInToken = totalCost / tokenPrice;
+      addLog(`Fee in ${assetIn}: ${feeInToken.toFixed(6)} (at $${tokenPrice})`);
+
+      // Step 3: Check ZK pool balance
+      const zkBalance = getZkPoolBalance(assetIn);
+      addLog(`ZK pool balance: ${zkBalance.toFixed(6)} ${assetIn}`);
+
+      if (zkBalance < feeInToken) {
+        throw new Error(`Insufficient ZK pool balance. Need ${feeInToken.toFixed(6)} ${assetIn}, have ${zkBalance.toFixed(6)} ${assetIn}`);
       }
 
-      // Round execution price to token's decimal places to avoid precision issues
-      const executionPriceRounded = parseFloat(executionPriceInToken.toFixed(tokenInfo.decimals));
-      const executionPriceStr = executionPriceRounded.toFixed(tokenInfo.decimals);
+      // Step 4: Pay execution fee from ZK pool
+      addLog('Paying execution fee from ZK pool...');
+      const feeResult = await payStrategyFee(assetIn, feeInToken, FEE_RECIPIENT);
 
-      addLog(`Execution price: ${executionPriceStr} ${assetIn} ($${totalCost.toFixed(2)})`);
-
-      // Check if user has sufficient balance
-      const userBalance = parseFloat(amountStr);
-      if (userBalance < executionPriceRounded) {
-        throw new Error(`Insufficient balance. Need ${executionPriceStr} ${assetIn}, have ${userBalance} ${assetIn}`);
+      if (!feeResult.success) {
+        throw new Error(`Fee payment failed: ${feeResult.error}`);
       }
 
-      const remainingBalance = userBalance - executionPriceRounded;
-      const remainingBalanceStr = remainingBalance.toFixed(tokenInfo.decimals);
-      addLog(`Balance check: ${userBalance} ${assetIn} - ${executionPriceStr} ${assetIn} = ${remainingBalanceStr} ${assetIn} remaining`);
-
-      if (remainingBalance <= 0) {
-        throw new Error('Insufficient balance remaining for strategy execution after fee payment');
+      if (feeResult.skipped) {
+        addLog(`✅ Fee skipped (below minimum threshold)`);
+      } else {
+        addLog(`✅ Fee payment successful! Tx: ${feeResult.signature?.slice(0, 20)}...`);
       }
+      addLog(`Remaining balance: ${feeResult.remainingBalance?.toFixed(6)} ${assetIn}`);
 
-      // Step 1: Pay execution fee
-      addLog('Paying execution fee...');
-      const vaultContractAddress = "0x8Be4A7A074468F571271192A0A0824cf6F08a1f6"; // Corrected Entrypoint address
-      
-      // Generate ZK proof for fee payment (deducting execution price from commitment)
-      const feeZkResult = await generateZKData(
-        11155111,
-        tokenInfo,
-        executionPriceStr, // Fee amount in user's token (properly formatted)
-        vaultContractAddress // Recipient is vault (we're updating commitment, not withdrawing)
-      );
-
-      if ('error' in feeZkResult) {
-        throw new Error(`Fee payment proof generation failed: ${feeZkResult.error}`);
-      }
-
-      addLog('Fee payment proof generated');
-      
-      const feePaymentResult = await payExecutionFee(
-        assetIn || 'USDC',
-        executionPriceStr, // Execution price in user's token (properly formatted)
-        executionPriceStr, // Amount for proof verification (must match the proof's withdrawnValue)
-        feeZkResult.withdrawalTxData.stateRoot || "0",
-        feeZkResult.withdrawalTxData.nullifierHash.toString(),
-        feeZkResult.withdrawalTxData.newCommitment.toString(),
-        feeZkResult.withdrawalTxData.proof
-      );
-
-      if (!feePaymentResult.success) {
-        throw new Error(`Fee payment failed: ${feePaymentResult.error}`);
-      }
-
-      addLog(`✅ Fee payment successful! Transaction: ${feePaymentResult.transactionHash}`);
-
-      // Save new commitment after fee payment to localStorage (so it can be used for strategy execution)
-      if (feeZkResult.newDeposit && feeZkResult.newDepositKey) {
-        localStorage.setItem(feeZkResult.newDepositKey, JSON.stringify({ ...feeZkResult.newDeposit, spent: false }));
-        addLog('Saved new commitment after fee payment for strategy execution');
-      }
-
-      // Mark fee payment deposit as spent
-      if (feeZkResult.spentDepositKey) {
-        const feeOldData = JSON.parse(localStorage.getItem(feeZkResult.spentDepositKey) || '{}');
-        feeOldData.spent = true;
-        localStorage.setItem(feeZkResult.spentDepositKey, JSON.stringify(feeOldData));
-      }
-
-      // Step 2: Generate ZK proof for strategy execution with remaining balance
-      // This will use the new commitment created after fee payment
-      addLog('Generating strategy execution proof with remaining balance...');
-      const zkResult = await generateZKData(
-        11155111, 
-        tokenInfo,
-        remainingBalanceStr, // Use remaining balance after fee (properly formatted)
-        vaultContractAddress
-      );
-
-      if ('error' in zkResult) {
-        throw new Error(zkResult.error);
-      }
-
-      addLog('Strategy execution proof generated');
-      const { withdrawalTxData, newDeposit, newDepositKey, spentDepositKey } = zkResult;
-
-      addLog('Building strategy payload...');
+      // Step 5: Build strategy payload for FHE backend
+      addLog('Building encrypted strategy payload...');
       const strategyPayload = {
-        user_id: "user_123",
-        strategy_type: "LIMIT_ORDER",
-        asset_in: assetIn || "USDC",
+        user_id: wallet.publicKey.toBase58(),
+        strategy_type: 'LIMIT_ORDER',  // FHE engine expects: LIMIT_ORDER, LIMIT_BUY_DIP, LIMIT_SELL_RALLY, BRACKET_ORDER_SHORT
+        asset_in: assetIn,
         asset_out: assetOut,
         amount: amount,
-        upper_bound: targetPrice,
-        lower_bound: 0.0,
-        recipient_address: recipient,
-        // This pool address needs to be dynamically determined based on asset_in, asset_out, and fee
-        // For now, using a hardcoded WETH/USDC 0.05% pool on Sepolia
-        pool_address: "0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1",
-        zk_proof: {
-          proof: withdrawalTxData.proof,
-          nullifierHash: withdrawalTxData.nullifierHash,
-          newCommitment: withdrawalTxData.newCommitment,
-          atomicAmount: withdrawalTxData.amount, // This is `_amountIn` for the `publicInputs`
-          root: withdrawalTxData.stateRoot
-        }
+        price_goal: targetPrice,
+        recipient_address: recipientAddress,
       };
 
-      addLog('Sending payload to backend...');
+      addLog('Sending to FHE executor backend...');
       const result = await createStrategy(strategyPayload);
 
       if (result.success) {
-        addLog('Payload received, processing execution...');
-        addLog('Strategy execution completed!');
-        showToast('Strategy execution completed!', 'success');
-
-        // Handle strategy execution deposits (fee payment deposits already handled above)
-        if (newDeposit && newDepositKey) {
-            localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
-            addLog('Saved new commitment after strategy execution');
-        }
-        if (spentDepositKey) {
-            const oldData = JSON.parse(localStorage.getItem(spentDepositKey) || '{}');
-            oldData.spent = true;
-            localStorage.setItem(spentDepositKey, JSON.stringify(oldData));
-            addLog('Marked strategy execution deposit as spent');
-        }
+        addLog('Strategy created successfully!');
+        showToast('Strategy execution started!', 'success');
 
         addLog('Execution completed successfully!');
         setTimeout(() => {
           if (runningStrategies && setRunningStrategies) {
             const newRunning = new Map(runningStrategies);
-            newRunning.set(selectedStrategy.name, { 
-              startTime: Date.now(), 
-              isRunning: true, 
-              loop: false 
+            newRunning.set(selectedStrategy.name, {
+              startTime: Date.now(),
+              isRunning: true,
+              loop: false
             });
             setRunningStrategies(newRunning);
           }
@@ -474,7 +346,7 @@ export default function DetailsModal({
         }, 1500);
       } else {
         addLog(`Error: ${result.error}`);
-        showToast(`Strategy generation failed: ${result.error}`, 'error');
+        showToast(`Strategy creation failed: ${result.error}`, 'error');
         setIsExecuting(false);
         setTimeout(() => setExecutionLogs([]), 3000);
       }
@@ -658,17 +530,17 @@ export default function DetailsModal({
                         const tags: Array<{ label: string; field: string; options?: string[] }> = [];
                         
                         if (nodeData?.type === 'deposit') {
-                          tags.push({ label: 'Chain', field: 'chain', options: ['Sepolia'] });
-                          tags.push({ label: 'Token A', field: 'tokenA', options: ['USDC', 'ETH'] });
+                          tags.push({ label: 'Chain', field: 'chain', options: ['Devnet'] });
+                          tags.push({ label: 'Token A', field: 'tokenA', options: ['SOL', 'USDC'] });
                           tags.push({ label: 'Amount', field: 'amount' });
                         } else if (nodeData?.type === 'strategy' && nodeData.strategy === 'Limit Order') {
                           tags.push({ label: 'Type', field: 'type', options: ['Buy', 'Sell'] });
                           tags.push({ label: 'PriceGoal', field: 'priceGoal' });
                         } else if (nodeData?.type === 'swap') {
-                          tags.push({ label: 'Dex Type', field: 'dexType', options: ['Uniswap'] });
-                          tags.push({ label: 'Token B', field: 'coinB', options: ['ETH', 'USDC'] });
+                          tags.push({ label: 'Dex Type', field: 'dexType', options: ['Jupiter'] });
+                          tags.push({ label: 'Token B', field: 'coinB', options: ['SOL', 'USDC'] });
                         } else if (nodeData?.type === 'withdraw') {
-                          tags.push({ label: 'Chain', field: 'chain', options: ['Sepolia'] });
+                          tags.push({ label: 'Chain', field: 'chain', options: ['Devnet'] });
                           tags.push({ label: 'Address', field: 'address' });
                         }
                         
@@ -676,24 +548,9 @@ export default function DetailsModal({
                         const stepValues = runModeValues[stepId] || {};
                         
                         const handleMyWallet = () => {
-                          // Check both walletManager and localStorage for wallet connection
-                          const primaryWallet = walletManager.getPrimaryWallet();
-                          let walletAddress = primaryWallet?.address;
-                          
-                          // If not in walletManager, check localStorage
-                          if (!walletAddress) {
-                            try {
-                              const storedWallet = localStorage.getItem('siphon-connected-wallet');
-                              if (storedWallet) {
-                                const wallet = JSON.parse(storedWallet);
-                                walletAddress = wallet.address;
-                              }
-                            } catch (error) {
-                              console.error('Error reading wallet from localStorage:', error);
-                            }
-                          }
-                          
-                          if (walletAddress) {
+                          // Use Solana wallet adapter
+                          if (wallet.publicKey) {
+                            const walletAddress = wallet.publicKey.toBase58();
                             setRunModeValues(prev => ({
                               ...prev,
                               [stepId]: {
@@ -730,7 +587,7 @@ export default function DetailsModal({
                                         }}
                                       >
                                         <option value="">Chain</option>
-                                        <option value="Sepolia">Sepolia</option>
+                                        <option value="Devnet">Devnet</option>
                                       </select>
                                     </div>
                                     <div className="strategy-step-input-wrapper">
@@ -848,7 +705,7 @@ export default function DetailsModal({
                   <div className="strategy-run-stat-item">
                     <span className="strategy-run-stat-label">Run Fee</span>
                     <span className="strategy-run-stat-value">
-                      ${totalCost.toFixed(4)} USD / {(totalCost / (coinPrices['ETH'] || 3000)).toFixed(6)} ETH
+                      ${totalCost.toFixed(4)} USD / {(totalCost / (coinPrices['SOL'] || 100)).toFixed(6)} SOL
                     </span>
                   </div>
                   <div className="strategy-run-stat-item">
@@ -882,7 +739,7 @@ export default function DetailsModal({
                       const normalized = chain.toLowerCase();
                       if (!allChains.has(normalized)) {
                         const isActive = selectedStrategy.name === 'Limit Order' 
-                          ? normalized === 'base' 
+                          ? normalized === 'solana' || normalized === 'devnet' 
                           : false;
                         allChains.set(normalized, {
                           name: chain.charAt(0).toUpperCase() + chain.slice(1),
@@ -895,7 +752,7 @@ export default function DetailsModal({
                       const normalized = network.toLowerCase();
                       if (!allChains.has(normalized)) {
                         const isActive = selectedStrategy.name === 'Limit Order' 
-                          ? normalized === 'base' 
+                          ? normalized === 'solana' || normalized === 'devnet' 
                           : false;
                         allChains.set(normalized, {
                           name: network,
@@ -904,7 +761,7 @@ export default function DetailsModal({
                       } else {
                         const existing = allChains.get(normalized)!;
                         if (selectedStrategy.name === 'Limit Order') {
-                          existing.isActive = normalized === 'base';
+                          existing.isActive = normalized === 'solana' || normalized === 'devnet';
                         }
                       }
                     });

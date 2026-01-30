@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback } from "react";
-import { 
-  ReactFlow, 
-  ReactFlowProvider, 
-  Background, 
-  Controls, 
-  MiniMap, 
-  addEdge, 
-  Connection, 
-  Node, 
-  Edge, 
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  Controls,
+  MiniMap,
+  addEdge,
+  Connection,
+  Node,
+  Edge,
   Position,
   applyNodeChanges,
   applyEdgeChanges,
@@ -21,6 +21,8 @@ import '@xyflow/react/dist/style.css';
 import "./Build.css";
 import BuildNav from "./BuildNav";
 import { CustomNode } from "./BuildNodes";
+import { useWallet } from '@solana/wallet-adapter-react';
+import { createStrategy } from '@/lib/strategy';
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -45,10 +47,11 @@ export default function Build({
   savedScenes,
   setSavedScenes
 }: BuildProps) {
-  const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
-  
+  const wallet = useWallet();
+  const tokens = ['SOL', 'USDC', 'USDT', 'WBTC', 'ETH', 'XMR'];
+
   // Active tokens
-  const activeTokens = ['ETH', 'USDC'];
+  const activeTokens = ['SOL', 'USDC'];
   const isTokenActive = (token: string) => activeTokens.includes(token);
   
   // Normalize node to ensure it has all required properties
@@ -152,7 +155,7 @@ export default function Build({
           const toCoin = field === 'toCoin' ? value : (updatedData.toCoin || '');
           
           if (amount && coin && toCoin) {
-            const prices: { [key: string]: number } = { SOL: 192, USDC: 1, USDT: 1, WBTC: 45000, XMR: 120 };
+            const prices: { [key: string]: number } = { SOL: 250, USDC: 1, USDT: 1, WBTC: 105000, ETH: 3500, XMR: 200 };
             const pFrom = prices[coin as string] ?? 0;
             const pTo = prices[toCoin as string] ?? 0;
             if (pFrom > 0 && pTo > 0) {
@@ -176,10 +179,73 @@ export default function Build({
     setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
   }, [setNodes, setEdges]);
   
-  const onExecuteStrategy = useCallback(() => {
+  const onExecuteStrategy = useCallback(async () => {
     console.log('Executing strategy with nodes:', nodes);
-    // TODO: Implement strategy execution logic
-  }, [nodes]);
+
+    if (!wallet.publicKey) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    // Parse nodes to extract strategy parameters
+    const depositNode = nodes.find(n => n.data.type === 'deposit');
+    const swapNode = nodes.find(n => n.data.type === 'swap');
+    const strategyNode = nodes.find(n => n.data.type === 'strategy');
+
+    if (!depositNode || !swapNode || !strategyNode) {
+      alert('Strategy must include: Deposit → Strategy → Swap nodes');
+      return;
+    }
+
+    if (!depositNode.data.coin || !depositNode.data.amount) {
+      alert('Deposit node must specify coin and amount');
+      return;
+    }
+
+    if (!swapNode.data.coin || !swapNode.data.toCoin) {
+      alert('Swap node must specify input and output tokens');
+      return;
+    }
+
+    if (!strategyNode.data.priceGoal) {
+      alert('Strategy node must specify a price goal');
+      return;
+    }
+
+    // Extract strategy parameters
+    const assetIn = String(depositNode.data.coin);
+    const assetOut = String(swapNode.data.toCoin);
+    const amount = parseFloat(String(depositNode.data.amount));
+    const priceGoal = parseFloat(String(strategyNode.data.priceGoal));
+
+    console.log('[Strategy] Parsed parameters:', {
+      assetIn,
+      assetOut,
+      amount,
+      priceGoal,
+      recipient: wallet.publicKey.toBase58(),
+    });
+
+    // Create strategy via FHE + executor backend
+    console.log('[Strategy] Creating encrypted strategy...');
+    const result = await createStrategy({
+      user_id: wallet.publicKey.toBase58(),
+      strategy_type: 'LIMIT_ORDER',  // FHE engine expects: LIMIT_ORDER, LIMIT_BUY_DIP, LIMIT_SELL_RALLY, BRACKET_ORDER_SHORT
+      asset_in: assetIn,
+      asset_out: assetOut,
+      amount: amount,
+      recipient_address: wallet.publicKey.toBase58(),
+      price_goal: priceGoal,
+    });
+
+    if (result.success) {
+      alert(`Strategy created successfully! ID: ${result.data?.strategy_id || 'unknown'}\n\nThe executor will monitor prices and execute when ${assetIn} reaches $${priceGoal}.`);
+      console.log('[Strategy] Created:', result.data);
+    } else {
+      alert(`Strategy creation failed: ${result.error}`);
+      console.error('[Strategy] Failed:', result.error);
+    }
+  }, [nodes, wallet]);
   
   const onRestart = useCallback(() => {
     setNodes([]);

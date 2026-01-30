@@ -1,146 +1,28 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import WalletSelector from './WalletSelector';
-import { walletManager, WalletInfo } from './walletManager';
-import { initializeWithProvider, deinit, getSiphonVaultTotalBalance, TOKEN_MAP } from '../../lib/nexus';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { WalletInfo } from '@/lib/walletManager';
 
 export default function ConnectButton({ className, onConnected }: { className?: string; onConnected?: (wallet: WalletInfo) => void }) {
-  const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
+  const { publicKey, connected, wallet } = useWallet();
+  const { connection } = useConnection();
+  const { setVisible } = useWalletModal();
   const [balance, setBalance] = useState<number | null>(null);
-  const [shouldOpenSelector, setShouldOpenSelector] = useState(false);
-  
+  const lastAddressRef = useRef<string | null>(null);
+
+  // Fetch balance when connected
   useEffect(() => {
-    // Check for existing connections on mount
-    const wallets = walletManager.getConnectedWallets();
-    if (wallets.length > 0) {
-      const wallet = wallets[0];
-      setConnectedWallet(wallet);
-    } else {
-      // Also check localStorage
-      try {
-        const storedWallet = localStorage.getItem('siphon-connected-wallet');
-        if (storedWallet) {
-          const wallet = JSON.parse(storedWallet);
-          if (wallet && wallet.address) {
-            setConnectedWallet(wallet);
-          }
-        }
-      } catch (error) {
-        console.error('Error reading wallet from localStorage:', error);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    // Listen for wallet connection/disconnection events
-    const handleWalletConnected = () => {
-      const wallets = walletManager.getConnectedWallets();
-      if (wallets.length > 0) {
-        setConnectedWallet(wallets[0]);
-      } else {
-        // Check localStorage
-        try {
-          const storedWallet = localStorage.getItem('siphon-connected-wallet');
-          if (storedWallet) {
-            const wallet = JSON.parse(storedWallet);
-            if (wallet && wallet.address) {
-              setConnectedWallet(wallet);
-            }
-          }
-        } catch (error) {
-          console.error('Error reading wallet from localStorage:', error);
-        }
-      }
-    };
-
-    const handleWalletDisconnected = () => {
-      setConnectedWallet(null);
-      setBalance(null);
-    };
-
-    const handleTriggerConnection = () => {
-      if (!connectedWallet) {
-        setShouldOpenSelector(true);
-      }
-    };
-
-    window.addEventListener('walletConnected', handleWalletConnected);
-    window.addEventListener('walletDisconnected', handleWalletDisconnected);
-    window.addEventListener('triggerWalletConnection', handleTriggerConnection);
-
-    return () => {
-      window.removeEventListener('walletConnected', handleWalletConnected);
-      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
-      window.removeEventListener('triggerWalletConnection', handleTriggerConnection);
-    };
-  }, [connectedWallet]);
-
-  useEffect(() => {
-    // Fetch balance when wallet is connected
     const fetchBalance = async () => {
-      if (connectedWallet && connectedWallet.id === 'metamask') {
+      if (publicKey && connection) {
         try {
-          const VAULT_CHAIN_ID = 11155111; // Sepolia id
-          const { details } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
-          
-          // Get ETH balance from Siphon Vault (case-insensitive lookup)
-          const ethKey = Object.keys(details).find(key => key.toUpperCase() === 'ETH');
-          const ethBalance = ethKey ? details[ethKey] : 0;
-          setBalance(ethBalance);
-        } catch (error) {
-          console.error('Failed to fetch Siphon Vault balance:', error);
-          setBalance(0);
-        }
-      } else if (connectedWallet && (connectedWallet.id === 'phantom' || connectedWallet.id === 'solflare' || connectedWallet.id === 'solana')) {
-        // Fetch Solana balance for Phantom/Solana wallets
-        try {
-          const { Connection, PublicKey, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
-          
-          // Try to use wallet provider's connection first (Phantom)
-          let connection: InstanceType<typeof Connection> | null = null;
-          if (connectedWallet.id === 'phantom' && (window as any).solana?.connection) {
-            connection = (window as any).solana.connection;
-          }
-          
-          // If we have a wallet connection, use it
-          if (connection) {
-            const publicKey = new PublicKey(connectedWallet.address);
-            const balance = await connection.getBalance(publicKey);
-            const solBalance = balance / LAMPORTS_PER_SOL;
-            setBalance(solBalance);
-          } else {
-            // Use public RPC endpoints with fallback
-            const rpcEndpoints = [
-              'https://rpc.ankr.com/solana',
-              'https://solana-api.projectserum.com',
-              'https://api.mainnet-beta.solana.com',
-            ];
-            
-            // Try endpoints until one works
-            let lastError: Error | null = null;
-            for (const endpoint of rpcEndpoints) {
-              try {
-                const testConnection = new Connection(endpoint, 'confirmed');
-                const publicKey = new PublicKey(connectedWallet.address);
-                const balance = await testConnection.getBalance(publicKey);
-                const solBalance = balance / LAMPORTS_PER_SOL;
-                setBalance(solBalance);
-                return; // Success, exit early
-              } catch (err) {
-                lastError = err as Error;
-                console.warn(`Failed to fetch balance from ${endpoint}:`, err);
-                continue; // Try next endpoint
-              }
-            }
-            
-            // If all endpoints failed, log error but don't crash
-            console.error('All RPC endpoints failed:', lastError);
-            setBalance(null);
-          }
+          const balanceResult = await connection.getBalance(publicKey);
+          const solBalance = balanceResult / LAMPORTS_PER_SOL;
+          setBalance(solBalance);
         } catch (error) {
           console.error('Failed to fetch Solana balance:', error);
-          // Don't set balance to 0, keep it null so it shows as "0.0000 SOL" but doesn't hide the button
           setBalance(null);
         }
       } else {
@@ -148,42 +30,44 @@ export default function ConnectButton({ className, onConnected }: { className?: 
       }
     };
 
-    if (connectedWallet) {
+    if (connected && publicKey) {
       fetchBalance();
       // Refresh balance every 10 seconds
       const interval = setInterval(fetchBalance, 10000);
       return () => clearInterval(interval);
     }
-  }, [connectedWallet]);
+  }, [connected, publicKey, connection]);
 
+  // Notify parent when connected - only once per address change
+  useEffect(() => {
+    const currentAddress = publicKey?.toBase58() || null;
 
+    // Only notify if we have a new address that we haven't notified about
+    if (connected && publicKey && currentAddress && currentAddress !== lastAddressRef.current) {
+      lastAddressRef.current = currentAddress;
 
-  const handleWalletSelect = async (walletId: string) => {
-    try {
-      console.log(`Attempting to connect ${walletId} wallet...`);
-      const result = await walletManager.connectWallet(walletId);
-      if (result.success && result.wallet) {
-        console.log(`Successfully connected ${walletId} wallet:`, result.wallet);
-        setConnectedWallet(result.wallet);
-        onConnected?.(result.wallet);
-        window.dispatchEvent(new Event('walletConnected'));
-        
-        // Only initialize ethers provider for MetaMask (EVM wallets)
-        if (walletId === 'metamask' && window.ethereum) {
-          await initializeWithProvider(window.ethereum);
-        }
-        
-        // Persist wallet connection
-        localStorage.setItem('siphon-connected-wallet', JSON.stringify(result.wallet));
-      } else {
-        console.error(`Failed to connect ${walletId} wallet:`, result.error);
-        alert(`${walletId === 'phantom' ? 'Phantom' : walletId === 'metamask' ? 'MetaMask' : 'Wallet'} connection failed: ${result.error}`);
-      }
-    } catch (error: unknown) {
-      console.error(`Connection error for ${walletId}:`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Connection error: ${errorMessage}`);
+      const walletInfo: WalletInfo = {
+        id: wallet?.adapter.name.toLowerCase() || 'solana',
+        name: wallet?.adapter.name || 'Solana',
+        address: currentAddress,
+        chain: 'Solana',
+        connected: true
+      };
+
+      onConnected?.(walletInfo);
+      window.dispatchEvent(new Event('walletConnected'));
+      // Persist wallet connection
+      localStorage.setItem('siphon-connected-wallet', JSON.stringify(walletInfo));
     }
+
+    // Reset when disconnected
+    if (!connected) {
+      lastAddressRef.current = null;
+    }
+  }, [connected, publicKey, wallet]); // Remove onConnected from deps to prevent infinite loop
+
+  const handleConnect = () => {
+    setVisible(true);
   };
 
   const handleDashboardClick = () => {
@@ -193,15 +77,14 @@ export default function ConnectButton({ className, onConnected }: { className?: 
     }
   };
 
-  if (connectedWallet) {
+  if (connected && publicKey) {
     return (
-      <div className={`wallet-container ${className}`}>
-        <button 
+      <div className={`wallet-container ${className || ''}`}>
+        <button
           className="wallet-connected-button"
           onClick={handleDashboardClick}
           title="Open dashboard"
         >
-          {/* Wallet Icon and Balance in the same block */}
           <div className="wallet-info-block">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12v-2a5 5 0 0 0-5-5H8a5 5 0 0 0-5 5v2" />
@@ -209,9 +92,7 @@ export default function ConnectButton({ className, onConnected }: { className?: 
               <path d="M12 1v6m0 6v6" />
             </svg>
             <span className="wallet-balance-text">
-              {connectedWallet.chain === 'Solana' 
-                ? (balance !== null ? `${balance.toFixed(4)} SOL` : `0.0000 SOL`)
-                : balance !== null ? `${balance.toFixed(4)} ETH` : `0.0000 ETH`}
+              {balance !== null ? `${balance.toFixed(4)} SOL` : '0.0000 SOL'}
             </span>
           </div>
         </button>
@@ -220,11 +101,16 @@ export default function ConnectButton({ className, onConnected }: { className?: 
   }
 
   return (
-    <WalletSelector 
-      className={className}
-      onWalletSelect={handleWalletSelect}
-      shouldOpen={shouldOpenSelector}
-      onOpenChange={setShouldOpenSelector}
-    />
+    <div className={`wallet-selector ${className || ''}`}>
+      <button
+        className="wallet-selector-trigger"
+        onClick={handleConnect}
+      >
+        <span className="wallet-icon"></span>
+        <span className="wallet-text">Connect Wallet</span>
+      </button>
+    </div>
   );
 }
+
+

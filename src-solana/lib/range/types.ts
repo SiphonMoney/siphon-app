@@ -4,6 +4,15 @@ export interface RangeScreeningRequest {
   chain: 'solana' | 'ethereum';
 }
 
+export interface AddressRiskResponse {
+  riskScore: number;
+  riskLevel: string;
+}
+
+export interface SanctionsResponse {
+  is_ofac_sanctioned: boolean;
+}
+
 export interface RangeScreeningResponse {
   address: string;
   isAllowed: boolean;

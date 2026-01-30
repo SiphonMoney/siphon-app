@@ -1,5 +1,33 @@
 import { PublicKey } from '@solana/web3.js';
 
+// --- ZK Proof Types ---
+
+export interface NoirProof {
+  proof: Uint8Array;
+  publicInputs: {
+    withdrawnValue: bigint;
+    stateRoot: bigint;
+    newCommitment: bigint;
+    nullifierHash: bigint;
+  };
+}
+
+export interface CommitmentData {
+  commitment: bigint;
+  nullifier: bigint;
+  secret: bigint;
+  value: bigint;
+  leafIndex: number;
+}
+
+export interface MerkleProof {
+  pathElements: bigint[];
+  pathIndices: number[];
+  root: bigint;
+}
+
+// --- Deposit/Withdraw Params ---
+
 export interface DepositParams {
   lamports: number;
 }
@@ -7,6 +35,13 @@ export interface DepositParams {
 export interface WithdrawParams {
   lamports: number;
   recipientAddress: string;
+  utxos?: Array<{
+    commitment: string;
+    nullifier: string;
+    secret: string;
+    value: string;
+    leafIndex: number;
+  }>;
 }
 
 export interface DepositSPLParams {
@@ -18,6 +53,13 @@ export interface WithdrawSPLParams {
   amount: number;
   mintAddress: PublicKey;
   recipientAddress: string;
+  utxos?: Array<{
+    commitment: string;
+    nullifier: string;
+    secret: string;
+    value: string;
+    leafIndex: number;
+  }>;
 }
 
 export interface PrivateBalance {
@@ -33,14 +75,16 @@ export interface TransactionResult {
   success: boolean;
   signature?: string;
   error?: string;
+  proof?: string; // hex-encoded proof for on-chain verification
 }
 
-// siphon specific
+// --- Siphon Vault Types ---
+
 export interface SiphonVault {
   owner: PublicKey;
   assetMint: PublicKey;
-  amount: number; // Direct vault balance (lamports)
-  privacyPoolAmount: number; // Amount in Privacy Cash
+  amount: number;
+  privacyPoolAmount: number;
   strategies: number[];
   status: VaultStatus;
   createdAt: number;
@@ -74,7 +118,7 @@ export enum StrategyStatus {
   Cancelled = 'Cancelled',
 }
 
-// token mints on mainnet
+// Token mints on mainnet
 export const TOKEN_MINTS = {
   USDC: new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
   USDT: new PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'),

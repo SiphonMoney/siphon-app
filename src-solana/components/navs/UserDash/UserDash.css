@@ -382,3 +382,63 @@
   cursor: not-allowed;
 }
 
+/* Private Withdrawal Toggle Styles */
+.userdash-private-toggle {
+  display: flex;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.userdash-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.8rem;
+  transition: color 0.2s ease;
+}
+
+.userdash-checkbox-label:hover {
+  color: white;
+}
+
+.userdash-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.userdash-checkbox:checked {
+  background: rgba(138, 43, 226, 0.6);
+  border-color: rgba(138, 43, 226, 0.8);
+}
+
+.userdash-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.userdash-checkbox:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.userdash-checkbox-text {
+  user-select: none;
+}
+

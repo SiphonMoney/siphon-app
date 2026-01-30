@@ -1,164 +1,137 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { walletManager, WalletInfo } from '../../extensions/walletManager';
+import { useState, useEffect, useCallback } from 'react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
 import './UserDash.css';
-import { deposit, withdraw } from "../../../lib/handler";
-import { getSiphonVaultTotalBalance, TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit } from '../../../lib/nexus';
-
-interface UnifiedBalance {
-  symbol: string;
-  balance: string;
-  decimals: number;
-}
+import { SOLANA_TOKEN_MAP } from '../../../lib/solanaHandler';
+import { depositToZkPool, withdrawFromZkPool, getZkPoolBalance } from '../../../lib/zkPoolHandler';
+import { SUPPORTED_TOKENS } from '../../../lib/siphon/constants';
 
 interface UserDashProps {
   isLoaded?: boolean;
   walletConnected: boolean;
 }
 
+interface WalletBalance {
+  symbol: string;
+  balance: string;
+  decimals: number;
+}
+
 export default function UserDash({ isLoaded = true, walletConnected }: UserDashProps) {
-  const [wallet, setWallet] = useState<WalletInfo | null>(null);
-  const [walletBalances, setWalletBalances] = useState<UnifiedBalance[] | null>(null);
-  const [siphonVaultBalances, setSiphonVaultBalances] = useState<{ [token: string]: number } | null>(null);
+  const wallet = useWallet();
+  const { publicKey, disconnect, connected } = wallet;
+  const { connection } = useConnection();
+
+  const [walletBalances, setWalletBalances] = useState<WalletBalance[] | null>(null);
+  const [zkPoolBalances, setZkPoolBalances] = useState<{ [token: string]: number } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDepositMode, setIsDepositMode] = useState(true);
-  const VAULT_CHAIN_ID = 11155111; // Sepolia id
-  
+
   const [transactionInput, setTransactionInput] = useState({
-    token: "ETH",
+    token: "SOL",
     amount: "",
     recipient: ""
   });
-  useEffect(() => {
-    const fetchBalances = async () => {
-      const { details } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
-      setSiphonVaultBalances(details);
-      console.log("Siphon Vault Balances fetched:", details); // Debug log
-    };
-    
-    fetchBalances();
-    // Refresh Siphon balance periodically
-    const interval = setInterval(fetchBalances, 10000);
-    return () => clearInterval(interval);
-  }, [wallet]);
 
-  // ... (keep the depositInputs and withdrawals state as is) ...
+  // Fetch wallet balances from Solana
+  const fetchWalletBalances = useCallback(async () => {
+    if (!publicKey || !connection) return;
 
-  useEffect(() => {
-    const checkWalletAndFetchBalances = async () => {
+    try {
+      const balances: WalletBalance[] = [];
+
+      // Get SOL balance
+      const solBalance = await connection.getBalance(publicKey);
+      balances.push({
+        symbol: 'SOL',
+        balance: (solBalance / LAMPORTS_PER_SOL).toString(),
+        decimals: 9,
+      });
+
+      // Get USDC balance
       try {
-        // First check walletManager
-        const wallets = walletManager.getConnectedWallets();
-        let metamaskWallet = wallets.find(w => w.id === 'metamask');
-        
-        // If not found in walletManager, check localStorage
-        if (!metamaskWallet) {
-          try {
-            const storedWallet = localStorage.getItem('siphon-connected-wallet');
-            if (storedWallet) {
-              const walletData = JSON.parse(storedWallet);
-              if (walletData && walletData.address) {
-                metamaskWallet = walletData;
-              }
-            }
-          } catch (error) {
-            console.error('Error reading wallet from localStorage:', error);
-          }
-        }
-        
-        if (metamaskWallet) {
-          setWallet(metamaskWallet);
-          setTransactionInput(prev => ({...prev, recipient: metamaskWallet!.address}));
-          
-          // Ensure ethers is initialized before fetching balances
-          if (!isInitialized() && window.ethereum) {
-            try {
-              await initializeWithProvider(window.ethereum);
-            } catch (error) {
-              console.error('Failed to initialize ethers:', error);
-            }
-          }
-          
-          const balances = await getUnifiedBalances();
-          setWalletBalances(balances);
-        }
-      } catch (error) {
-        console.error('Error fetching wallet data:', error);
+        const usdcAta = await getAssociatedTokenAddress(
+          SUPPORTED_TOKENS.USDC.mint,
+          publicKey
+        );
+        const usdcAccount = await getAccount(connection, usdcAta);
+        balances.push({
+          symbol: 'USDC',
+          balance: (Number(usdcAccount.amount) / Math.pow(10, 6)).toString(),
+          decimals: 6,
+        });
+      } catch {
+        // USDC account doesn't exist
+        balances.push({
+          symbol: 'USDC',
+          balance: '0',
+          decimals: 6,
+        });
       }
-    };
 
-    checkWalletAndFetchBalances();
-    
-    // Listen for wallet connection/disconnection events
-    const handleWalletConnected = () => {
-      checkWalletAndFetchBalances();
-    };
+      setWalletBalances(balances);
+    } catch (error) {
+      console.error('Error fetching wallet balances:', error);
+    }
+  }, [publicKey, connection]);
 
-    const handleWalletDisconnected = () => {
-      setWallet(null);
-      setWalletBalances(null);
-    };
-
-    window.addEventListener('walletConnected', handleWalletConnected);
-    window.addEventListener('walletDisconnected', handleWalletDisconnected);
-
-    return () => {
-      window.removeEventListener('walletConnected', handleWalletConnected);
-      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
-    };
+  const fetchZkPoolBalances = useCallback(() => {
+    try {
+      const balances: { [token: string]: number } = {
+        SOL: getZkPoolBalance('SOL'),
+        USDC: getZkPoolBalance('USDC'),
+      };
+      setZkPoolBalances(balances);
+      console.log("ZK Pool Balances fetched:", balances);
+    } catch (error) {
+      console.error('Error fetching ZK pool balances:', error);
+    }
   }, []);
 
-  // Separate effect for balance refresh
+  // Set recipient to own address on connect
   useEffect(() => {
-    if (!wallet) return;
-    
-    const interval = setInterval(async () => {
-      try {
-        // Ensure ethers is initialized before fetching balances
-        if (!isInitialized() && window.ethereum) {
-          try {
-            await initializeWithProvider(window.ethereum);
-          } catch (error) {
-            console.error('Failed to initialize ethers:', error);
-            return;
-          }
-        }
-        
-        const balances = await getUnifiedBalances();
-        setWalletBalances(balances);
-      } catch (error) {
-        console.error('Error refreshing wallet balances:', error);
-      }
+    if (publicKey) {
+      setTransactionInput(prev => ({...prev, recipient: publicKey.toBase58()}));
+    }
+  }, [publicKey]);
+
+  // Fetch balances on mount and periodically
+  useEffect(() => {
+    fetchWalletBalances();
+    fetchZkPoolBalances();
+
+    const interval = setInterval(() => {
+      fetchWalletBalances();
+      fetchZkPoolBalances();
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [wallet]);
+  }, [fetchWalletBalances, fetchZkPoolBalances]);
 
   const formatAddress = (address: string) => {
     if (address.length <= 10) return address;
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
-  const handleLogout = () => {
-    if (wallet) {
-      console.log(`Disconnecting ${wallet.id} wallet...`);
-      walletManager.disconnectWallet(wallet.id);
-      setWallet(null);
-      window.dispatchEvent(new Event('walletDisconnected'));
-      deinit();
-      // Clear persisted wallet connection
+  const handleLogout = async () => {
+    try {
+      await disconnect();
       localStorage.removeItem('siphon-connected-wallet');
-      // Navigate back to discover view
+      window.dispatchEvent(new Event('walletDisconnected'));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'discover' }));
       }
+    } catch (error) {
+      console.error('Error disconnecting wallet:', error);
     }
   };
 
   const handleConfirm = async () => {
     if (isProcessing) return;
 
-    if (!walletConnected) {
+    if (!walletConnected || !publicKey) {
       alert('Please connect wallet first');
       return;
     }
@@ -181,24 +154,30 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
     try {
       if (isDepositMode) {
-        console.log('Depositing to Siphon Vault');
-        const result = await deposit(transactionInput.token, transactionInput.amount);
-        
+        console.log('Depositing to ZK Pool on Solana');
+        const result = await depositToZkPool(connection, wallet, transactionInput.token, transactionInput.amount);
+
         if (result.success) {
-          alert(`Successfully deposited ${transactionInput.amount} ${transactionInput.token}`);
+          alert(`Successfully deposited ${transactionInput.amount} ${transactionInput.token}\nSignature: ${result.signature}`);
           setTransactionInput(prev => ({...prev, amount: ""}));
+          // Refresh balances
+          await fetchWalletBalances();
+          fetchZkPoolBalances();
         } else {
           alert(`Deposit failed: ${result.error}`);
         }
       } else {
-        console.log('Withdrawing from Siphon Vault');
-        const result = await withdraw(transactionInput.token, transactionInput.amount, transactionInput.recipient);
-        
+        // All withdrawals are now private via ZK Pool
+        console.log('Withdrawing from ZK Pool (private/anonymous)');
+        const result = await withdrawFromZkPool(transactionInput.token, transactionInput.amount, transactionInput.recipient);
+
         if (result.success) {
-          alert(`Successfully withdrawn ${transactionInput.amount} ${transactionInput.token}`);
+          alert(`Private withdrawal successful!\n${transactionInput.amount} ${transactionInput.token} sent to ${transactionInput.recipient}\nSignature: ${result.signature}`);
           setTransactionInput(prev => ({...prev, amount: ""}));
+          await fetchWalletBalances();
+          fetchZkPoolBalances();
         } else {
-          alert(`Withdraw failed: ${result.error}`);
+          alert(`Private withdrawal failed: ${result.error}`);
         }
       }
     } catch (error: unknown) {
@@ -209,13 +188,13 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     setIsProcessing(false);
   };
 
-  if (!wallet) {
+  if (!publicKey) {
     return (
       <div className={`userdash-view ${isLoaded ? 'loaded' : ''}`}>
         <div className="userdash-content-wrapper">
           <div className="userdash-empty-state">
-            <h2>No MetaMask Wallet Connected</h2>
-            <p>Please connect your MetaMask wallet to view your dashboard.</p>
+            <h2>No Wallet Connected</h2>
+            <p>Please connect your Solana wallet to view your dashboard.</p>
           </div>
         </div>
       </div>
@@ -243,11 +222,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           </div>
           <div className="userdash-address">
             <span className="userdash-address-label">Address:</span>
-            <span className="userdash-address-value">{formatAddress(wallet.address)}</span>
+            <span className="userdash-address-value">{formatAddress(publicKey.toBase58())}</span>
             <button
               className="userdash-copy-button"
               onClick={() => {
-                navigator.clipboard.writeText(wallet.address);
+                navigator.clipboard.writeText(publicKey.toBase58());
                 alert('Address copied to clipboard!');
               }}
               title="Copy address"
@@ -264,16 +243,15 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">Wallet Balance</h2>
-              <span className="userdash-balance-network">Sepolia</span>
+              <span className="userdash-balance-network">{process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}</span>
             </div>
             <div className="userdash-balance-content-multi">
               {walletBalances !== null && walletBalances.length > 0 ? (
-                // Sort and filter balances to show ETH then USDC
                 walletBalances
-                  .filter(bal => bal.symbol === 'ETH' || bal.symbol === 'USDC')
+                  .filter(bal => bal.symbol === 'SOL' || bal.symbol === 'USDC')
                   .sort((a, b) => {
-                    if (a.symbol === 'ETH') return -1;
-                    if (b.symbol === 'ETH') return 1;
+                    if (a.symbol === 'SOL') return -1;
+                    if (b.symbol === 'SOL') return 1;
                     return 0;
                   })
                   .map((bal, index) => (
@@ -289,23 +267,22 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               )}
             </div>
             <div className="userdash-balance-description">
-              Your ETH balance on Sepolia network
+              Your balance on Solana {process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}
             </div>
           </div>
 
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">Siphon Vault Balance</h2>
-              <span className="userdash-balance-network">Sepolia</span>
+              <span className="userdash-balance-network">Private</span>
             </div>
             <div className="userdash-balance-content-multi">
-              {siphonVaultBalances !== null && Object.keys(siphonVaultBalances).length > 0 ? (
-                // Sort and filter balances to show ETH then USDC
-                Object.entries(siphonVaultBalances)
-                  .filter(([symbol]) => symbol === 'ETH' || symbol === 'USDC')
+              {zkPoolBalances !== null && Object.keys(zkPoolBalances).length > 0 ? (
+                Object.entries(zkPoolBalances)
+                  .filter(([symbol]) => symbol === 'SOL' || symbol === 'USDC')
                   .sort(([symbolA], [symbolB]) => {
-                    if (symbolA === 'ETH') return -1;
-                    if (symbolB === 'ETH') return 1;
+                    if (symbolA === 'SOL') return -1;
+                    if (symbolB === 'SOL') return 1;
                     return 0;
                   })
                   .map(([tokenSymbol, amount], index) => (
@@ -321,21 +298,21 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               )}
             </div>
             <div className="userdash-balance-description">
-              Your aggregated balance across all Siphon Vault deposits
+              Your anonymous balance in the Noir ZK privacy pool (stored in browser)
             </div>
           </div>
 
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">
-                <span 
+                <span
                   className={`userdash-mode-toggle ${isDepositMode ? 'active' : ''}`}
                   onClick={() => setIsDepositMode(true)}
                 >
                   Deposit
                 </span>
                 {' / '}
-                <span 
+                <span
                   className={`userdash-mode-toggle ${!isDepositMode ? 'active' : ''}`}
                   onClick={() => setIsDepositMode(false)}
                 >
@@ -361,8 +338,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                   }}
                   className="userdash-select"
                 >
-                  {Object.keys(TOKEN_MAP)
-                    .filter(tokenSymbol => tokenSymbol === 'ETH' || tokenSymbol === 'USDC')
+                  {Object.keys(SOLANA_TOKEN_MAP)
                     .map((tokenSymbol) => (
                       <option key={tokenSymbol} value={tokenSymbol} style={{ fontSize: '0.8em' }}>
                         {tokenSymbol}
@@ -401,4 +377,3 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     </div>
   );
 }
-

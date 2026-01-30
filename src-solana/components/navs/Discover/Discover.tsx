@@ -585,47 +585,26 @@ export default function Discover({
       </div>
       <div className={`discover-grid ${discoverViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
         {/* Strategy cards from strategies.tsx */}
-        {(() => {
-          const filteredStrategies = strategyList
-            .filter(strategy => {
-              if (selectedCategory === 'all') return true;
-              if (typeof selectedCategory === 'object' && selectedCategory instanceof Set) {
-                return selectedCategory.has(strategy.category);
-              }
-              return strategy.category === selectedCategory;
-            })
-            .filter(strategy => {
-              if (selectedChains.size === 0) return true;
-              return strategy.chains.some(chain => selectedChains.has(chain));
-            })
-            .filter(strategy => {
-              if (selectedNetworks.size === 0) return true;
-              return strategy.networks.some(network => selectedNetworks.has(network));
-            })
-            .filter(strategy => !discoverSearch || strategy.name.toLowerCase().includes(discoverSearch.toLowerCase()) || strategy.description.toLowerCase().includes(discoverSearch.toLowerCase()));
-          
-          // Determine columns per row based on view mode and screen size
-          // Default is 4 columns for cards view, 1 for list view
-          const getColumnsPerRow = () => {
-            if (discoverViewMode === 'list') return 1;
-            // For cards view, check window width (default 4, responsive breakpoints: 3, 2, 1)
-            if (typeof window !== 'undefined') {
-              if (window.innerWidth <= 640) return 1;
-              if (window.innerWidth <= 1024) return 2;
-              if (window.innerWidth <= 1400) return 3;
-            }
-            return 4;
-          };
-          
-          const columnsPerRow = getColumnsPerRow();
-          const totalStrategies = filteredStrategies.length;
-          
-          return filteredStrategies.map((strategy, index) => {
-            const isFavorite = favoriteStrategies?.has(strategy.name) || false;
-            const activeNetworks = strategy.activeNetworks || strategy.networks;
-            
-            // Hide category label on first card if it's alone in first row and there are more cards in subsequent rows
-            const shouldHideCategoryLabel = index === 0 && totalStrategies > columnsPerRow;
+        {strategyList
+        .filter(strategy => {
+          if (selectedCategory === 'all') return true;
+          if (typeof selectedCategory === 'object' && selectedCategory instanceof Set) {
+            return selectedCategory.has(strategy.category);
+          }
+          return strategy.category === selectedCategory;
+        })
+        .filter(strategy => {
+          if (selectedChains.size === 0) return true;
+          return strategy.chains.some(chain => selectedChains.has(chain));
+        })
+        .filter(strategy => {
+          if (selectedNetworks.size === 0) return true;
+          return strategy.networks.some(network => selectedNetworks.has(network));
+        })
+        .filter(strategy => !discoverSearch || strategy.name.toLowerCase().includes(discoverSearch.toLowerCase()) || strategy.description.toLowerCase().includes(discoverSearch.toLowerCase()))
+        .map((strategy, index) => {
+          const isFavorite = favoriteStrategies?.has(strategy.name) || false;
+          const activeNetworks = strategy.activeNetworks || strategy.networks;
           
           return (
             <div 
@@ -695,11 +674,9 @@ export default function Discover({
                   );
                 })}
               </div>
-              {!shouldHideCategoryLabel && (
-                <div className="discover-card-category-label">
-                  <span className="discover-category-text">{strategy.category.charAt(0).toUpperCase() + strategy.category.slice(1)}</span>
-                </div>
-              )}
+              <div className="discover-card-category-label">
+                <span className="discover-category-text">{strategy.category.charAt(0).toUpperCase() + strategy.category.slice(1)}</span>
+              </div>
               <div className="discover-card-meta">
                 <div className="discover-meta-item">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -766,8 +743,7 @@ export default function Discover({
               </div>
             </div>
           );
-          });
-        })()}
+        })}
       </div>
       
       {/* Strategy Modal */}
