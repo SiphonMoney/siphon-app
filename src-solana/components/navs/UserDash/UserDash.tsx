@@ -7,7 +7,7 @@ import './UserDash.css';
 import { SOLANA_TOKEN_MAP } from '../../../lib/solanaHandler';
 import { depositToZkPool, withdrawFromZkPool, getZkPoolBalance } from '../../../lib/zkPoolHandler';
 import { SUPPORTED_TOKENS } from '../../../lib/siphon/constants';
-import { NEXT_PUBLIC_SOLANA_NETWORK } from '../../../../lib/config';
+import { NEXT_PUBLIC_SOLANA_NETWORK } from '../../../lib/config';
 
 interface UserDashProps {
   isLoaded?: boolean;
