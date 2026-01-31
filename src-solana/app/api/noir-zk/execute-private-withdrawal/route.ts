@@ -217,7 +217,6 @@ export async function POST(request: NextRequest) {
       if (!idl.address) {
         idl.address = SIPHON_PROGRAM_ID.toBase58();
       }
-      // @ts-expect-error - Anchor Program constructor signature varies by version
       const program = new Program(idl as Idl, provider);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
