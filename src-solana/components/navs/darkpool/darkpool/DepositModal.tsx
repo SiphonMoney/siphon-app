@@ -6,6 +6,7 @@ import './darkpool.css';
 
 interface DepositModalProps {
   walletAddress: string;
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -14,6 +15,7 @@ type TokenType = 'base' | 'quote';
 
 export default function DepositModal({ 
   walletAddress, 
+  signMessage,
   onClose, 
   onSuccess 
 }: DepositModalProps) {

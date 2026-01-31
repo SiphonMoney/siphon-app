@@ -110,10 +110,14 @@ export async function awaitEvent<T = DarkPoolEvent>(
   try {
     const event = await new Promise<T>((resolve, reject) => {
       // Set up event listener
-      listenerId = program.addEventListener(eventName, (event: T) => {
-        if (timeoutId) clearTimeout(timeoutId);
-        resolve(event);
-      });
+      listenerId = program.addEventListener(
+        eventName,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (event: any, _slot: number, _signature: string) => {
+          if (timeoutId) clearTimeout(timeoutId);
+          resolve(event as T);
+        },
+      );
 
       // Set up timeout
       timeoutId = setTimeout(() => {
@@ -228,10 +232,16 @@ export async function awaitAnyEvent<T = DarkPoolEvent>(
 export function listenToEvent<T = DarkPoolEvent>(
   program: Program,
   eventName: EventName,
-  callback: (event: T) => void
+  callback: (event: T) => void,
 ): () => Promise<void> {
-  const listenerId = program.addEventListener(eventName, callback);
-  
+  const listenerId = program.addEventListener(
+    eventName,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (event: any, _slot: number, _signature: string) => {
+      callback(event as T);
+    },
+  );
+
   return async () => {
     await program.removeEventListener(listenerId);
   };

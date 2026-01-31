@@ -20,12 +20,25 @@ import { SIPHON_PROGRAM_ID, NATIVE_SOL_MINT, CONFIG_SEED, VAULT_SEED, WITHDRAWAL
 function getExecutorKeypair(): Keypair {
   const privateKey = process.env.EXECUTOR_PRIVATE_KEY;
   if (!privateKey) {
-    throw new Error('EXECUTOR_PRIVATE_KEY not configured');
+    console.error('[Execute Private Withdrawal] EXECUTOR_PRIVATE_KEY is not set in environment');
+    throw new Error('EXECUTOR_PRIVATE_KEY not configured.');
   }
-  if (privateKey.startsWith('[')) {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(privateKey)));
+
+  console.log('[Execute Private Withdrawal] EXECUTOR_PRIVATE_KEY found, length:', privateKey.length);
+
+  try {
+    if (privateKey.startsWith('[')) {
+      const parsed = JSON.parse(privateKey);
+      console.log('[Execute Private Withdrawal] Parsed as JSON array, length:', parsed.length);
+      return Keypair.fromSecretKey(Uint8Array.from(parsed));
+    }
+    const decoded = bs58.decode(privateKey);
+    console.log('[Execute Private Withdrawal] Decoded from base58, byte length:', decoded.length);
+    return Keypair.fromSecretKey(decoded);
+  } catch (e) {
+    console.error('[Execute Private Withdrawal] Failed to parse private key:', e);
+    throw new Error(`Failed to parse EXECUTOR_PRIVATE_KEY: ${e instanceof Error ? e.message : 'Unknown error'}`);
   }
-  return Keypair.fromSecretKey(bs58.decode(privateKey));
 }
 
 let isInitialized = false;

@@ -121,7 +121,7 @@ async function getProgram(
     programId,
     MATCHING_ENGINE_IDL_PATH || undefined,
   );
-  return new Program(idl, provider) as UnknownProgram;
+  return new Program(idl, programId, provider) as UnknownProgram;
 }
 
 export class MatchingEngineClient {
@@ -164,7 +164,7 @@ export class MatchingEngineClient {
       programId,
       MATCHING_ENGINE_IDL_PATH || undefined,
     );
-    const program = new Program(idl, provider) as UnknownProgram;
+    const program = new Program(idl, programId, provider) as UnknownProgram;
     return new MatchingEngineClient(
       connection,
       wallet,

@@ -78,20 +78,21 @@ export default function DarkPoolInterface({
   };
 
   // Not connected state - MUST connect wallet first
-  // if (!walletAddress) {
-  //   return (
-  //     <div className="darkpool-interface">
-  //       <div className="welcome-screen">
-  //         <div className="connect-button-wrapper">
-  //           <ConnectButton
-  //             className="welcome-connect-button"
-  //             onConnected={onWalletConnected}
-  //           />
-  //         </div>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  if (!walletAddress) {
+    return (
+      <div className="darkpool-interface">
+        <div className="welcome-screen">
+          <div className="connect-button-wrapper">
+            {/* <ConnectButton
+              className="welcome-connect-button"
+              onConnected={onWalletConnected}
+            /> */}
+            <p className="text-white">Please connect your wallet to continue.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Checking ledger state (skip in demo mode)
   if (checkingLedger && !DEMO_MODE) {

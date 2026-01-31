@@ -1,8 +1,7 @@
 /**
  * Relayer Core - Embedded Poseidon Merkle tree + commitment indexing
- *
- * This module provides the core relayer functionality without requiring
- * a separate server process. It runs directly inside Next.js API routes.
+ * This module provides the core relayer functionality without requiringa separate server process. 
+ * It runs directly inside Next.js API routes
  */
 
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';

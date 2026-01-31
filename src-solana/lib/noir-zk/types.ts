@@ -1,7 +1,5 @@
 import { PublicKey } from '@solana/web3.js';
 
-// --- ZK Proof Types ---
-
 export interface NoirProof {
   proof: Uint8Array;
   publicInputs: {

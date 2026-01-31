@@ -7,6 +7,7 @@ import './darkpool.css';
 
 interface WithdrawModalProps {
   walletAddress: string;
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -15,6 +16,8 @@ type TokenType = 'base' | 'quote';
 type WithdrawStatus = 'idle' | 'verifying' | 'waiting_backend' | 'executing' | 'complete' | 'failed';
 
 export default function WithdrawModal({ 
+  walletAddress,
+  signMessage,
   onClose, 
   onSuccess 
 }: WithdrawModalProps) {

@@ -1,6 +1,5 @@
 /**
  * Client-side ZK Pool Deposit - User signs with their wallet
- *
  * Generates commitment/nullifier client-side for privacy.
  * User's wallet signs and pays for the transaction.
  */
