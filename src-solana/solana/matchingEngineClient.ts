@@ -1,68 +1,83 @@
-import { AnchorProvider, BN, Program, Idl } from "@coral-xyz/anchor";
-import * as anchor from "@coral-xyz/anchor";
+// matchingEngine.ts - Integration utilities for the matching engine
+// Based on new_inmp.md specification
+
+import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import {
-  Connection,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
+  PROGRAM_ID,
+  SOLANA_RPC,
+  SCALE_FACTOR,
+  getUserLedgerAddress,
+  getOrderAccountAddress,
+  getOrderbookAddress,
+  getVaultAddress,
+  getVaultAuthorityAddress,
+} from '../lib/constants';
+import { MATCHING_ENGINE_IDL_PATH } from '@/config/env';
 import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddress,
-} from "@solana/spl-token";
-import { Buffer } from "buffer";
+  getMXEPublicKeyWithRetry,
+} from '../lib/arciumHelpers';
+import { 
+  awaitEvent, 
+  awaitOrderCheckResult, 
+  extractBalanceNonce,
+  UserLedgerDepositedEvent,
+  UserLedgerWithdrawVerifiedSuccessEvent
+} from '../lib/eventListeners';
+import { randomBytes } from 'crypto';
 import {
-  getComputationAccAddress,
-  getCompDefAccAddress,
-  getCompDefAccOffset,
-  getExecutingPoolAccAddress,
-  getClusterAccAddress,
-  getArciumProgramId,
-  getMempoolAccAddress,
-  getMXEAccAddress,
   awaitComputationFinalization,
-} from "@/lib/arciumHelpers";
-import {
-  MATCHING_ENGINE_PROGRAM_ID,
-  ARCIUM_CLUSTER_OFFSET,
-} from "@/config/env";
-import {
-  globalStatePda,
-  orderAccountPda,
-  orderTicketPda,
-  userLedgerPda,
-  vaultAuthorityPda,
-  vaultPda,
-} from "@/solana/pdas";
-import {
-  cipherForUser,
-  computeOrderCommitment,
-  encryptOrder,
-  getMxePublicKeyWithRetry,
-  u64ToBn,
-} from "@/crypto/arcium";
-import { getOrCreateUserX25519 } from "@/crypto/X25519Store";
+  getCompDefAccOffset,
+  getCompDefAccAddress,
+  getComputationAccAddress,
+  deserializeLE,
+  x25519,
+  getArciumProgramId,
+  RescueCipher,
+  getClusterAccAddress,
+} from "@arcium-hq/client";
 import { MatchingEngine } from "../../public/types/matching_engine";
 import MatchingEngineIDL from "../../public/idl/matching_engine.json";
 
 
 
-type TokenType = "base" | "quote";
-type Side = "buy" | "sell";
-type UnknownProgram = Program<Idl>;
-type RpcOptions = { commitment?: string };
-type AccountsPartialRpc = {
-  accountsPartial: (accounts: Record<string, PublicKey>) => {
-    rpc: (options?: RpcOptions) => Promise<string>;
-  };
-};
-type MatchingMethods = {
-  initializeUserLedger: (...args: unknown[]) => AccountsPartialRpc;
-  depositToLedger: (...args: unknown[]) => AccountsPartialRpc;
-  withdrawFromLedgerVerify: (...args: unknown[]) => AccountsPartialRpc;
-  submitOrderCheck: (...args: unknown[]) => AccountsPartialRpc;
-};
+
+// Types for matching engine integration
+export interface OrderParams {
+  amount: number; // Amount in base token (e.g., SOL) - NOT scaled
+  price: number;  // Price in quote token (e.g., USDC) - NOT scaled
+  orderType: 0 | 1; // 0 = buy, 1 = sell
+  orderId: number;
+}
+
+export interface EncryptedBalance {
+  baseTotal: bigint;
+  baseAvailable: bigint;
+  quoteTotal: bigint;
+  quoteAvailable: bigint;
+}
+
+export interface SubmitOrderResult {
+  success: boolean;
+  txSignature?: string;
+  orderId?: number;
+  reason?: string;
+}
+
+export interface DepositResult {
+  success: boolean;
+  txSignature?: string;
+  updatedBalance?: EncryptedBalance;
+  error?: string;
+}
+
+export interface WithdrawResult {
+  success: boolean;
+  txSignature?: string;
+  updatedBalance?: EncryptedBalance;
+  error?: string;
+}
 
 interface WalletAdapter {
   publicKey: PublicKey | null;
@@ -71,476 +86,621 @@ interface WalletAdapter {
   signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
 }
 
-function randomBytes(length: number): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(length));
+function assertProviderWallet(wallet: WalletAdapter): asserts wallet is {
+  publicKey: PublicKey;
+  signTransaction: (transaction: Transaction) => Promise<Transaction>;
+  signAllTransactions: (transactions: Transaction[]) => Promise<Transaction[]>;
+} {
+  if (!wallet.publicKey) {
+    throw new Error('Wallet not connected');
+  }
+  if (!wallet.signTransaction || !wallet.signAllTransactions) {
+    throw new Error('Wallet missing transaction signing support');
+  }
 }
 
-function randomU64(): bigint {
-  const buffer = Buffer.alloc(8);
-  buffer.set(randomBytes(8));
-  return buffer.readBigUInt64LE(0);
+function resolveIdlPath(idlPath?: string): string {
+  const trimmed = (idlPath || '').trim();
+  if (!trimmed) return '/idl/matching_engine.json';
+  if (trimmed.includes('/public/idl/')) {
+    return trimmed.replace('/public/idl/', '/idl/');
+  }
+  if (trimmed.startsWith('public/idl/')) {
+    return `/${trimmed.slice('public/idl/'.length)}`.replace(/^\/?/, '/idl/');
+  }
+  if (trimmed.startsWith('idl/')) {
+    return `/${trimmed}`;
+  }
+  if (trimmed.startsWith('/')) {
+    return trimmed;
+  }
+  return `/idl/${trimmed}`;
 }
 
-function u128FromBytes(bytes: Uint8Array): BN {
-  const buffer = Buffer.from(bytes);
-  const hex = buffer.toString("hex");
-  return new BN(hex, 16);
+function containsGenerics(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) {
+    return value.some(containsGenerics);
+  }
+  if ('generics' in value || 'generic' in value) {
+    return true;
+  }
+  return Object.values(value).some(containsGenerics);
 }
 
-const SIGN_PDA_SEED = "ArciumSignerAccount";
-const POOL_ACCOUNT = new PublicKey(
-  "G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC",
-);
-const CLOCK_ACCOUNT = new PublicKey(
-  "7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot",
-);
+function sanitizeIdlNode(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeIdlNode(item));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
 
-function signPdaAccount(programId: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from(SIGN_PDA_SEED)],
-    programId,
-  );
-  return pda;
+  if ('generic' in value) {
+    return 'u8';
+  }
+
+  if ('defined' in value) {
+    const defined = (value as { defined?: unknown }).defined;
+    if (defined && typeof defined === 'object' && 'name' in defined) {
+      return {
+        ...value,
+        defined: (defined as { name: string }).name,
+      };
+    }
+  }
+
+  if ('array' in value) {
+    const arrayValue = (value as { array?: unknown }).array;
+    if (Array.isArray(arrayValue) && arrayValue.length === 2) {
+      const elementType = sanitizeIdlNode(arrayValue[0]);
+      let length = arrayValue[1];
+      if (typeof length !== 'number') {
+        length = 1;
+      }
+      const next = { ...value, array: [elementType, length] };
+      if ('generics' in next) {
+        delete (next as { generics?: unknown }).generics;
+      }
+      return next;
+    }
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === 'generics') {
+      continue;
+    }
+    result[key] = sanitizeIdlNode(entry);
+  }
+  return result;
 }
 
-function toU128LE(value: BN): Uint8Array {
-  const buffer = Buffer.alloc(16);
-  buffer.set(value.toArrayLike(Buffer, "le", 16));
-  return new Uint8Array(buffer);
+function sanitizeIdlIfNeeded(idl: Idl): Idl {
+  if (!containsGenerics(idl)) {
+    return idl;
+  }
+  const cloned = JSON.parse(JSON.stringify(idl)) as Idl;
+  return sanitizeIdlNode(cloned) as Idl;
 }
 
-async function getProgram(
-  connection: Connection,
-  wallet: WalletAdapter,
-  programId = MATCHING_ENGINE_PROGRAM_ID,
-): Promise<anchor.Program<MatchingEngine>> {
-  const provider = new AnchorProvider(
-    connection,
-    wallet as AnchorProvider["wallet"],
-    { commitment: "confirmed" },
-  );
-  return new anchor.Program<MatchingEngine>(
-    MatchingEngineIDL as anchor.Idl,
-    provider
-  );
+async function loadIdl(): Promise<Idl> {
+  const path = resolveIdlPath(MATCHING_ENGINE_IDL_PATH);
+  const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch IDL: HTTP ${response.status} (${path})`);
+  }
+  const idl = (await response.json()) as Idl;
+  return sanitizeIdlIfNeeded(idl);
 }
+
+// ===== Main Matching Engine Client =====
 
 export class MatchingEngineClient {
-  private connection: Connection;
-  private wallet: WalletAdapter;
+  private program: Program;
   private provider: AnchorProvider;
-  private program: UnknownProgram;
-  private programId: PublicKey;
+  private userPrivateKey: Uint8Array;
+  private userPublicKey: Uint8Array;
+  private cipher: RescueCipher | null = null;
+  private clusterOffset: number = 456;
+  private clusterAccount : PublicKey;
+  private mempoolAccount : PublicKey;
+  private executingPoolAccount : PublicKey;
+  private mxeAccount : PublicKey;
+  private wallet?: WalletAdapter;
+  // private compDefAccAddressOfInitUserLedger : PublicKey;
+  // private compDefAccAddressOfUpdateLedgerDeposit : PublicKey;
+  // private compDefAccAddressOfUpdateLedgerWithdrawVerify : PublicKey;
+  // private compDefAccAddressOfExecuteSettlement : PublicKey;
+  // private compDefAccAddressOfSubmitOrderCheck : PublicKey;
+  // private compDefAccAddressOfMatchOrders : PublicKey;
+  // private compDefAccAddressOfTriggerMatching : PublicKey;
+  // private compDefAccAddressOfExecuteSettlement : PublicKey;
 
-  private constructor(
-    connection: Connection,
-    wallet: WalletAdapter,
+
+  constructor(
+    program: Program,
     provider: AnchorProvider,
-    program: UnknownProgram,
-    programId: PublicKey,
+    userPrivateKey: Uint8Array,
+    userPublicKey: Uint8Array,
+    wallet?: WalletAdapter
   ) {
-    this.connection = connection;
-    this.wallet = wallet;
-    this.provider = provider;
+
+
+
+//     clusterAccount DzaQCyfybroycrNqE5Gk7LhSbWD2qfCics6qptBFbr95
+// mempoolAccount Ex7BD8o8PK1y2eXDd38Jgujj93uHygrZeWXDeGAHmHtN
+// executingPoolAccount 4mcrgNZzJwwKrE3wXMHfepT8htSBmGqBzDYPJijWooog
+// comp def acc address of init_user_ledger PublicKey [PublicKey(9Ps2uKkckSScLGbWZ3ssZRE8aNs46sNyzHqyfLdP72y4)] {
+//   _bn: <BN: 7cb8d870e1d2ae371f296bc064b34cbcfd27e9875432396a3cc9da83ead46667>
+// }
+// comp def acc address of update_ledger_deposit PublicKey [PublicKey(AA3MXRjgVbJyhNV7cxx1sYyXmESGxkXjxqNRRscMRuH3)] {
+//   _bn: <BN: 880a1236efb746f912614b2caf8647a813970d1858f11436a8de854ff5898352>
+// }
+// comp def acc address of update_ledger_withdraw_verify PublicKey [PublicKey(4xDPisooqQEyYLhmMq2YMimRFLNpJvA4GEMKkjgBX1qG)] {
+//   _bn: <BN: 3ab804456c71cbf611b69222f4edcb1cd891ca884effaf6753effbd5cf5a499f>
+// }
+// comp def acc address of execute_settlement PublicKey [PublicKey(2Wq5JSbPwhmzRQtNewodmZ2cK9HU2bRCvHELobDvevFQ)] {
+//   _bn: <BN: 167fe35442777c08d64b8189592894fdd02f8c44c0763945315f7c6451934fcf>
+// }
+// comp def acc address of submit_order_check PublicKey [PublicKey(3dGihdq9R8RuqHnMFnmDGC4154ewMd4GKusruQV9N1pS)] {
+//   _bn: <BN: 27020e759d2186b8c46a56416658a2cd4a0c09bb393f7b4218827247f40a7cc7>
+// }
+// comp def acc address of match_orders PublicKey [PublicKey(7APvfRWtsw9732CnN35shvt5DYck83dPDkH72WBx9ShH)] {
+//   _bn: <BN: 5b8e453d0d653380537a6d62611af4e013b9737950e47faea72076b68e801b54>
+// }
+// comp def acc address of trigger_matching PublicKey [PublicKey(Fw63UnmhnCi7vuLacpt9yTa43gncUiPbgffSDDnYpbhz)] {
+//   _bn: <BN: dddeaeb8cb75bb2d996c8211a6b41cd56a5ef49be7dc5654a8106f2837f2c579>
+// }
+// comp def acc address of execute_settlement PublicKey [PublicKey(2Wq5JSbPwhmzRQtNewodmZ2cK9HU2bRCvHELobDvevFQ)] {
+//   _bn: <BN: 167fe35442777c08d64b8189592894fdd02f8c44c0763945315f7c6451934fcf>
+// }
+// comp def acc address of execute_settlement PublicKey [PublicKey(2Wq5JSbPwhmzRQtNewodmZ2cK9HU2bRCvHELobDvevFQ)] {
+//   _bn: <BN: 167fe35442777c08d64b8189592894fdd02f8c44c0763945315f7c6451934fcf>
+// }
+// mxe acc address PublicKey [PublicKey(4c63M2Q9ZXdszjfyqjhYf6JynYd6KjX2NaieSteYN9tZ)] {
+//   _bn: <BN: 3590169d1ee15d2a74024d741a7b8ff666839c70e0b88aa74bddc9613df47f66>
+// }
+// computation acc address with random offset PublicKey [PublicKey(GoeajPH8MoyLUDMzsibA1VyM4Sra8sjJMhFww6KwDJS2)] {
+//   _bn: <BN: ead283c4ec7b6fc62bd645af2919bc8e97953558fd03a22834345b1b80cc4dcf>
+// }
     this.program = program;
-    this.programId = programId;
+    this.provider = provider;
+    this.userPrivateKey = userPrivateKey;
+    this.userPublicKey = userPublicKey;
+    this.wallet = wallet;
+    this.clusterAccount = new PublicKey("DzaQCyfybroycrNqE5Gk7LhSbWD2qfCics6qptBFbr95");
+    this.mempoolAccount = new PublicKey("Ex7BD8o8PK1y2eXDd38Jgujj93uHygrZeWXDeGAHmHtN");
+    this.executingPoolAccount = new PublicKey("4mcrgNZzJwwKrE3wXMHfepT8htSBmGqBzDYPJijWooog");
+    this.mxeAccount = new PublicKey("4c63M2Q9ZXdszjfyqjhYf6JynYd6KjX2NaieSteYN9tZ");
+    // this.compDefAccAddressOfInitUserLedger = new PublicKey("9Ps2uKkckSScLGbWZ3ssZRE8aNs46sNyzHqyfLdP72y4");
+    // this.compDefAccAddressOfUpdateLedgerDeposit = new PublicKey("AA3MXRjgVbJyhNV7cxx1sYyXmESGxkXjxqNRRscMRuH3");
+    // this.compDefAccAddressOfUpdateLedgerWithdrawVerify = new PublicKey("4xDPisooqQEyYLhmMq2YMimRFLNpJvA4GEMKkjgBX1qG");
+    // this.compDefAccAddressOfExecuteSettlement = new PublicKey("2Wq5JSbPwhmzRQtNewodmZ2cK9HU2bRCvHELobDvevFQ");
+    // this.compDefAccAddressOfSubmitOrderCheck = new PublicKey("3dGihdq9R8RuqHnMFnmDGC4154ewMd4GKusruQV9N1pS");
+    // this.compDefAccAddressOfMatchOrders = new PublicKey("7APvfRWtsw9732CnN35shvt5DYck83dPDkH72WBx9ShH");
+    // this.compDefAccAddressOfTriggerMatching = new PublicKey("Fw63UnmhnCi7vuLacpt9yTa43gncUiPbgffSDDnYpbhz");
+    // this.compDefAccAddressOfExecuteSettlement = new PublicKey("2Wq5JSbPwhmzRQtNewodmZ2cK9HU2bRCvHELobDvevFQ");
+
   }
 
   static async create(
     connection: Connection,
-    wallet: WalletAdapter,
-    programId = MATCHING_ENGINE_PROGRAM_ID,
+    walletAdapter: WalletAdapter
   ): Promise<MatchingEngineClient> {
-    if (!wallet.publicKey) {
-      throw new Error("Wallet not connected");
-    }
-
-    const provider = new AnchorProvider(
-      connection,
-      wallet as AnchorProvider["wallet"],
-      { commitment: "confirmed" },
-    );
-    const program =new anchor.Program<MatchingEngine>(
-      MatchingEngineIDL as anchor.Idl,
+    assertProviderWallet(walletAdapter);
+    const provider = new AnchorProvider(connection, walletAdapter as AnchorProvider['wallet'], {
+      commitment: 'confirmed',
+    });
+    const program = new Program<MatchingEngine>(
+      MatchingEngineIDL as Idl,
+      PROGRAM_ID,
       provider
     );
     return new MatchingEngineClient(
-      connection,
-      wallet,
-      provider, 
       program,
-      programId,
+      provider,
+      new Uint8Array(32),
+      new Uint8Array(32),
+      walletAdapter
     );
   }
 
-  getProgram(): UnknownProgram {
-    return this.program;
+  /**
+   * Initialize encryption cipher with MXE public key
+   */
+  async initializeCipher(): Promise<void> {
+    const mxePublicKey = await getMXEPublicKeyWithRetry(this.provider, PROGRAM_ID);
+    const sharedSecret = x25519.getSharedSecret(this.userPrivateKey, mxePublicKey);
+    this.cipher = new RescueCipher(sharedSecret);
   }
 
-  async fetchGlobalState(): Promise<Record<string, unknown>> {
-    const account = this.program.account as Record<
-      string,
-      { fetch: (pda: PublicKey) => Promise<unknown> }
-    >;
-    const globalState = await account.globalState.fetch(
-      globalStatePda(this.programId),
-    );
-    return globalState as Record<string, unknown>;
-  }
+  /**
+   * Initialize user ledger
+   * Flow 1 from new_inmp.md lines 101-174
+   */
+  async initializeUserLedger(user: Keypair): Promise<string> {
+    if (!this.cipher) await this.initializeCipher();
 
-  deriveUserLedger(userPubkey: PublicKey): PublicKey {
-    return userLedgerPda(this.programId, userPubkey);
+    const userLedgerNonce = randomBytes(16);
+    const computationOffset = new BN(randomBytes(8));
+    const clusterAccount = getClusterAccAddress(this.clusterOffset);
+
+    const tx = await (this.program as any).methods
+      .initializeUserLedger(
+        Array.from(this.userPublicKey),
+        new BN(deserializeLE(userLedgerNonce).toString()),
+        computationOffset
+      )
+      .accountsPartial({
+        computationAccount: getComputationAccAddress(
+          this.clusterOffset,
+          computationOffset
+        ),
+        user: user.publicKey,
+        clusterAccount: this.clusterAccount,
+        mxeAccount: this.mxeAccount,
+        mempoolAccount: this.mempoolAccount,
+        executingPool: this.executingPoolAccount,
+        compDefAccount: getCompDefAccAddress(
+          PROGRAM_ID,
+          Buffer.from(getCompDefAccOffset('init_user_ledger')).readUInt32LE()
+        ),
+        systemProgram: SystemProgram.programId,
+        arciumProgram: getArciumProgramId(),
+        userLedger: getUserLedgerAddress(user.publicKey, PROGRAM_ID),
+      })
+      .signers([user])
+      .rpc({ commitment: 'confirmed' });
+
+    await awaitComputationFinalization(this.provider, computationOffset, PROGRAM_ID, 'confirmed');
+
+    return tx;
   }
 
   async ensureUserLedger(userEncPubkey?: Uint8Array): Promise<string> {
-    if (!this.wallet.publicKey) {
-      throw new Error("Wallet not connected");
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
     }
-
-    const ledger = this.deriveUserLedger(this.wallet.publicKey);
-    const existing = await this.connection.getAccountInfo(ledger);
-    if (existing) {
-      return "already-initialized";
+    if (!userEncPubkey || userEncPubkey.length === 0) {
+      throw new Error('Missing user encryption public key');
     }
-
-    const resolvedEncPubkey =
-      userEncPubkey ??
-      (
-        await getOrCreateUserX25519(
-          this.wallet.publicKey.toBase58(),
-          this.wallet.signMessage,
-        )
-      ).publicKey;
 
     const userLedgerNonce = randomBytes(16);
-    const computationOffset = u64ToBn(randomU64());
-    const clusterAccount = getClusterAccAddress(ARCIUM_CLUSTER_OFFSET);
+    const computationOffset = new BN(randomBytes(8));
 
-    const methods = this.program.methods as unknown as MatchingMethods;
-    const tx = await methods
+    const tx = await (this.program as any).methods
       .initializeUserLedger(
-        Array.from(resolvedEncPubkey),
-        u128FromBytes(userLedgerNonce),
-        computationOffset,
-      )
-      .accountsPartial({
-        computationAccount: getComputationAccAddress(
-          ARCIUM_CLUSTER_OFFSET,
-          computationOffset,
-        ),
-        user: this.wallet.publicKey,
-        clusterAccount,
-        mxeAccount: getMXEAccAddress(this.programId),
-        mempoolAccount: getMempoolAccAddress(ARCIUM_CLUSTER_OFFSET),
-        executingPool: getExecutingPoolAccAddress(ARCIUM_CLUSTER_OFFSET),
-        compDefAccount: getCompDefAccAddress(
-          this.programId,
-          Buffer.from(getCompDefAccOffset("init_user_ledger")).readUInt32LE(),
-        ),
-        systemProgram: SystemProgram.programId,
-        arciumProgram: getArciumProgramId(),
-        userLedger: ledger,
-      })
-      .rpc({ commitment: "confirmed" });
-
-    await awaitComputationFinalization(
-      this.provider,
-      computationOffset,
-      this.programId,
-      "confirmed",
-    );
-    return tx;
-  }
-
-  async deposit(params: {
-    token: TokenType;
-    amountU64: bigint;
-  }): Promise<string> {
-    if (!this.wallet.publicKey) {
-      throw new Error("Wallet not connected");
-    }
-
-    const globalState = await this.fetchGlobalState();
-    const baseMint = new PublicKey(globalState.baseMint as string);
-    const quoteMint = new PublicKey(globalState.quoteMint as string);
-    const mint = params.token === "base" ? baseMint : quoteMint;
-    const isBase = params.token === "base";
-
-    const { publicKey: userEncPubkey } = await getOrCreateUserX25519(
-      this.wallet.publicKey.toBase58(),
-      this.wallet.signMessage,
-    );
-
-    const computationOffset = u64ToBn(randomU64());
-    const clusterAccount = getClusterAccAddress(ARCIUM_CLUSTER_OFFSET);
-    const ledger = this.deriveUserLedger(this.wallet.publicKey);
-    const vault = vaultPda(this.programId, mint);
-    const vaultAuthority = vaultAuthorityPda(this.programId);
-    const userTokenAccount = await getAssociatedTokenAddress(
-      mint,
-      this.wallet.publicKey,
-    );
-
-    const methods = this.program.methods as unknown as MatchingMethods;
-    const tx = await methods
-      .depositToLedger(
         Array.from(userEncPubkey),
-        new BN(params.amountU64.toString()),
-        isBase,
-        computationOffset,
+        new BN(deserializeLE(userLedgerNonce).toString()),
+        computationOffset
       )
       .accountsPartial({
         computationAccount: getComputationAccAddress(
-          ARCIUM_CLUSTER_OFFSET,
-          computationOffset,
+          this.clusterOffset,
+          computationOffset
         ),
         user: this.wallet.publicKey,
-        clusterAccount,
-        mxeAccount: getMXEAccAddress(this.programId),
-        mempoolAccount: getMempoolAccAddress(ARCIUM_CLUSTER_OFFSET),
-        executingPool: getExecutingPoolAccAddress(ARCIUM_CLUSTER_OFFSET),
+        clusterAccount: this.clusterAccount,
+        mxeAccount: this.mxeAccount,
+        mempoolAccount: this.mempoolAccount,
+        executingPool: this.executingPoolAccount,
         compDefAccount: getCompDefAccAddress(
-          this.programId,
-          Buffer.from(
-            getCompDefAccOffset("update_ledger_deposit"),
-          ).readUInt32LE(),
+          PROGRAM_ID,
+          Buffer.from(getCompDefAccOffset('init_user_ledger')).readUInt32LE()
         ),
         systemProgram: SystemProgram.programId,
         arciumProgram: getArciumProgramId(),
-        userLedger: ledger,
-        mint,
-        vault,
-        userTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        vaultAuthority,
+        userLedger: getUserLedgerAddress(this.wallet.publicKey, PROGRAM_ID),
       })
-      .rpc({ commitment: "confirmed" });
+      .rpc({ commitment: 'confirmed' });
 
-    await awaitComputationFinalization(
-      this.provider,
-      computationOffset,
-      this.programId,
-      "confirmed",
-    );
+    await awaitComputationFinalization(this.provider, computationOffset, PROGRAM_ID, 'confirmed');
     return tx;
   }
 
-  async withdrawVerify(params: {
-    token: TokenType;
-    amountU64: bigint;
-  }): Promise<string> {
-    if (!this.wallet.publicKey) {
-      throw new Error("Wallet not connected");
+  /**
+   * Deposit tokens to ledger
+   * Flow 2 from new_inmp.md lines 190-271
+   */
+  async depositToLedger(
+    user: Keypair,
+    amount: number,
+    mint: PublicKey,
+    isBaseToken: boolean
+  ): Promise<DepositResult> {
+    if (!this.cipher) await this.initializeCipher();
+
+    try {
+      const depositAmount = new BN(amount * SCALE_FACTOR);
+      const computationOffset = new BN(randomBytes(8));
+      const clusterAccount = getClusterAccAddress(this.clusterOffset);
+
+      const userLedgerPDA = getUserLedgerAddress(user.publicKey, PROGRAM_ID);
+      const vaultPDA = getVaultAddress(mint, PROGRAM_ID);
+      const vaultAuthorityPDA = getVaultAuthorityAddress(PROGRAM_ID);
+      const userTokenAccount = await getAssociatedTokenAddress(mint, user.publicKey);
+
+      const eventPromise = awaitEvent<UserLedgerDepositedEvent>(this.program, 'userLedgerDepositedEvent');
+
+      const tx = await (this.program as any).methods
+        .depositToLedger(
+          Array.from(this.userPublicKey),
+          depositAmount,
+          isBaseToken,
+          computationOffset
+        )
+        .accounts({
+          computationAccount: getComputationAccAddress(this.clusterOffset, computationOffset),
+          user: user.publicKey,
+          clusterAccount: this.clusterAccount,
+          mxeAccount: this.mxeAccount,
+          mempoolAccount: this.mempoolAccount,
+          executingPool: this.executingPoolAccount,
+          compDefAccount: getCompDefAccAddress(
+            PROGRAM_ID,
+            Buffer.from(getCompDefAccOffset('update_ledger_deposit')).readUInt32LE()
+          ),
+          systemProgram: SystemProgram.programId,
+          arciumProgram: getArciumProgramId(),
+          userLedger: userLedgerPDA,
+          mint,
+          vault: vaultPDA,
+          userTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          vaultAuthority: vaultAuthorityPDA,
+        })
+        .signers([user])
+        .rpc({ commitment: 'confirmed' });
+
+      await awaitComputationFinalization(this.provider, computationOffset, PROGRAM_ID, 'confirmed');
+
+      const event = await eventPromise;
+      const balanceNonce = extractBalanceNonce(event);
+      const balances = this.cipher!.decrypt([...event.encryptedBalances], balanceNonce);
+
+      return {
+        success: true,
+        txSignature: tx,
+        updatedBalance: {
+          baseTotal: balances[0],
+          baseAvailable: balances[1],
+          quoteTotal: balances[2],
+          quoteAvailable: balances[3],
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
-
-    const globalState = await this.fetchGlobalState();
-    const baseMint = new PublicKey(globalState.baseMint as string);
-    const quoteMint = new PublicKey(globalState.quoteMint as string);
-    const mint = params.token === "base" ? baseMint : quoteMint;
-    const isBase = params.token === "base";
-
-    const { publicKey: userEncPubkey } = await getOrCreateUserX25519(
-      this.wallet.publicKey.toBase58(),
-      this.wallet.signMessage,
-    );
-
-    const computationOffset = u64ToBn(randomU64());
-    const clusterAccount = getClusterAccAddress(ARCIUM_CLUSTER_OFFSET);
-    const ledger = this.deriveUserLedger(this.wallet.publicKey);
-    const vault = vaultPda(this.programId, mint);
-    const vaultAuthority = vaultAuthorityPda(this.programId);
-
-    const methods = this.program.methods as unknown as MatchingMethods;
-    const tx = await methods
-      .withdrawFromLedgerVerify(
-        Array.from(userEncPubkey),
-        new BN(params.amountU64.toString()),
-        isBase,
-        computationOffset,
-      )
-      .accountsPartial({
-        computationAccount: getComputationAccAddress(
-          ARCIUM_CLUSTER_OFFSET,
-          computationOffset,
-        ),
-        user: this.wallet.publicKey,
-        clusterAccount,
-        mxeAccount: getMXEAccAddress(this.programId),
-        mempoolAccount: getMempoolAccAddress(ARCIUM_CLUSTER_OFFSET),
-        executingPool: getExecutingPoolAccAddress(ARCIUM_CLUSTER_OFFSET),
-        compDefAccount: getCompDefAccAddress(
-          this.programId,
-          Buffer.from(
-            getCompDefAccOffset("update_ledger_withdraw_verify"),
-          ).readUInt32LE(),
-        ),
-        systemProgram: SystemProgram.programId,
-        arciumProgram: getArciumProgramId(),
-        userLedger: ledger,
-        mint,
-        vault,
-        vaultAuthority,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      })
-      .rpc({ commitment: "confirmed" });
-
-    await awaitComputationFinalization(
-      this.provider,
-      computationOffset,
-      this.programId,
-      "confirmed",
-    );
-    return tx;
   }
 
-  async submitOrderTicket(params: {
-    side: Side;
-    amountU64: bigint;
-    priceU64: bigint;
-  }): Promise<{
-    orderIdU64: bigint;
-    salt32Hex: string;
-    commitmentHex: string;
-  }> {
-    if (!this.wallet.publicKey) {
-      throw new Error("Wallet not connected");
-    }
+  /**
+   * Submit order (two-step process)
+   * Flow 3 from new_inmp.md lines 284-488
+   */
+  async submitOrder(
+    user: Keypair,
+    orderParams: OrderParams,
+    baseMint: PublicKey
+  ): Promise<SubmitOrderResult> {
+    if (!this.cipher) await this.initializeCipher();
 
-    const { privateKey: userPriv, publicKey: userEncPubkey } =
-      await getOrCreateUserX25519(
-        this.wallet.publicKey.toBase58(),
-        this.wallet.signMessage,
+    try {
+      // Scale amounts
+      const amount = orderParams.amount * SCALE_FACTOR;
+      const price = orderParams.price * SCALE_FACTOR;
+      const orderNonce = randomBytes(16);
+
+      // Encrypt order data once
+      const ciphertext = this.cipher!.encrypt(
+        [BigInt(amount), BigInt(price)],
+        orderNonce
       );
 
-    const mxePubkey = await getMxePublicKeyWithRetry(
-      this.provider,
-      this.programId,
-    );
-    const cipher = cipherForUser(userPriv, mxePubkey);
+      // STEP 1: submit_order_check
+      const checkOffset = new BN(randomBytes(8));
+      const orderAccountPDA = getOrderAccountAddress(new BN(orderParams.orderId), PROGRAM_ID);
+      const baseVaultPDA = getVaultAddress(baseMint, PROGRAM_ID);
+      const userLedgerPDA = getUserLedgerAddress(user.publicKey, PROGRAM_ID);
 
-    let orderIdU64 = randomU64();
-    for (let i = 0; i < 5; i += 1) {
-      const ticketPda = orderTicketPda(this.programId, orderIdU64);
-      const exists = await this.connection.getAccountInfo(ticketPda);
-      if (!exists) break;
-      orderIdU64 = randomU64();
+      await (this.program as any).methods
+        .submitOrderCheck(
+          Array.from(ciphertext[0]),
+          Array.from(ciphertext[1]),
+          Array.from(this.userPublicKey),
+          orderParams.orderType,
+          checkOffset,
+          new BN(orderParams.orderId),
+          new BN(deserializeLE(orderNonce).toString())
+        )
+        .accountsPartial({
+          computationAccount: getComputationAccAddress(this.clusterOffset, checkOffset),
+          user: user.publicKey,
+          clusterAccount: this.clusterAccount,
+          mxeAccount: this.mxeAccount,
+          mempoolAccount: this.mempoolAccount,
+          executingPool: this.executingPoolAccount,
+          compDefAccount: getCompDefAccAddress(
+            PROGRAM_ID,
+            Buffer.from(getCompDefAccOffset('submit_order_check')).readUInt32LE()
+          ),
+          systemProgram: SystemProgram.programId,
+          arciumProgram: getArciumProgramId(),
+          baseMint,
+          vault: baseVaultPDA,
+          orderAccount: orderAccountPDA,
+          userLedger: userLedgerPDA,
+        })
+        .signers([user])
+        .rpc({ commitment: 'confirmed' });
+
+      await awaitComputationFinalization(this.provider, checkOffset, PROGRAM_ID, 'confirmed');
+
+      // Check result
+      const { success } = await awaitOrderCheckResult(this.program);
+
+      if (!success) {
+        return {
+          success: false,
+          reason: 'Insufficient balance',
+        };
+      }
+
+      // STEP 2: submit_order (only if check succeeded)
+      const submitOffset = new BN(randomBytes(8));
+      const orderbookPDA = getOrderbookAddress(PROGRAM_ID);
+
+      const submitTx = await (this.program as any).methods
+        .submitOrder(
+          Array.from(ciphertext[0]), // Same encrypted data
+          Array.from(ciphertext[1]), // Same encrypted data
+          Array.from(this.userPublicKey),
+          orderParams.orderType,
+          submitOffset,
+          new BN(orderParams.orderId),
+          new BN(deserializeLE(orderNonce).toString())
+        )
+        .accountsPartial({
+          computationAccount: getComputationAccAddress(this.clusterOffset, submitOffset),
+          user: user.publicKey,
+          clusterAccount: this.clusterAccount,
+          mxeAccount: this.mxeAccount,
+          mempoolAccount: this.mempoolAccount,
+          executingPool: this.executingPoolAccount,
+          compDefAccount: getCompDefAccAddress(
+            PROGRAM_ID,
+            Buffer.from(getCompDefAccOffset('submit_order')).readUInt32LE()
+          ),
+          systemProgram: SystemProgram.programId,
+          arciumProgram: getArciumProgramId(),
+          baseMint,
+          vault: baseVaultPDA,
+          orderbookState: orderbookPDA,
+        })
+        .signers([user])
+        .rpc({ commitment: 'confirmed' });
+
+      await awaitComputationFinalization(this.provider, submitOffset, PROGRAM_ID, 'confirmed');
+
+      return {
+        success: true,
+        txSignature: submitTx,
+        orderId: orderParams.orderId,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
-
-    const salt32 = randomBytes(32);
-    const nonce16 = randomBytes(16);
-    const computationOffset = u64ToBn(randomU64());
-    const clusterAccount = getClusterAccAddress(ARCIUM_CLUSTER_OFFSET);
-
-    const { amountCt32, priceCt32 } = encryptOrder(
-      cipher,
-      params.amountU64,
-      params.priceU64,
-      nonce16,
-    );
-    const sideU8 = params.side === "buy" ? 0 : 1;
-    const commitment = await computeOrderCommitment(
-      params.amountU64,
-      params.priceU64,
-      sideU8,
-      salt32,
-    );
-
-    const globalState = await this.fetchGlobalState();
-    const baseMint = new PublicKey(globalState.baseMint as string);
-    const vault = vaultPda(this.programId, baseMint);
-
-    const methods = this.program.methods as unknown as MatchingMethods;
-    await methods
-      .submitOrderCheck(
-        Array.from(amountCt32),
-        Array.from(priceCt32),
-        Array.from(userEncPubkey),
-        sideU8,
-        Array.from(commitment),
-        computationOffset,
-        new BN(orderIdU64.toString()),
-        u128FromBytes(nonce16),
-      )
-      .accountsPartial({
-        computationAccount: getComputationAccAddress(
-          ARCIUM_CLUSTER_OFFSET,
-          computationOffset,
-        ),
-        user: this.wallet.publicKey,
-        signPdaAccount: signPdaAccount(this.programId),
-        clusterAccount,
-        mxeAccount: getMXEAccAddress(this.programId),
-        mempoolAccount: getMempoolAccAddress(ARCIUM_CLUSTER_OFFSET),
-        executingPool: getExecutingPoolAccAddress(ARCIUM_CLUSTER_OFFSET),
-        compDefAccount: getCompDefAccAddress(
-          this.programId,
-          Buffer.from(getCompDefAccOffset("submit_order_check")).readUInt32LE(),
-        ),
-        systemProgram: SystemProgram.programId,
-        arciumProgram: getArciumProgramId(),
-        poolAccount: POOL_ACCOUNT,
-        clockAccount: CLOCK_ACCOUNT,
-        baseMint,
-        vault,
-        orderAccount: orderAccountPda(this.programId, orderIdU64),
-        orderTicket: orderTicketPda(this.programId, orderIdU64),
-        userLedger: this.deriveUserLedger(this.wallet.publicKey),
-      })
-      .rpc({ commitment: "confirmed" });
-
-    await awaitComputationFinalization(
-      this.provider,
-      computationOffset,
-      this.programId,
-      "confirmed",
-    );
-
-    return {
-      orderIdU64,
-      salt32Hex: Buffer.from(salt32).toString("hex"),
-      commitmentHex: Buffer.from(commitment).toString("hex"),
-    };
   }
 
-  async fetchBalancesDecrypted(): Promise<bigint[]> {
-    if (!this.wallet.publicKey) {
-      throw new Error("Wallet not connected");
+  /**
+   * Withdraw from ledger (verification step)
+   * Flow 4 from new_inmp.md lines 492-579
+   */
+  async withdrawFromLedgerVerify(
+    user: Keypair,
+    amount: number,
+    mint: PublicKey,
+    isBaseToken: boolean
+  ): Promise<WithdrawResult> {
+    if (!this.cipher) await this.initializeCipher();
+
+    try {
+      const withdrawAmount = new BN(amount * SCALE_FACTOR);
+      const computationOffset = new BN(randomBytes(8));
+      const clusterAccount = getClusterAccAddress(this.clusterOffset);
+
+      const userLedgerPDA = getUserLedgerAddress(user.publicKey, PROGRAM_ID);
+      const vaultPDA = getVaultAddress(mint, PROGRAM_ID);
+      const vaultAuthorityPDA = getVaultAuthorityAddress(PROGRAM_ID);
+
+      const resultPromise = awaitEvent<UserLedgerWithdrawVerifiedSuccessEvent>(this.program, 'userLedgerWithdrawVerifiedSuccessEvent');
+
+      const tx = await (this.program as any).methods
+        .withdrawFromLedgerVerify(
+          Array.from(this.userPublicKey),
+          withdrawAmount,
+          isBaseToken,
+          computationOffset
+        )
+        .accountsPartial({
+          computationAccount: getComputationAccAddress(this.clusterOffset, computationOffset),
+          user: user.publicKey,
+          clusterAccount: this.clusterAccount,
+          mxeAccount: this.mxeAccount,
+          mempoolAccount: this.mempoolAccount,
+          executingPool: this.executingPoolAccount,
+          compDefAccount: getCompDefAccAddress(
+            PROGRAM_ID,
+            Buffer.from(getCompDefAccOffset('update_ledger_withdraw_verify')).readUInt32LE()
+          ),
+          systemProgram: SystemProgram.programId,
+          arciumProgram: getArciumProgramId(),
+          vault: vaultPDA,
+          userLedger: userLedgerPDA,
+          mint,
+          vaultAuthority: vaultAuthorityPDA,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        })
+        .signers([user])
+        .rpc({ commitment: 'confirmed' });
+
+      await awaitComputationFinalization(this.provider, computationOffset, PROGRAM_ID, 'confirmed');
+
+      const event = await resultPromise;
+      const balanceNonce = extractBalanceNonce(event);
+      const balances = this.cipher!.decrypt([...event.encryptedBalances], balanceNonce);
+
+      return {
+        success: true,
+        txSignature: tx,
+        updatedBalance: {
+          baseTotal: balances[0],
+          baseAvailable: balances[1],
+          quoteTotal: balances[2],
+          quoteAvailable: balances[3],
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
-
-    const { privateKey: userPriv } = await getOrCreateUserX25519(
-      this.wallet.publicKey.toBase58(),
-      this.wallet.signMessage,
-    );
-
-    const mxePubkey = await getMxePublicKeyWithRetry(
-      this.provider,
-      this.programId,
-    );
-    const cipher = cipherForUser(userPriv, mxePubkey);
-
-    const account = this.program.account as Record<
-      string,
-      { fetch: (pda: PublicKey) => Promise<unknown> }
-    >;
-    const ledger = (await account.userPrivateLedger.fetch(
-      this.deriveUserLedger(this.wallet.publicKey),
-    )) as Record<string, unknown>;
-    const encryptedBalances = (ledger.encryptedBalances ??
-      ledger.encrypted_balances) as Uint8Array[] | number[][];
-    const balanceNonce = (ledger.balanceNonce ??
-      ledger.balance_nonce ??
-      ledger.nonce) as BN;
-
-    if (!encryptedBalances || !balanceNonce) {
-      throw new Error("Ledger data missing encrypted balances or nonce");
-    }
-
-    const nonceBytes = toU128LE(balanceNonce);
-    const balances = cipher.decrypt(encryptedBalances, nonceBytes);
-    return balances;
   }
 }
 
-export { getProgram };
+// ===== Factory Functions =====
+
+/**
+ * Create a new matching engine client
+ */
+// export async function createMatchingEngineClient(
+//   userKeypair: Keypair,
+//   userPrivateKey: Uint8Array,
+//   userPublicKey: Uint8Array,
+//   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//   programIdl: any
+// ): Promise<MatchingEngineClient> {
+//   const connection = new Connection(SOLANA_RPC, 'confirmed');
+//   const wallet = { publicKey: userKeypair.publicKey, signTransaction: async (tx: Transaction) => tx, signAllTransactions: async (txs: Transaction[]) => txs };
+//   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//   const provider = new AnchorProvider(connection, walletAdapter as AnchorProvider['wallet'], {
+//     commitment: 'confirmed',
+//   });
+//   // const idl = await loadIdl();
+//   const program = new Program<MatchingEngine>(
+//     MatchingEngineIDL as Idl,
+//     PROGRAM_ID,
+//     provider
+//   );
+
+//   return new MatchingEngineClient(program, provider, userPrivateKey, userPublicKey);
+// }

@@ -10,7 +10,7 @@
     "postinstall": "cp node_modules/@lightprotocol/hasher.rs/dist/hasher_wasm_simd_bg.wasm node_modules/@lightprotocol/hasher.rs/dist/browser-fat/es/ && cp node_modules/@lightprotocol/hasher.rs/dist/light_wasm_hasher_bg.wasm node_modules/@lightprotocol/hasher.rs/dist/browser-fat/es/"
   },
   "dependencies": {
-    "@arcium-hq/client": "^0.1.0",
+    "@arcium-hq/client": "^0.6.3",
     "@coral-xyz/anchor": "0.29.0",
     "@lightprotocol/hasher.rs": "0.2.1",
     "@noble/curves": "^2.0.1",
