@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
       if (!idl.address) {
         idl.address = SIPHON_PROGRAM_ID.toBase58();
       }
-      const program = new Program(idl as Idl, provider);
+      const program = new Program(idl as Idl, SIPHON_PROGRAM_ID, provider);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const completeSig = await (program.methods as any)
