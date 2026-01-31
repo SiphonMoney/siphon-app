@@ -38,7 +38,17 @@ export async function POST(request: NextRequest) {
   console.log('[Noir ZK API] POST /api/noir-zk/withdraw called');
 
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error('[Noir ZK API] Failed to parse request body:', parseError);
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
+
     const { tokenType, amount, recipientAddress, mintAddress, utxos } = body;
 
     console.log('[Noir ZK API] Request body:', { tokenType, amount, recipientAddress, mintAddress, utxoCount: utxos?.length });
@@ -70,8 +80,17 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[Noir ZK API] About to initialize client...');
-    const client = await ensureInitialized();
-    console.log('[Noir ZK API] Client initialized successfully');
+    let client;
+    try {
+      client = await ensureInitialized();
+      console.log('[Noir ZK API] Client initialized successfully');
+    } catch (initError) {
+      console.error('[Noir ZK API] Client initialization failed:', initError);
+      return NextResponse.json(
+        { success: false, error: `Initialization failed: ${initError instanceof Error ? initError.message : 'Unknown error'}` },
+        { status: 500 }
+      );
+    }
 
     if (tokenType === 'SOL') {
       console.log(`[Noir ZK API] Withdrawing ${amount} lamports SOL to ${recipientAddress} using ${utxos.length} UTXO(s)`);

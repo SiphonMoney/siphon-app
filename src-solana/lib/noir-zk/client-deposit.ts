@@ -12,7 +12,53 @@ import {
   TransactionInstruction,
   ComputeBudgetProgram,
   LAMPORTS_PER_SOL,
+  TransactionSignature,
 } from '@solana/web3.js';
+
+/**
+ * Polling-based transaction confirmation to avoid WebSocket issues in browsers.
+ * The standard confirmTransaction uses WebSocket which has bufferUtil issues.
+ */
+async function confirmTransactionPolling(
+  connection: Connection,
+  signature: TransactionSignature,
+  blockhash: string,
+  lastValidBlockHeight: number,
+  commitment: 'confirmed' | 'finalized' = 'confirmed'
+): Promise<void> {
+  const startTime = Date.now();
+  const timeout = 60000; // 60 seconds
+
+  while (Date.now() - startTime < timeout) {
+    // Check if blockhash is still valid
+    const blockHeight = await connection.getBlockHeight(commitment);
+    if (blockHeight > lastValidBlockHeight) {
+      throw new Error('Transaction expired: blockhash no longer valid');
+    }
+
+    // Check signature status
+    const status = await connection.getSignatureStatus(signature);
+
+    if (status.value !== null) {
+      if (status.value.err) {
+        throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`);
+      }
+
+      const confirmationStatus = status.value.confirmationStatus;
+      if (commitment === 'confirmed' && (confirmationStatus === 'confirmed' || confirmationStatus === 'finalized')) {
+        return;
+      }
+      if (commitment === 'finalized' && confirmationStatus === 'finalized') {
+        return;
+      }
+    }
+
+    // Wait before polling again
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  throw new Error('Transaction confirmation timeout');
+}
 import { BN } from '@coral-xyz/anchor';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import {
@@ -244,12 +290,8 @@ export async function depositSOLClientSide(
       throw sendError;
     }
 
-    // Wait for confirmation
-    await connection.confirmTransaction({
-      signature,
-      blockhash,
-      lastValidBlockHeight,
-    }, 'confirmed');
+    // Wait for confirmation using polling (avoids WebSocket bufferUtil issues)
+    await confirmTransactionPolling(connection, signature, blockhash, lastValidBlockHeight, 'confirmed');
 
     console.log(`[Client Deposit] Success! Signature: ${signature}`);
 
@@ -460,12 +502,8 @@ export async function depositSPLClientSide(
       throw sendError;
     }
 
-    // Wait for confirmation
-    await connection.confirmTransaction({
-      signature,
-      blockhash,
-      lastValidBlockHeight,
-    }, 'confirmed');
+    // Wait for confirmation using polling (avoids WebSocket bufferUtil issues)
+    await confirmTransactionPolling(connection, signature, blockhash, lastValidBlockHeight, 'confirmed');
 
     console.log(`[Client Deposit SPL] Success! Signature: ${signature}`);
 

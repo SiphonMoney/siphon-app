@@ -258,12 +258,14 @@ export async function isProtocolInitialized(): Promise<boolean> {
 }
 
 // Private withdrawal - transfers from vault PDA to executor, then Noir ZK pool deposit+withdraw
+// Uses async job processing to avoid Vercel timeout issues
 export async function withdrawPrivate(
   tokenSymbol: string,
   amount: string,
-  recipientAddress: string
+  recipientAddress: string,
+  onProgress?: (step: string, progress: number) => void
 ): Promise<{ success: boolean; signature?: string; error?: string }> {
-  console.log('[Privacy Withdraw] === Starting Private Withdrawal ===');
+  console.log('[Privacy Withdraw] === Starting Private Withdrawal (Async) ===');
   console.log('[Privacy Withdraw] Token:', tokenSymbol, 'Amount:', amount, 'Recipient:', recipientAddress);
 
   if (!siphonClient) {
@@ -283,7 +285,7 @@ export async function withdrawPrivate(
     // Step 1: Call initiatePrivateWithdrawal on-chain (user signs)
     // This transfers wSOL from vault PDA -> executor's token account
     console.log('[Privacy Withdraw] Step 1: Initiating on-chain private withdrawal...');
-    console.log('[Privacy Withdraw] Amount (smallest units):', amountBN.toString());
+    onProgress?.('Initiating on-chain withdrawal', 5);
 
     const initSig = await siphonClient.initiatePrivateWithdrawal(
       token.mint,
@@ -291,12 +293,19 @@ export async function withdrawPrivate(
       recipientPubkey
     );
     console.log('[Privacy Withdraw] On-chain initiation succeeded, sig:', initSig);
+    onProgress?.('On-chain initiation complete', 10);
 
-    // Step 2: Call backend to handle executor-side operations
-    // (unwrap wSOL, ZK pool deposit via Noir proof, ZK pool withdraw, complete on-chain)
-    console.log('[Privacy Withdraw] Step 2: Calling backend to execute private withdrawal...');
+    // Step 2: Create async job for backend processing
+    console.log('[Privacy Withdraw] Step 2: Creating async withdrawal job...');
     const lamports = parseFloat(amount) * 1e9;
-    const res = await fetch('/api/noir-zk/execute-private-withdrawal', {
+
+    // Get UTXOs from localStorage for the withdrawal
+    const utxos = getStoredUtxos(tokenSymbol.toUpperCase());
+    if (!utxos || utxos.length === 0) {
+      console.warn('[Privacy Withdraw] No UTXOs found in localStorage, backend will use its own');
+    }
+
+    const createJobRes = await fetch('/api/noir-zk/withdraw-async', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -304,22 +313,78 @@ export async function withdrawPrivate(
         amount: tokenSymbol.toUpperCase() === 'SOL' ? lamports : parseFloat(amount),
         recipientAddress,
         ownerAddress: owner.toBase58(),
+        utxos: utxos || [],
       }),
     });
 
-    const result = await res.json();
-    console.log('[Privacy Withdraw] Backend result:', JSON.stringify(result));
-
-    if (result.success) {
-      console.log('[Privacy Withdraw] === Private Withdrawal COMPLETE ===');
-    } else {
-      console.error('[Privacy Withdraw] Backend execution FAILED:', result.error);
+    const jobResponse = await createJobRes.json();
+    if (!jobResponse.success) {
+      return { success: false, error: jobResponse.error || 'Failed to create withdrawal job' };
     }
 
-    return result;
+    const jobId = jobResponse.jobId;
+    console.log('[Privacy Withdraw] Job created:', jobId);
+    onProgress?.('Withdrawal job created', 15);
+
+    // Step 3: Process job in chunks by repeatedly calling process-job
+    let attempts = 0;
+    const maxAttempts = 30; // Maximum 30 calls (should be plenty)
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      console.log(`[Privacy Withdraw] Processing job (attempt ${attempts})...`);
+
+      const processRes = await fetch('/api/noir-zk/process-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
+
+      const processResult = await processRes.json();
+      console.log('[Privacy Withdraw] Process result:', processResult);
+
+      if (processResult.status === 'completed') {
+        console.log('[Privacy Withdraw] === Private Withdrawal COMPLETE ===');
+        onProgress?.('Complete', 100);
+        return {
+          success: true,
+          signature: processResult.signature,
+        };
+      }
+
+      if (processResult.status === 'failed') {
+        console.error('[Privacy Withdraw] Job failed:', processResult.error);
+        return { success: false, error: processResult.error };
+      }
+
+      // Update progress
+      if (processResult.step && processResult.progress) {
+        onProgress?.(processResult.step, processResult.progress);
+      }
+
+      // Wait before next call to avoid hammering the server
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    return { success: false, error: 'Withdrawal timed out after maximum attempts' };
   } catch (error) {
     console.error('[Privacy Withdraw] Exception caught:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Withdraw failed' };
+  }
+}
+
+// Helper to get UTXOs from localStorage (for frontend)
+function getStoredUtxos(tokenType: string): unknown[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem('siphon_utxos');
+    if (!stored) return [];
+    const utxos = JSON.parse(stored);
+    return utxos.filter((u: { tokenType: string; spent: boolean }) =>
+      u.tokenType === tokenType && !u.spent
+    );
+  } catch {
+    return [];
   }
 }
 

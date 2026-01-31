@@ -268,7 +268,8 @@ export async function depositToZkPool(
 export async function withdrawFromZkPool(
   tokenSymbol: string,
   amount: string,
-  recipientAddress: string
+  recipientAddress: string,
+  onProgress?: (step: string, progress: number) => void
 ): Promise<{ success: boolean; signature?: string; error?: string }> {
   console.log('[ZK Pool] withdrawFromZkPool() called', { tokenSymbol, amount, recipientAddress });
 
@@ -309,38 +310,60 @@ export async function withdrawFromZkPool(
     }
 
     console.log(`[ZK Pool] Using ${utxosToSpend.length} UTXO(s) for withdrawal`);
+    onProgress?.('Sending withdrawal request', 10);
 
-    // Send UTXO data to API route for relayer to process
-    const response = await fetch('/api/noir-zk/withdraw', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tokenType: tokenSymbol.toUpperCase(),
-        amount: lamports,
-        recipientAddress,
-        mintAddress: tokenType === 'SPL' ? mint : undefined, // Send mint for SPL tokens
-        utxos: utxosToSpend.map(u => ({
-          commitment: u.commitment,
-          nullifier: u.nullifier,
-          secret: u.secret,
-          value: u.value,
-          leafIndex: u.leafIndex,
-        })),
-      }),
-    });
+    // Call the direct withdraw endpoint
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
-    const result = await response.json();
+    try {
+      const response = await fetch('/api/noir-zk/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tokenType: tokenSymbol.toUpperCase(),
+          amount: lamports,
+          recipientAddress,
+          mintAddress: tokenType === 'SPL' ? mint : undefined,
+          utxos: utxosToSpend.map(u => ({
+            commitment: u.commitment,
+            nullifier: u.nullifier,
+            secret: u.secret,
+            value: u.value,
+            leafIndex: u.leafIndex,
+          })),
+        }),
+        signal: controller.signal,
+      });
 
-    if (result.success) {
-      console.log('[ZK Pool] Withdrawal successful:', result.signature);
+      clearTimeout(timeoutId);
 
-      // Mark UTXOs as spent
-      utxosToSpend.forEach(utxo => markUtxoSpent(utxo.commitment));
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[ZK Pool] Withdraw request failed:', response.status, errorText);
+        return { success: false, error: `Server error: ${response.status}` };
+      }
 
-      return { success: true, signature: result.signature };
-    } else {
-      console.error('[ZK Pool] Withdrawal failed:', result.error);
-      return { success: false, error: result.error };
+      const result = await response.json();
+
+      if (result.success) {
+        console.log('[ZK Pool] Withdrawal successful:', result.signature);
+        onProgress?.('Complete', 100);
+
+        // Mark UTXOs as spent
+        utxosToSpend.forEach(utxo => markUtxoSpent(utxo.commitment));
+
+        return { success: true, signature: result.signature };
+      } else {
+        console.error('[ZK Pool] Withdrawal failed:', result.error);
+        return { success: false, error: result.error };
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        return { success: false, error: 'Request timed out. The withdrawal may still be processing.' };
+      }
+      throw fetchError;
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Withdrawal failed';

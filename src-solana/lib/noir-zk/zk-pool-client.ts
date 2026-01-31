@@ -14,8 +14,50 @@ import {
   VersionedTransaction,
   ComputeBudgetProgram,
   LAMPORTS_PER_SOL,
+  TransactionSignature,
 } from '@solana/web3.js';
 import { Program, AnchorProvider, BN, Wallet } from '@coral-xyz/anchor';
+
+/**
+ * Polling-based transaction confirmation to avoid WebSocket bufferUtil issues in Next.js.
+ */
+async function confirmTransactionPolling(
+  connection: Connection,
+  signature: TransactionSignature,
+  blockhash: string,
+  lastValidBlockHeight: number,
+  commitment: 'confirmed' | 'finalized' = 'confirmed'
+): Promise<void> {
+  const startTime = Date.now();
+  const timeout = 60000; // 60 seconds
+
+  while (Date.now() - startTime < timeout) {
+    const blockHeight = await connection.getBlockHeight(commitment);
+    if (blockHeight > lastValidBlockHeight) {
+      throw new Error('Transaction expired: blockhash no longer valid');
+    }
+
+    const status = await connection.getSignatureStatus(signature);
+
+    if (status.value !== null) {
+      if (status.value.err) {
+        throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`);
+      }
+
+      const confirmationStatus = status.value.confirmationStatus;
+      if (commitment === 'confirmed' && (confirmationStatus === 'confirmed' || confirmationStatus === 'finalized')) {
+        return;
+      }
+      if (commitment === 'finalized' && confirmationStatus === 'finalized') {
+        return;
+      }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  throw new Error('Transaction confirmation timeout');
+}
 import {
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
@@ -176,11 +218,7 @@ export class ZkPoolClient {
       console.log(`[ZkPoolClient] Deposit tx submitted: ${signature}`);
 
       // Wait for confirmation
-      await this.connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
+      await confirmTransactionPolling(this.connection, signature, blockhash, lastValidBlockHeight, 'confirmed');
 
       console.log(`[ZkPoolClient] Deposit confirmed: ${signature}`);
 
@@ -329,11 +367,7 @@ export class ZkPoolClient {
       console.log(`[ZkPoolClient] Withdraw tx submitted: ${signature}`);
 
       // Wait for confirmation
-      await this.connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
+      await confirmTransactionPolling(this.connection, signature, blockhash, lastValidBlockHeight, 'confirmed');
 
       console.log(`[ZkPoolClient] Withdraw confirmed: ${signature}`);
 
@@ -384,11 +418,7 @@ export class ZkPoolClient {
         preflightCommitment: 'confirmed',
       });
 
-      await this.connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
+      await confirmTransactionPolling(this.connection, signature, blockhash, lastValidBlockHeight, 'confirmed');
 
       console.log(`[ZkPoolClient] Root updated: ${signature}`);
 
@@ -484,11 +514,7 @@ export class ZkPoolClient {
 
       console.log(`[ZkPoolClient] USDC deposit tx submitted: ${signature}`);
 
-      await this.connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
+      await confirmTransactionPolling(this.connection, signature, blockhash, lastValidBlockHeight, 'confirmed');
 
       console.log(`[ZkPoolClient] USDC deposit confirmed: ${signature}`);
 
@@ -687,11 +713,7 @@ export class ZkPoolClient {
 
       console.log(`[ZkPoolClient] USDC withdraw tx submitted: ${signature}`);
 
-      await this.connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
+      await confirmTransactionPolling(this.connection, signature, blockhash, lastValidBlockHeight, 'confirmed');
 
       console.log(`[ZkPoolClient] USDC withdraw confirmed: ${signature}`);
 
