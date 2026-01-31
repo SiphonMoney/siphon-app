@@ -1,17 +1,19 @@
 // DarkPoolInterface.tsx - Main interface for dark pool trading
 "use client";
 
-import { useState, useCallback } from 'react';
-import { useUserLedger } from './useUserLedger';
-import InitializeLedger from './InitializeLedger';
-import DepositModal from './DepositModal';
-import WithdrawModal from './WithdrawModal';
-import OrderForm from './OrderForm';
-import OrderList from './OrderList';
-import PriceChart from './PriceChart';
-import ManageLiquidity from './ManageLiquidity';
-import { WalletInfo } from '@/components/extensions/walletManager';
-import './darkpool.css';
+import { useState, useCallback } from "react";
+import { useUserLedger } from "@/lib/siphon/hooks";
+import InitializeLedger from "./InitializeLedger";
+import BalanceDisplay from "./BalanceDisplay";
+import DepositModal from "./DepositModal";
+import WithdrawModal from "./WithdrawModal";
+import OrderForm from "./OrderForm";
+import OrderList from "./OrderList";
+// import ConnectButton from "../swap_face/extensions/ConnectButton";
+import { WalletInfo } from "@/lib/walletManager";
+import { getBrowserWalletAdapter } from "@/lib/solanaWallet";
+import "./darkpool.css";
+// import ConnectButton from "@/components/extensions/ConnectButton";
 
 interface DarkPoolInterfaceProps {
   walletAddress: string | null;
@@ -20,44 +22,41 @@ interface DarkPoolInterfaceProps {
   onWalletConnected?: (wallet: WalletInfo) => void;
 }
 
-type View = 'overview' | 'trade' | 'history';
-type ModalType = 'deposit' | 'withdraw' | null;
+type View = "overview" | "trade" | "history";
+type ModalType = "deposit" | "withdraw" | null;
 
 export default function DarkPoolInterface({
   walletAddress,
-  walletName: _walletName = 'Wallet',
-  onDisconnect: _onDisconnect,
-  onWalletConnected: _onWalletConnected
+  walletName = "Wallet",
+  onDisconnect,
+  onWalletConnected,
 }: DarkPoolInterfaceProps) {
-  // Silence unused variable warnings for props that will be used later
-  void _walletName;
-  void _onDisconnect;
-  void _onWalletConnected;
-
-  // All hooks must be called at the top, before any conditional returns
-  const { exists: ledgerExists, loading: checkingLedger, checkLedgerExists } = useUserLedger(walletAddress);
-  const [_view, _setView] = useState<View>('overview');
-  void _view; void _setView; // Will be used when view switching is implemented
+  const {
+    exists: ledgerExists,
+    loading: checkingLedger,
+    checkLedgerExists,
+  } = useUserLedger(walletAddress);
+  const [view, setView] = useState<View>("overview");
   const [activeModal, setActiveModal] = useState<ModalType>(null);
-  const [_balanceKey, setBalanceKey] = useState(0);
-  void _balanceKey; // Used to trigger balance refresh
-  const [selectedPair, setSelectedPair] = useState("SOL/USDC");
-  const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'>('1h');
-  const [orderView, setOrderView] = useState<'place' | 'liquidity'>('place');
-  
-  // DEMO MODE: Bypass initialization for testing/demo
+  const [balanceKey, setBalanceKey] = useState(0);
+
+  // 🎭 DEMO MODE: Bypass initialization for testing/demo
   // Set to true to skip ledger check and go straight to main interface
   // TODO: Remove this before production launch
   const DEMO_MODE = true;
-  
-  console.log('DEMO MODE:', DEMO_MODE ? 'ENABLED' : 'DISABLED');
 
-  // Mock signMessage function - replace with actual wallet adapter
-  const signMessage = useCallback(async (message: Uint8Array): Promise<Uint8Array> => {
-    // TODO: Implement actual message signing with wallet adapter
-    console.log('Signing message:', message);
-    return new Uint8Array(64).fill(0); // Mock signature
-  }, []);
+  console.log("🎭 DEMO MODE:", DEMO_MODE ? "ENABLED" : "DISABLED");
+
+  const signMessage = useCallback(
+    async (message: Uint8Array): Promise<Uint8Array> => {
+      const adapter = getBrowserWalletAdapter();
+      if (!adapter.signMessage) {
+        throw new Error("Wallet does not support message signing");
+      }
+      return adapter.signMessage(message);
+    },
+    [],
+  );
 
   const handleLedgerInitialized = () => {
     checkLedgerExists();
@@ -65,55 +64,34 @@ export default function DarkPoolInterface({
 
   const handleDepositSuccess = () => {
     setActiveModal(null);
-    setBalanceKey(prev => prev + 1); // Force balance refresh
+    setBalanceKey((prev) => prev + 1); // Force balance refresh
   };
 
   const handleWithdrawSuccess = () => {
     setActiveModal(null);
-    setBalanceKey(prev => prev + 1); // Force balance refresh
+    setBalanceKey((prev) => prev + 1); // Force balance refresh
   };
 
   const handleOrderSuccess = (orderId: string) => {
-    console.log('Order placed successfully:', orderId);
-    setBalanceKey(prev => prev + 1); // Force balance refresh
+    console.log("Order placed successfully:", orderId);
+    setBalanceKey((prev) => prev + 1); // Force balance refresh
   };
 
   // Not connected state - MUST connect wallet first
-  if (!walletAddress) {
-    return (
-      <div className="darkpool-interface">
-        <div className="welcome-screen">
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            textAlign: 'center',
-            padding: '2rem',
-            color: 'rgba(255, 255, 255, 0.9)',
-            fontFamily: 'var(--font-source-code), monospace'
-          }}>
-            <h2 style={{
-              fontSize: '24px',
-              marginBottom: '1rem',
-              fontWeight: '600'
-            }}>
-              Wallet Not Connected
-            </h2>
-            <p style={{
-              fontSize: '14px',
-              color: 'rgba(255, 255, 255, 0.7)',
-              lineHeight: '1.6',
-              maxWidth: '400px'
-            }}>
-              Please connect your wallet using the button in the top right corner to access the Dark Pool.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // if (!walletAddress) {
+  //   return (
+  //     <div className="darkpool-interface">
+  //       <div className="welcome-screen">
+  //         <div className="connect-button-wrapper">
+  //           <ConnectButton
+  //             className="welcome-connect-button"
+  //             onConnected={onWalletConnected}
+  //           />
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // Checking ledger state (skip in demo mode)
   if (checkingLedger && !DEMO_MODE) {
@@ -133,189 +111,204 @@ export default function DarkPoolInterface({
       <div className="darkpool-interface">
         <InitializeLedger
           walletAddress={walletAddress}
+          signMessage={signMessage}
           onComplete={handleLedgerInitialized}
         />
       </div>
     );
   }
 
-  // Mock 24h stats data
-  const stats24h = {
-    high: 192.50,
-    low: 188.20,
-    volume: 2847500.0,
-    change: 0.0023,
-    changePercent: 1.85
-  };
-
+  // Main interface
   return (
-    <div className="darkpool-container loaded">
+    <div className="darkpool-interface">
+      {/* Demo Mode Banner */}
+      {DEMO_MODE && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            background: "rgba(255, 165, 0, 0.15)",
+            borderBottom: "1px solid rgba(255, 165, 0, 0.4)",
+            padding: "0.5rem",
+            textAlign: "center",
+            zIndex: 9999,
+            fontFamily: "var(--font-source-code), monospace",
+            fontSize: "11px",
+            color: "rgba(255, 165, 0, 0.95)",
+            fontWeight: "600",
+            letterSpacing: "0.5px",
+            textTransform: "uppercase",
+          }}
+        >
+          🎭 Demo Mode Active - Bypassing Ledger Initialization
+        </div>
+      )}
+
       {/* Header */}
-      <div className="darkpool-header">
-        <div className="darkpool-header-left">
-          <div className="trading-pair-selector">
-            <button 
-              className={`pair-button ${selectedPair === 'SOL/USDC' ? 'active' : ''}`}
-              onClick={() => setSelectedPair('SOL/USDC')}
-            >
-              SOL/USDC
-            </button>
-            <button 
-              className={`pair-button example-pool ${selectedPair === 'XMR/SOL' ? 'active' : ''}`}
-              onClick={() => setSelectedPair('XMR/SOL')}
-              disabled
-            >
-              XMR/SOL
-              <span className="example-label">(Soon)</span>
-            </button>
-            <button 
-              className={`pair-button example-pool ${selectedPair === 'ZEC/SOL' ? 'active' : ''}`}
-              onClick={() => setSelectedPair('ZEC/SOL')}
-              disabled
-            >
-              ZEC/SOL
-              <span className="example-label">(Soon)</span>
-            </button>
-          </div>
+      <div
+        className="darkpool-main-header"
+        style={{ marginTop: DEMO_MODE ? "35px" : "40px" }}
+      >
+        <div className="header-left">
+          <h2>Dark Pool</h2>
         </div>
-        <div className="darkpool-header-right">
-          {/* Connect button is in nav, but keeping structure for consistency */}
+        <div className="header-right">
+          <div className="wallet-badge">
+            <span className="wallet-name">{walletName}</span>
+            <span className="wallet-address">
+              {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}
+            </span>
+          </div>
+          {onDisconnect && (
+            <button onClick={onDisconnect} className="disconnect-btn">
+              Disconnect
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Top Row: Chart (2/3) + Order Form (1/3) */}
-      <div className="darkpool-top-row">
-        {/* Chart Section - 2/3 width */}
-        <div className="chart-section">
-          <div className="chart-header">
-            <span className="chart-title">Price Chart</span>
-            <div className="timeframe-selector">
-              <button 
-                className={`timeframe-btn ${timeframe === '1m' ? 'active' : ''}`}
-                onClick={() => setTimeframe('1m')}
-              >
-                1m
-              </button>
-              <button 
-                className={`timeframe-btn ${timeframe === '5m' ? 'active' : ''}`}
-                onClick={() => setTimeframe('5m')}
-              >
-                5m
-              </button>
-              <button 
-                className={`timeframe-btn ${timeframe === '15m' ? 'active' : ''}`}
-                onClick={() => setTimeframe('15m')}
-              >
-                15m
-              </button>
-              <button 
-                className={`timeframe-btn ${timeframe === '1h' ? 'active' : ''}`}
-                onClick={() => setTimeframe('1h')}
-              >
-                1h
-              </button>
-              <button 
-                className={`timeframe-btn ${timeframe === '4h' ? 'active' : ''}`}
-                onClick={() => setTimeframe('4h')}
-              >
-                4h
-              </button>
-              <button 
-                className={`timeframe-btn ${timeframe === '1d' ? 'active' : ''}`}
-                onClick={() => setTimeframe('1d')}
-              >
-                1d
-              </button>
-            </div>
-          </div>
-          
-          {/* 24h Stats */}
-          <div className="stats-24h">
-            <div className="stat-item">
-              <span className="stat-label">24h High</span>
-              <span className="stat-value">{stats24h.high.toFixed(2)}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">24h Low</span>
-              <span className="stat-value">{stats24h.low.toFixed(2)}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">24h Volume</span>
-              <span className="stat-value">{(stats24h.volume / 1000000).toFixed(2)}M</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">24h Change</span>
-              <span className={`stat-value ${stats24h.change >= 0 ? 'positive' : 'negative'}`}>
-                {stats24h.change >= 0 ? '+' : ''}{stats24h.changePercent.toFixed(2)}%
-              </span>
-            </div>
-          </div>
-          <div className="chart-container">
-            <PriceChart pair={selectedPair} timeframe={timeframe} />
-          </div>
-        </div>
-
-        {/* Order Form Section - 1/3 width */}
-        <div className="order-form-section">
-          <div className="order-form-header">
-            <div className="view-toggle">
-              <button
-                type="button"
-                className={`view-toggle-text ${orderView === 'place' ? 'active' : ''}`}
-                onClick={() => {
-                  setOrderView('place');
-                }}
-              >
-                Place Order
-              </button>
-              <button
-                type="button"
-                className={`view-toggle-text ${orderView === 'liquidity' ? 'active' : ''}`}
-                onClick={() => {
-                  setOrderView('liquidity');
-                }}
-              >
-                Manage Liquidity
-              </button>
-            </div>
-          </div>
-          
-          <div className="order-form-content">
-            {orderView === 'place' ? (
-              <OrderForm
-                walletAddress={walletAddress}
-                signMessage={signMessage}
-                onSuccess={handleOrderSuccess}
-              />
-            ) : (
-              <ManageLiquidity
-                walletAddress={walletAddress}
-                signMessage={signMessage}
-                onDeposit={() => setActiveModal('deposit')}
-                onWithdraw={() => setActiveModal('withdraw')}
-              />
-            )}
-          </div>
-        </div>
+      {/* Navigation Tabs */}
+      <div className="view-tabs">
+        <button
+          className={`tab ${view === "overview" ? "active" : ""}`}
+          onClick={() => setView("overview")}
+        >
+          Overview
+        </button>
+        <button
+          className={`tab ${view === "trade" ? "active" : ""}`}
+          onClick={() => setView("trade")}
+        >
+          Trade
+        </button>
+        <button
+          className={`tab ${view === "history" ? "active" : ""}`}
+          onClick={() => setView("history")}
+        >
+          Order History
+        </button>
       </div>
 
-      {/* Order History Section */}
-      <div className="order-history-section">
-        <OrderList walletAddress={walletAddress} />
+      {/* Content Area */}
+      <div className="content-area">
+        {view === "overview" && (
+          <div className="overview-view">
+            <div className="balance-section">
+              <BalanceDisplay
+                key={balanceKey}
+                walletAddress={walletAddress}
+                signMessage={signMessage}
+              />
+            </div>
+
+            <div className="actions-section">
+              <h3>Manage Funds</h3>
+              <div className="action-buttons">
+                <button
+                  onClick={() => setActiveModal("deposit")}
+                  className="action-card deposit"
+                >
+                  <div className="action-content">
+                    <h4>Deposit</h4>
+                    <p>Add tokens to your encrypted balance</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveModal("withdraw")}
+                  className="action-card withdraw"
+                >
+                  <div className="action-content">
+                    <h4>Withdraw</h4>
+                    <p>Remove tokens from the pool</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="info-section">
+              <div className="info-card">
+                <div>
+                  <h4>Privacy First</h4>
+                  <p>Your balances are encrypted on-chain using MPC</p>
+                </div>
+              </div>
+              <div className="info-card">
+                <div>
+                  <h4>Fast Settlement</h4>
+                  <p>Orders settle within seconds using Solana</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === "trade" && (
+          <div className="trade-view">
+            <div className="trade-container">
+              <div className="order-form-container">
+                <OrderForm
+                  walletAddress={walletAddress}
+                  signMessage={signMessage}
+                  onSuccess={handleOrderSuccess}
+                />
+              </div>
+              <div className="market-info">
+                <div className="market-card">
+                  <h4>SOL/USDC Market</h4>
+                  <div className="market-stats">
+                    <div className="stat">
+                      <span className="label">Current Price</span>
+                      <span className="value">$192.00</span>
+                    </div>
+                    <div className="stat">
+                      <span className="label">24h Change</span>
+                      <span className="value positive">+2.3%</span>
+                    </div>
+                    <div className="stat">
+                      <span className="label">24h Volume</span>
+                      <span className="value">$1.2M</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="info-box">
+                  <div>
+                    <strong>How it works:</strong>
+                    <ol>
+                      <li>Your order is encrypted and submitted</li>
+                      <li>MPC matches orders privately</li>
+                      <li>Settlement happens on-chain</li>
+                      <li>Your balance updates automatically</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === "history" && (
+          <div className="history-view">
+            <OrderList walletAddress={walletAddress} />
+          </div>
+        )}
       </div>
 
       {/* Modals */}
-      {activeModal === 'deposit' && (
+      {activeModal === "deposit" && (
         <DepositModal
           walletAddress={walletAddress}
+          signMessage={signMessage}
           onClose={() => setActiveModal(null)}
           onSuccess={handleDepositSuccess}
         />
       )}
 
-      {activeModal === 'withdraw' && (
+      {activeModal === "withdraw" && (
         <WithdrawModal
           walletAddress={walletAddress}
+          signMessage={signMessage}
           onClose={() => setActiveModal(null)}
           onSuccess={handleWithdrawSuccess}
         />
@@ -323,4 +316,3 @@ export default function DarkPoolInterface({
     </div>
   );
 }
-

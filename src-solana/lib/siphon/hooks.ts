@@ -1,11 +1,19 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { useConnection, useWallet, useAnchorWallet } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
-import { AnchorProvider, BN } from '@coral-xyz/anchor';
-import { SiphonClient, VaultInfo, ConfigInfo } from './client';
-import { SUPPORTED_TOKENS } from './constants';
+import { useState, useCallback, useEffect, useMemo } from "react";
+import {
+  useConnection,
+  useWallet,
+  useAnchorWallet,
+} from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { AnchorProvider, BN } from "@coral-xyz/anchor";
+import { SiphonClient, VaultInfo, ConfigInfo } from "./client";
+import { SUPPORTED_TOKENS } from "./constants";
+
+import { Connection } from "@solana/web3.js";
+import { L1_RPC_URL, MATCHING_ENGINE_PROGRAM_ID } from "@/config/env";
+import { userLedgerPda } from "@/solana/pdas";
 
 interface UseSiphonState {
   isInitialized: boolean;
@@ -38,7 +46,7 @@ export function useSiphon() {
   const client = useMemo(() => {
     if (!wallet) return null;
     const provider = new AnchorProvider(connection, wallet, {
-      commitment: 'confirmed',
+      commitment: "confirmed",
     });
     return new SiphonClient(provider);
   }, [connection, wallet]);
@@ -61,11 +69,12 @@ export function useSiphon() {
           config,
         }));
       } catch (error) {
-        console.error('Failed to initialize Siphon client:', error);
+        console.error("Failed to initialize Siphon client:", error);
         setState((prev) => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Failed to initialize',
+          error:
+            error instanceof Error ? error.message : "Failed to initialize",
         }));
       }
     };
@@ -89,11 +98,11 @@ export function useSiphon() {
         }
         return vault;
       } catch (error) {
-        console.error('Failed to fetch vault:', error);
+        console.error("Failed to fetch vault:", error);
         return null;
       }
     },
-    [client, publicKey]
+    [client, publicKey],
   );
 
   // Refresh all vaults
@@ -118,11 +127,11 @@ export function useSiphon() {
         vaults: newVaults,
       }));
     } catch (error) {
-      console.error('Failed to refresh vaults:', error);
+      console.error("Failed to refresh vaults:", error);
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to refresh',
+        error: error instanceof Error ? error.message : "Failed to refresh",
       }));
     }
   }, [client, publicKey]);
@@ -131,7 +140,7 @@ export function useSiphon() {
   const createVault = useCallback(
     async (assetMint: PublicKey): Promise<TransactionResult> => {
       if (!client) {
-        return { success: false, error: 'Client not initialized' };
+        return { success: false, error: "Client not initialized" };
       }
 
       try {
@@ -141,27 +150,31 @@ export function useSiphon() {
         setState((prev) => ({ ...prev, isLoading: false }));
         return { success: true, signature };
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Create vault failed';
+        const errorMsg =
+          error instanceof Error ? error.message : "Create vault failed";
         setState((prev) => ({ ...prev, isLoading: false, error: errorMsg }));
         return { success: false, error: errorMsg };
       }
     },
-    [client, fetchVault]
+    [client, fetchVault],
   );
 
   // Deposit
   const deposit = useCallback(
-    async (assetMint: PublicKey, amount: number): Promise<TransactionResult> => {
+    async (
+      assetMint: PublicKey,
+      amount: number,
+    ): Promise<TransactionResult> => {
       if (!client) {
-        return { success: false, error: 'Client not initialized' };
+        return { success: false, error: "Client not initialized" };
       }
 
       try {
         setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
         // Find token decimals
-        const token = Object.values(SUPPORTED_TOKENS).find(
-          (t) => t.mint.equals(assetMint)
+        const token = Object.values(SUPPORTED_TOKENS).find((t) =>
+          t.mint.equals(assetMint),
         );
         const decimals = token?.decimals ?? 9;
 
@@ -173,27 +186,31 @@ export function useSiphon() {
         setState((prev) => ({ ...prev, isLoading: false }));
         return { success: true, signature };
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Deposit failed';
+        const errorMsg =
+          error instanceof Error ? error.message : "Deposit failed";
         setState((prev) => ({ ...prev, isLoading: false, error: errorMsg }));
         return { success: false, error: errorMsg };
       }
     },
-    [client, fetchVault]
+    [client, fetchVault],
   );
 
   // Withdraw (direct)
   const withdraw = useCallback(
-    async (assetMint: PublicKey, amount: number): Promise<TransactionResult> => {
+    async (
+      assetMint: PublicKey,
+      amount: number,
+    ): Promise<TransactionResult> => {
       if (!client) {
-        return { success: false, error: 'Client not initialized' };
+        return { success: false, error: "Client not initialized" };
       }
 
       try {
         setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
         // Find token decimals
-        const token = Object.values(SUPPORTED_TOKENS).find(
-          (t) => t.mint.equals(assetMint)
+        const token = Object.values(SUPPORTED_TOKENS).find((t) =>
+          t.mint.equals(assetMint),
         );
         const decimals = token?.decimals ?? 9;
 
@@ -205,12 +222,13 @@ export function useSiphon() {
         setState((prev) => ({ ...prev, isLoading: false }));
         return { success: true, signature };
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Withdraw failed';
+        const errorMsg =
+          error instanceof Error ? error.message : "Withdraw failed";
         setState((prev) => ({ ...prev, isLoading: false, error: errorMsg }));
         return { success: false, error: errorMsg };
       }
     },
-    [client, fetchVault]
+    [client, fetchVault],
   );
 
   // Get vault balance for a token
@@ -219,14 +237,14 @@ export function useSiphon() {
       const vault = state.vaults.get(assetMint.toBase58());
       if (!vault) return 0;
 
-      const token = Object.values(SUPPORTED_TOKENS).find(
-        (t) => t.mint.equals(assetMint)
+      const token = Object.values(SUPPORTED_TOKENS).find((t) =>
+        t.mint.equals(assetMint),
       );
       const decimals = token?.decimals ?? 9;
 
       return vault.amount.toNumber() / Math.pow(10, decimals);
     },
-    [state.vaults]
+    [state.vaults],
   );
 
   return {
@@ -257,5 +275,55 @@ export function useSiphonBalances() {
     refreshVaults,
     isLoading,
     getVaultBalance,
+  };
+}
+
+export interface UserLedgerState {
+  exists: boolean;
+  loading: boolean;
+  error: string | null;
+}
+
+export function useUserLedger(walletAddress: string | null) {
+  const [state, setState] = useState<UserLedgerState>({
+    exists: false,
+    loading: false,
+    error: null,
+  });
+
+  const checkLedgerExists = useCallback(async () => {
+    if (!walletAddress) {
+      setState({ exists: false, loading: false, error: null });
+      return false;
+    }
+
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+
+    try {
+      const connection = new Connection(L1_RPC_URL, "confirmed");
+      const userPubkey = new PublicKey(walletAddress);
+      const ledgerPDA = userLedgerPda(MATCHING_ENGINE_PROGRAM_ID, userPubkey);
+
+      const accountInfo = await connection.getAccountInfo(ledgerPDA);
+      const exists = accountInfo !== null;
+
+      setState({ exists, loading: false, error: null });
+      return exists;
+    } catch (error) {
+      console.error("Failed to check ledger existence:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      setState({ exists: false, loading: false, error: errorMessage });
+      return false;
+    }
+  }, [walletAddress]);
+
+  useEffect(() => {
+    checkLedgerExists();
+  }, [checkLedgerExists]);
+
+  return {
+    ...state,
+    checkLedgerExists,
   };
 }
