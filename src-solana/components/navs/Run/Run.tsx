@@ -23,7 +23,7 @@ async function fetchPythPrices(): Promise<Record<string, number>> {
   } catch (error) {
     console.error('[Run] Error fetching Pyth prices:', error);
     // Fallback prices
-    return { 'SOL': 250, 'USDC': 1, 'USDT': 1, 'ETH': 3500, 'BTC': 100000 };
+    return { 'SOL': 108.39, 'USDC': 1, 'USDT': 1, 'ETH': 3500, 'BTC': 100000 };
   }
 }
 

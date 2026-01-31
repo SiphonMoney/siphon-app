@@ -114,7 +114,7 @@ export default function DetailsModal({
             // Fallback prices (fetchCoinPrices now returns fallback automatically)
             console.warn('[DetailsModal] Using fallback prices from fetchCoinPrices');
             setCoinPrices({
-              'SOL': 250,
+              'SOL': 108,
               'ETH': 3500,
               'BTC': 105000,
               'USDC': 1,
@@ -126,7 +126,7 @@ export default function DetailsModal({
           console.error('[DetailsModal] Error fetching prices:', error);
           // Fallback prices
           setCoinPrices({
-            'SOL': 250,
+            'SOL': 108,
             'ETH': 3500,
             'BTC': 105000,
             'USDC': 1,
@@ -281,7 +281,7 @@ export default function DetailsModal({
       addLog(`Execution cost: $${totalCost.toFixed(4)} USD`);
 
       // Step 2: Get token price from Pyth
-      const tokenPrice = coinPrices[assetIn] || (assetIn === 'SOL' ? 250 : 1);
+      const tokenPrice = coinPrices[assetIn] || (assetIn === 'SOL' ? 108 : 1);
       const feeInToken = totalCost / tokenPrice;
       addLog(`Fee in ${assetIn}: ${feeInToken.toFixed(6)} (at $${tokenPrice})`);
 

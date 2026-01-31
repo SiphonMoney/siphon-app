@@ -156,7 +156,7 @@ export default function Build({
           const toCoin = field === 'toCoin' ? value : (updatedData.toCoin || '');
           
           if (amount && coin && toCoin) {
-            const prices: { [key: string]: number } = { SOL: 250, USDC: 1, USDT: 1, WBTC: 105000, ETH: 3500, XMR: 200 };
+            const prices: { [key: string]: number } = { SOL: 108, USDC: 1, USDT: 1, WBTC: 105000, ETH: 3500, XMR: 200 };
             const pFrom = prices[coin as string] ?? 0;
             const pTo = prices[toCoin as string] ?? 0;
             if (pFrom > 0 && pTo > 0) {

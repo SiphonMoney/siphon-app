@@ -189,7 +189,7 @@ export const getInputCoin = (
 
 // Default fallback prices (used when API fails)
 const FALLBACK_PRICES: Record<string, number> = {
-  'SOL': 250,
+  'SOL': 108.39,
   'ETH': 3500,
   'BTC': 105000,
   'USDC': 1,
