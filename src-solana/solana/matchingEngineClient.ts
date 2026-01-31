@@ -1,4 +1,5 @@
 import { AnchorProvider, BN, Program, Idl } from "@coral-xyz/anchor";
+import * as anchor from "@coral-xyz/anchor";
 import {
   Connection,
   PublicKey,
@@ -25,9 +26,7 @@ import {
 import {
   MATCHING_ENGINE_PROGRAM_ID,
   ARCIUM_CLUSTER_OFFSET,
-  MATCHING_ENGINE_IDL_PATH,
 } from "@/config/env";
-import { loadIdl } from "@/solana/idl";
 import {
   globalStatePda,
   orderAccountPda,
@@ -44,6 +43,10 @@ import {
   u64ToBn,
 } from "@/crypto/arcium";
 import { getOrCreateUserX25519 } from "@/crypto/X25519Store";
+import { MatchingEngine } from "../../public/types/matching_engine";
+import MatchingEngineIDL from "../../public/idl/matching_engine.json";
+
+
 
 type TokenType = "base" | "quote";
 type Side = "buy" | "sell";
@@ -110,18 +113,16 @@ async function getProgram(
   connection: Connection,
   wallet: WalletAdapter,
   programId = MATCHING_ENGINE_PROGRAM_ID,
-): Promise<UnknownProgram> {
+): Promise<anchor.Program<MatchingEngine>> {
   const provider = new AnchorProvider(
     connection,
     wallet as AnchorProvider["wallet"],
     { commitment: "confirmed" },
   );
-  const idl = await loadIdl(
-    provider,
-    programId,
-    MATCHING_ENGINE_IDL_PATH || undefined,
+  return new anchor.Program<MatchingEngine>(
+    MatchingEngineIDL as anchor.Idl,
+    provider
   );
-  return new Program(idl, provider) as UnknownProgram;
 }
 
 export class MatchingEngineClient {
@@ -159,16 +160,14 @@ export class MatchingEngineClient {
       wallet as AnchorProvider["wallet"],
       { commitment: "confirmed" },
     );
-    const idl = await loadIdl(
-      provider,
-      programId,
-      MATCHING_ENGINE_IDL_PATH || undefined,
+    const program =new anchor.Program<MatchingEngine>(
+      MatchingEngineIDL as anchor.Idl,
+      provider
     );
-    const program = new Program(idl, provider) as UnknownProgram;
     return new MatchingEngineClient(
       connection,
       wallet,
-      provider,
+      provider, 
       program,
       programId,
     );
