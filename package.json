@@ -46,6 +46,9 @@
     "typescript": "^5"
   },
   "overrides": {
-    "@solana/web3.js": "^1.98.4"
+    "@solana/web3.js": "^1.98.4",
+    "@arcium-hq/client": {
+      "@coral-xyz/anchor": "0.32.1"
+    }
   }
 }
