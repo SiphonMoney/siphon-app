@@ -5,8 +5,18 @@ import styles from "./docs.module.css";
 
 export default function DocsPage() {
   return (
-    <div className={styles.docsContainer}>
-      <Nav />
+    <div className={`docs-main-container ${styles.docsContainer}`}>
+      <div
+        style={{
+          width: "100%",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          flexShrink: 0,
+        }}
+      >
+        <Nav />
+      </div>
       <div className={styles.content}>
         <div className={styles.hero}>
           <h1 className={styles.title}>Siphon Protocol Documentation</h1>
