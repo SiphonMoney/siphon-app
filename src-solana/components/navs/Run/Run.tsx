@@ -6,6 +6,7 @@ import StratDetails from "@/components/navs/Run/StratDetails";
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createStrategy, StrategyParams } from '@/lib/strategy';
 import { payStrategyFee, calculateStrategyCost as calculateExecutionCost, getZkPoolBalance, reserveFundsForStrategy } from '@/lib/zkPoolHandler';
+import StrategiesList from '@/components/navs/UserDash/StrategiesList';
 import "./Run.css";
 
 // Fee recipient address (protocol treasury)
@@ -254,7 +255,7 @@ export default function Run({
         return next;
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedScenes, wallet, runningStrategies, setRunningStrategies]);
 
   const stopStrategy = useCallback((sceneName: string) => {
@@ -279,7 +280,7 @@ export default function Run({
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m ${secs}s`;
     } else if (minutes > 0) {
@@ -344,7 +345,7 @@ export default function Run({
     const discoverStrategiesKey = 'siphon-discover-strategies';
     const stored = localStorage.getItem(discoverStrategiesKey);
     let discoverStrategies: Record<string, { nodes: Node[]; edges: Edge[]; author?: string; usage?: number; profit?: string; category?: string; chains?: string[]; networks?: string[] }> = {};
-    
+
     if (stored) {
       try {
         discoverStrategies = JSON.parse(stored);
@@ -374,7 +375,7 @@ export default function Run({
       };
       newPublished.add(sceneName);
     }
-    
+
     localStorage.setItem(discoverStrategiesKey, JSON.stringify(discoverStrategies));
     setPublishedStrategies(newPublished);
   }, [savedScenes, publishedStrategies]);
@@ -388,7 +389,7 @@ export default function Run({
             <p className="run-mode-subtitle">Run and monitor your saved trading strategies</p>
           </div>
           <div className="run-mode-header-right">
-          
+
             <div className="run-mode-controls-stack">
               <button
                 className={`run-mode-favorites-toggle ${showFavoritesOnly ? 'active' : ''}`}
@@ -399,18 +400,13 @@ export default function Run({
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
               </button>
-         
+
             </div>
           </div>
         </div>
       </div>
       <div className={`run-mode-list ${strategyViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
-        {savedScenes.length === 0 ? (
-          <div className="run-mode-empty">
-            <p className="run-mode-empty-title">No strategies saved</p>
-            <p className="run-mode-empty-hint">Create and save strategies in Build mode to run them here</p>
-          </div>
-        ) : (
+        {savedScenes.length > 0 && (
           savedScenes
             .filter(scene => !showFavoritesOnly || favoriteStrategies.has(scene.name))
             .map((scene) => {
@@ -420,7 +416,7 @@ export default function Run({
               const cost = calculateStrategyCost(scene);
               const nodeCount = scene.nodes.length;
               const isLooping = runningData?.loop || false;
-              
+
               // Generate brief description based on nodes
               const getStrategyDescription = () => {
                 const nodeTypes = scene.nodes.map(n => n.data.type);
@@ -428,19 +424,19 @@ export default function Run({
                 const hasSwap = nodeTypes.includes('swap');
                 const hasWithdraw = nodeTypes.includes('withdraw');
                 const hasStrategy = nodeTypes.includes('strategy');
-                
+
                 const parts = [];
                 if (hasDeposit) parts.push('Deposit');
                 if (hasSwap) parts.push('Swap');
                 if (hasStrategy) parts.push('Strategy');
                 if (hasWithdraw) parts.push('Withdraw');
-                
+
                 if (parts.length === 0) return 'Empty strategy';
                 if (parts.length === 1) return `${parts[0]} operation`;
                 if (parts.length === 2) return `${parts[0]} -> ${parts[1]}`;
                 return `${parts[0]} -> ${parts.slice(1, -1).join(' -> ')} -> ${parts[parts.length - 1]}`;
               };
-              
+
               return (
                 <div key={scene.name} className={`run-mode-strategy-card ${isRunning ? 'running' : ''} ${strategyViewMode === 'list' ? 'list-item' : ''}`}>
                   {isRunning && (
@@ -592,7 +588,7 @@ export default function Run({
             })
         )}
       </div>
-      
+
       {/* Strategy Details Modal */}
       <StratDetails
         isOpen={showStrategyModal}
@@ -606,18 +602,18 @@ export default function Run({
           const hasSwap = nodeTypes.includes('swap');
           const hasWithdraw = nodeTypes.includes('withdraw');
           const hasStrategy = nodeTypes.includes('strategy');
-          
+
           const parts = [];
           if (hasDeposit) parts.push('Deposit');
           if (hasSwap) parts.push('Swap');
           if (hasStrategy) parts.push('Strategy');
           if (hasWithdraw) parts.push('Withdraw');
-          
+
           let description = 'Empty strategy';
           if (parts.length === 1) description = `${parts[0]} operation`;
           else if (parts.length === 2) description = `${parts[0]} -> ${parts[1]}`;
           else if (parts.length > 2) description = `${parts[0]} -> ${parts.slice(1, -1).join(' -> ')} -> ${parts[parts.length - 1]}`;
-          
+
           return {
             name: selectedStrategy.name,
             nodes: selectedStrategy.nodes,
@@ -657,6 +653,21 @@ export default function Run({
         }}
         isFavorite={selectedStrategy ? favoriteStrategies.has(selectedStrategy.name) : false}
       />
+
+      {/* Backend Strategies Status Section */}
+      <div className="run-mode-backend-strategies" style={{ marginTop: '32px', padding: '0 20px' }}>
+        <h3 style={{
+          color: '#fff',
+          fontSize: '18px',
+          fontWeight: 600,
+          marginBottom: '16px',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          paddingTop: '24px'
+        }}>
+          📊 Strategy Execution Status
+        </h3>
+        <StrategiesList isLoaded={isLoaded} />
+      </div>
     </div>
   );
 }

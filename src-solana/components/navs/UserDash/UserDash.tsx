@@ -94,7 +94,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   // Set recipient to own address on connect
   useEffect(() => {
     if (publicKey) {
-      setTransactionInput(prev => ({...prev, recipient: publicKey.toBase58()}));
+      setTransactionInput(prev => ({ ...prev, recipient: publicKey.toBase58() }));
     }
   }, [publicKey]);
 
@@ -170,7 +170,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
         if (result.success) {
           alert(`Successfully deposited ${transactionInput.amount} ${transactionInput.token}\nSignature: ${result.signature}`);
-          setTransactionInput(prev => ({...prev, amount: ""}));
+          setTransactionInput(prev => ({ ...prev, amount: "" }));
           // Refresh balances
           await fetchWalletBalances();
           fetchZkPoolBalances();
@@ -184,7 +184,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
         if (result.success) {
           alert(`Private withdrawal successful!\n${transactionInput.amount} ${transactionInput.token} sent to ${transactionInput.recipient}\nSignature: ${result.signature}`);
-          setTransactionInput(prev => ({...prev, amount: ""}));
+          setTransactionInput(prev => ({ ...prev, amount: "" }));
           await fetchWalletBalances();
           fetchZkPoolBalances();
         } else {
@@ -338,14 +338,14 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                   placeholder="Amount"
                   value={transactionInput.amount}
                   onChange={(e) => {
-                    setTransactionInput(prev => ({...prev, amount: e.target.value}));
+                    setTransactionInput(prev => ({ ...prev, amount: e.target.value }));
                   }}
                   className="userdash-input"
                 />
                 <select
                   value={transactionInput.token}
                   onChange={(e) => {
-                    setTransactionInput(prev => ({...prev, token: e.target.value}));
+                    setTransactionInput(prev => ({ ...prev, token: e.target.value }));
                   }}
                   className="userdash-select"
                 >
@@ -364,7 +364,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                     placeholder="Recipient Address"
                     value={transactionInput.recipient}
                     onChange={(e) => {
-                      setTransactionInput(prev => ({...prev, recipient: e.target.value}));
+                      setTransactionInput(prev => ({ ...prev, recipient: e.target.value }));
                     }}
                     className="userdash-input"
                   />
