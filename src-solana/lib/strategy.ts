@@ -10,7 +10,7 @@ export interface StrategyParams {
 
 export async function createStrategy(strategyData: StrategyParams) {
   try {
-    const PAYLOAD_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "http://localhost:5009";
+    const PAYLOAD_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "https://43.207.34.231.sslip.io";
     const apiToken = process.env.NEXT_PUBLIC_API_TOKEN || "";
 
     const headers: HeadersInit = {
@@ -89,7 +89,7 @@ export function getSolanaExplorerUrl(txHash: string, network: string = 'devnet')
 // Fetch user's strategies with execution status and tx_hash
 export async function getStrategies(userId: string): Promise<{ success: boolean; strategies?: StrategyStatus[]; error?: string }> {
   try {
-    const API_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "http://localhost:5005";
+    const API_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "https://43.207.34.231.sslip.io";
 
     const response = await fetch(`${API_URL}/strategies/${userId}`, {
       method: "GET",
