@@ -343,8 +343,8 @@ export default function DetailsModal({
 
       if (result.success) {
         const strategyId = result.data?.strategy_id as string | undefined;
-        addLog('Strategy sent. Checking FHE status in 1s...');
-        showToast('Checking status...', 'loading');
+        addLog('Strategy sent to FHE executor!');
+        showToast('Order sent! Check the Run tab for updates.', 'success');
 
         const userId = wallet.publicKey.toBase58();
         const initialDelayMs = 1000;
