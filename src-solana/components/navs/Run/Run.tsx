@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Node, Edge } from '@xyflow/react';
 import StratDetails from "@/components/navs/Run/StratDetails";
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createStrategy, StrategyParams } from '@/lib/strategy';
 import { payStrategyFee, calculateStrategyCost as calculateExecutionCost, getZkPoolBalance, reserveFundsForStrategy } from '@/lib/zkPoolHandler';
 import StrategiesList from '@/components/navs/UserDash/StrategiesList';
+import DetailsModal from '@/components/navs/Discover/DetailsModal';
+import { strategyList, initializeLimitOrderStrategy } from '@/components/navs/Discover/strategies';
+import type { StrategyMetadata, StrategyData } from '@/components/navs/Discover/strategies';
 import "./Run.css";
 
 // Fee recipient address (protocol treasury)
@@ -59,9 +62,58 @@ export default function Run({
 }: RunProps) {
   const wallet = useWallet();
   const [strategyViewMode] = useState<'cards' | 'list'>('cards');
+  const [runSectionTab, setRunSectionTab] = useState<'alphas' | 'runs'>('alphas');
   const [selectedStrategy, setSelectedStrategy] = useState<{ name: string; nodes: Node[]; edges: Edge[] } | null>(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
+  const [showLimitOrderPreExecuteModal, setShowLimitOrderPreExecuteModal] = useState(false);
+  const [limitOrderModalNodes, setLimitOrderModalNodes] = useState<Node[]>([]);
+  const [limitOrderModalEdges, setLimitOrderModalEdges] = useState<Edge[]>([]);
+  const [limitOrderFlowKey, setLimitOrderFlowKey] = useState(0);
+  const [limitOrderFlowLoading, setLimitOrderFlowLoading] = useState(false);
+  const [limitOrderIsRunMode, setLimitOrderIsRunMode] = useState(false);
+  const [limitOrderRunModeValues, setLimitOrderRunModeValues] = useState<Record<string, Record<string, string>>>({});
+  const [limitOrderRunDuration, setLimitOrderRunDuration] = useState<string>('1h');
+  const [limitOrderIsFading, setLimitOrderIsFading] = useState(false);
+  const [limitOrderShowSuccessNotification, setLimitOrderShowSuccessNotification] = useState(false);
   const [publishedStrategies, setPublishedStrategies] = useState<Set<string>>(new Set());
+
+  const limitOrderMetadata = useMemo((): StrategyMetadata | null => {
+    return strategyList.find((s) => s.name === 'Limit Order') ?? null;
+  }, []);
+
+  useEffect(() => {
+    if (showLimitOrderPreExecuteModal && limitOrderMetadata) {
+      initializeLimitOrderStrategy();
+      setLimitOrderFlowLoading(true);
+      const key = 'siphon-discover-strategies';
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        try {
+          const data = JSON.parse(stored) as Record<string, StrategyData>;
+          const limitOrder = data['Limit Order'];
+          if (limitOrder?.nodes?.length && limitOrder?.edges) {
+            const nodes = limitOrder.nodes.map((n: Node) => ({
+              ...n,
+              type: n.type || 'custom',
+              position: n.position || { x: 0, y: 0 },
+            }));
+            const edges = limitOrder.edges.map((e: Edge) => ({ ...e, type: e.type || 'smoothstep' }));
+            setLimitOrderModalNodes(nodes);
+            setLimitOrderModalEdges(edges);
+            setLimitOrderFlowKey((k) => k + 1);
+          }
+        } catch {
+          setLimitOrderModalNodes([]);
+          setLimitOrderModalEdges([]);
+        }
+      }
+      setTimeout(() => setLimitOrderFlowLoading(false), 200);
+    } else {
+      setLimitOrderModalNodes([]);
+      setLimitOrderModalEdges([]);
+    }
+  }, [showLimitOrderPreExecuteModal, limitOrderMetadata]);
+
   const [executingStrategies, setExecutingStrategies] = useState<Set<string>>(new Set());
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const pricesFetchedRef = useRef(false);
@@ -389,26 +441,32 @@ export default function Run({
             <p className="run-mode-subtitle">Run and monitor your saved trading strategies</p>
           </div>
           <div className="run-mode-header-right">
-
-            <div className="run-mode-controls-stack">
-              <button
-                className={`run-mode-favorites-toggle ${showFavoritesOnly ? 'active' : ''}`}
-                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-                title={showFavoritesOnly ? 'Show all strategies' : 'Show favorites only'}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill={showFavoritesOnly ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </button>
-
-            </div>
           </div>
         </div>
       </div>
+
+      <div className="run-mode-tabs">
+        <button
+          type="button"
+          className={`run-mode-tab ${runSectionTab === 'alphas' ? 'active' : ''}`}
+          onClick={() => setRunSectionTab('alphas')}
+        >
+          My Alphas
+        </button>
+        <button
+          type="button"
+          className={`run-mode-tab ${runSectionTab === 'runs' ? 'active' : ''}`}
+          onClick={() => setRunSectionTab('runs')}
+        >
+          My Runs
+        </button>
+      </div>
+
+      {runSectionTab === 'alphas' && (
       <div className={`run-mode-list ${strategyViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
         {savedScenes.length > 0 && (
           savedScenes
-            .filter(scene => !showFavoritesOnly || favoriteStrategies.has(scene.name))
+            .filter(() => true)
             .map((scene) => {
               const isRunning = runningStrategies.has(scene.name);
               const isExecuting = executingStrategies.has(scene.name);
@@ -483,19 +541,8 @@ export default function Run({
                       </div>
                     </div>
                   </div>
-                  <div className="strategy-card-actions">
+                    <div className="strategy-card-actions">
                     <div className="strategy-card-actions-group">
-                      <button
-                        className={`strategy-publish-btn ${publishedStrategies.has(scene.name) ? 'active' : ''}`}
-                        onClick={() => togglePublishStrategy(scene.name)}
-                        title={publishedStrategies.has(scene.name) ? 'Make private' : 'Make public'}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill={publishedStrategies.has(scene.name) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                          <line x1="4" y1="22" x2="4" y2="15" />
-                        </svg>
-                        <span>{publishedStrategies.has(scene.name) ? 'Public' : 'Public'}</span>
-                      </button>
                       {isRunning ? (
                         <button
                           className="strategy-stop-btn"
@@ -528,17 +575,6 @@ export default function Run({
                         </button>
                       )}
                       <button
-                        className={`strategy-loop-toggle ${isLooping ? 'active' : ''}`}
-                        onClick={() => toggleLoop(scene.name)}
-                        title={isLooping ? 'Disable loop' : 'Enable loop'}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="23 4 23 10 17 10" />
-                          <polyline points="1 20 1 14 7 14" />
-                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                        </svg>
-                      </button>
-                      <button
                         className="strategy-edit-btn"
                         onClick={() => onEditStrategy(scene.name)}
                         title="Edit strategy"
@@ -552,8 +588,12 @@ export default function Run({
                         className="strategy-details-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedStrategy(scene);
-                          setShowStrategyModal(true);
+                          if (scene.name === 'Limit Order') {
+                            setShowLimitOrderPreExecuteModal(true);
+                          } else {
+                            setSelectedStrategy(scene);
+                            setShowStrategyModal(true);
+                          }
                         }}
                         title="More Details"
                       >
@@ -588,6 +628,13 @@ export default function Run({
             })
         )}
       </div>
+      )}
+
+      {runSectionTab === 'runs' && (
+      <div className="run-mode-backend-strategies" style={{ marginTop: '0', padding: '0 20px' }}>
+        <StrategiesList isLoaded={isLoaded} />
+      </div>
+      )}
 
       {/* Strategy Details Modal */}
       <StratDetails
@@ -654,20 +701,39 @@ export default function Run({
         isFavorite={selectedStrategy ? favoriteStrategies.has(selectedStrategy.name) : false}
       />
 
-      {/* Backend Strategies Status Section */}
-      <div className="run-mode-backend-strategies" style={{ marginTop: '32px', padding: '0 20px' }}>
-        <h3 style={{
-          color: '#fff',
-          fontSize: '18px',
-          fontWeight: 600,
-          marginBottom: '16px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          paddingTop: '24px'
-        }}>
-          📊 Strategy Execution Status
-        </h3>
-        <StrategiesList isLoaded={isLoaded} />
-      </div>
+      {showLimitOrderPreExecuteModal && limitOrderMetadata && (
+        <DetailsModal
+          selectedStrategy={limitOrderMetadata}
+          isOpen={showLimitOrderPreExecuteModal}
+          onClose={() => {
+            setShowLimitOrderPreExecuteModal(false);
+            setLimitOrderIsRunMode(false);
+            setLimitOrderRunModeValues({});
+          }}
+          isRunMode={limitOrderIsRunMode}
+          setIsRunMode={setLimitOrderIsRunMode}
+          modalStrategyNodes={limitOrderModalNodes}
+          modalStrategyEdges={limitOrderModalEdges}
+          runModeValues={limitOrderRunModeValues}
+          setRunModeValues={setLimitOrderRunModeValues}
+          runDuration={limitOrderRunDuration}
+          setRunDuration={setLimitOrderRunDuration}
+          isFading={limitOrderIsFading}
+          setIsFading={setLimitOrderIsFading}
+          flowKey={limitOrderFlowKey}
+          isFlowLoading={limitOrderFlowLoading}
+          runningStrategies={runningStrategies}
+          setRunningStrategies={setRunningStrategies}
+          setNodes={setNodes}
+          setEdges={setEdges}
+          setViewMode={setViewMode}
+          setCurrentFileName={setCurrentFileName}
+          savedScenes={savedScenes}
+          setSavedScenes={setSavedScenes}
+          setShowSuccessNotification={setLimitOrderShowSuccessNotification}
+        />
+      )}
+
     </div>
   );
 }

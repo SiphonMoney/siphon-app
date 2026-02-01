@@ -9,6 +9,8 @@ interface DepositModalProps {
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   onClose: () => void;
   onSuccess: () => void;
+  onNotify?: (message: string, type: "success" | "error") => void;
+  onTxRecorded?: (entry: { type: "deposit"; timestamp: number; txHash: string; amount?: string; token?: string }) => void;
 }
 
 type TokenType = 'base' | 'quote';
@@ -17,7 +19,9 @@ export default function DepositModal({
   walletAddress, 
   signMessage,
   onClose, 
-  onSuccess 
+  onSuccess,
+  onNotify,
+  onTxRecorded,
 }: DepositModalProps) {
   const [amount, setAmount] = useState('');
   const [tokenType, setTokenType] = useState<TokenType>('base');
@@ -29,43 +33,45 @@ export default function DepositModal({
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      setError('Please enter a valid amount');
+      const msg = "Please enter a valid amount";
+      setError(msg);
+      onNotify?.(msg, "error");
       return;
     }
 
     setLoading(true);
     setError(null);
-    setProgress('Preparing deposit...');
+    setProgress("Preparing deposit...");
 
     try {
       // TODO: Implement actual deposit logic
-      // 1. Get user's x25519 public key
-      // 2. Generate computation offset
-      // 3. Call deposit_to_ledger instruction
-      // 4. Wait for MPC computation
-      
-      setProgress('Getting encryption keys...');
-      await new Promise(resolve => setTimeout(resolve, 800));
+      setProgress("Getting encryption keys...");
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-      setProgress('Creating transaction...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setProgress("Creating transaction...");
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      setProgress('Submitting to pool...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      setProgress("Submitting to pool...");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      setProgress('Awaiting MPC computation...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      setProgress("Awaiting MPC computation...");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      console.log('Deposit completed:', { amount, tokenType, walletAddress });
-      
-      setProgress('Complete!');
+      const txHash = "deposit_" + Date.now();
+      const timestamp = Date.now();
+      onTxRecorded?.({ type: "deposit", timestamp, txHash, amount, token: tokenName });
+      onNotify?.("Deposit completed successfully", "success");
+
+      setProgress("Complete!");
       setTimeout(() => {
         onSuccess();
         onClose();
       }, 500);
     } catch (err) {
-      console.error('Deposit failed:', err);
-      setError(err instanceof Error ? err.message : 'Deposit failed');
+      const msg = err instanceof Error ? err.message : "Deposit failed";
+      console.error("Deposit failed:", err);
+      setError(msg);
+      onNotify?.(msg, "error");
       setLoading(false);
     }
   };

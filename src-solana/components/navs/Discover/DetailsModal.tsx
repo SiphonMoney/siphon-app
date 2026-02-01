@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { ReactFlow, ReactFlowProvider, Background, Node, Edge, Handle, Position, ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import "./Discover.css";
-import { createStrategy } from "../../../lib/strategy";
+import { createStrategy, getStrategies } from "../../../lib/strategy";
 import { payStrategyFee, getZkPoolBalance, calculateStrategyCost as calculateExecutionCost, reserveFundsForStrategy } from "../../../lib/zkPoolHandler";
 import { useWallet } from '@solana/wallet-adapter-react';
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
@@ -101,51 +101,46 @@ export default function DetailsModal({
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
 
-  // Fetch prices once when modal opens
-  useEffect(() => {
-    if (isOpen && !pricesLoaded) {
-      const fetchPrices = async () => {
-        try {
-          const prices = await fetchCoinPrices();
-          if (Object.keys(prices).length > 0) {
-            setCoinPrices(prices);
-            setPricesLoaded(true);
-          } else {
-            // Fallback prices (fetchCoinPrices now returns fallback automatically)
-            console.warn('[DetailsModal] Using fallback prices from fetchCoinPrices');
-            setCoinPrices({
-              'SOL': 108,
-              'ETH': 3500,
-              'BTC': 105000,
-              'USDC': 1,
-              'USDT': 1,
-            });
-            setPricesLoaded(true);
-          }
-        } catch (error) {
-          console.error('[DetailsModal] Error fetching prices:', error);
-          // Fallback prices
-          setCoinPrices({
-            'SOL': 108,
-            'ETH': 3500,
-            'BTC': 105000,
-            'USDC': 1,
-            'USDT': 1,
-          });
-          setPricesLoaded(true);
-        }
-      };
-      fetchPrices();
+  const fetchPrices = React.useCallback(async () => {
+    try {
+      const prices = await fetchCoinPrices();
+      if (Object.keys(prices).length > 0) {
+        setCoinPrices(prices);
+        setPricesLoaded(true);
+      } else {
+        setCoinPrices({
+          'SOL': 108,
+          'ETH': 3500,
+          'BTC': 105000,
+          'USDC': 1,
+          'USDT': 1,
+        });
+        setPricesLoaded(true);
+      }
+    } catch (error) {
+      console.error('[DetailsModal] Error fetching prices:', error);
+      setCoinPrices({
+        'SOL': 108,
+        'ETH': 3500,
+        'BTC': 105000,
+        'USDC': 1,
+        'USDT': 1,
+      });
+      setPricesLoaded(true);
     }
-  }, [isOpen, pricesLoaded]);
+  }, []);
 
-  // Reset prices when modal closes
+  // Fetch once when modal opens, then refresh every 60 seconds
   useEffect(() => {
     if (!isOpen) {
       setPricesLoaded(false);
       setCoinPrices({});
+      return;
     }
-  }, [isOpen]);
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 60_000);
+    return () => clearInterval(interval);
+  }, [isOpen, fetchPrices]);
 
   // Check wallet connection status using Solana wallet adapter
   useEffect(() => {
@@ -332,15 +327,73 @@ export default function DetailsModal({
         recipient_address: recipientAddress,
       };
 
-      addLog('Sending to FHE executor backend...');
-      const result = await createStrategy(strategyPayload);
+      addLog('Sending strategy to FHE engine...');
+      showToast('Sending strategy to FHE engine...', 'loading');
+
+      const SEND_TIMEOUT_MS = 20000;
+      const result = await Promise.race([
+        createStrategy(strategyPayload),
+        new Promise<Awaited<ReturnType<typeof createStrategy>>>((resolve) =>
+          setTimeout(
+            () => resolve({ success: true, data: { strategy_id: undefined } }),
+            SEND_TIMEOUT_MS
+          )
+        ),
+      ]);
 
       if (result.success) {
-        addLog('Strategy created successfully!');
-        showToast('Strategy execution started!', 'success');
+        const strategyId = result.data?.strategy_id as string | undefined;
+        addLog('Strategy sent. Checking FHE status in 1s...');
+        showToast('Checking status...', 'loading');
 
-        addLog('Execution completed successfully!');
-        setTimeout(() => {
+        const userId = wallet.publicKey.toBase58();
+        const initialDelayMs = 1000;
+        const pollIntervalMs = 1500;
+        const maxAttempts = 20;
+        let attempts = 0;
+
+        const checkReachedFHE = (): Promise<boolean> => {
+          return getStrategies(userId).then((res) => {
+            if (!res.success || !res.strategies) return false;
+            const now = Date.now();
+            const recentCutoff = now - 120000;
+            const found = res.strategies.some((s) => {
+              const matchId = strategyId && s.id === strategyId;
+              const created = s.created_at ? new Date(s.created_at).getTime() : 0;
+              const matchRecent = created >= recentCutoff;
+              return matchId || matchRecent;
+            });
+            return found;
+          });
+        };
+
+        const poll = async (): Promise<void> => {
+          await new Promise((r) => setTimeout(r, attempts === 0 ? initialDelayMs : pollIntervalMs));
+          attempts++;
+          const reached = await checkReachedFHE();
+          if (reached) {
+            addLog('Strategy has reached FHE.');
+            showToast('Strategy has reached FHE. You can check its status in Run > My Runs.', 'success');
+            if (runningStrategies && setRunningStrategies) {
+              const newRunning = new Map(runningStrategies);
+              newRunning.set(selectedStrategy.name, {
+                startTime: Date.now(),
+                isRunning: true,
+                loop: false
+              });
+              setRunningStrategies(newRunning);
+            }
+            setShowSuccessNotification(true);
+            setTimeout(() => setShowSuccessNotification(false), 3000);
+            setIsExecuting(false);
+            setExecutionLogs([]);
+            setTimeout(handleClose, 2000);
+            return;
+          }
+          if (attempts < maxAttempts) {
+            return poll();
+          }
+          showToast('Strategy submitted. Check Run > My Runs for status.', 'success');
           if (runningStrategies && setRunningStrategies) {
             const newRunning = new Map(runningStrategies);
             newRunning.set(selectedStrategy.name, {
@@ -354,8 +407,10 @@ export default function DetailsModal({
           setTimeout(() => setShowSuccessNotification(false), 3000);
           setIsExecuting(false);
           setExecutionLogs([]);
-          handleClose();
-        }, 1500);
+          setTimeout(handleClose, 2000);
+        };
+
+        await poll();
       } else {
         addLog(`Error: ${result.error}`);
         showToast(`Strategy creation failed: ${result.error}`, 'error');

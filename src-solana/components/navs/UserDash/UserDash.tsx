@@ -8,6 +8,7 @@ import { SOLANA_TOKEN_MAP } from '../../../lib/solanaHandler';
 import { depositToZkPool, withdrawFromZkPool, getZkPoolBalance } from '../../../lib/zkPoolHandler';
 import { SUPPORTED_TOKENS } from '../../../lib/siphon/constants';
 import { NEXT_PUBLIC_SOLANA_NETWORK } from '../../../lib/config';
+import TxList, { getTxList, appendTx, type TxEntry } from '../darkpool/darkpool/TxList';
 
 interface UserDashProps {
   isLoaded?: boolean;
@@ -35,6 +36,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     amount: "",
     recipient: ""
   });
+  const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [txList, setTxList] = useState<TxEntry[]>([]);
 
   // Fetch wallet balances from Solana
   const fetchWalletBalances = useCallback(async () => {
@@ -98,6 +101,18 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     }
   }, [publicKey]);
 
+  // Auto-hide notification after 5s
+  useEffect(() => {
+    if (!notification) return;
+    const t = setTimeout(() => setNotification(null), 5000);
+    return () => clearTimeout(t);
+  }, [notification]);
+
+  // Load transaction history from localStorage
+  useEffect(() => {
+    setTxList(getTxList());
+  }, []);
+
   // Fetch balances on mount and periodically
   useEffect(() => {
     fetchWalletBalances();
@@ -143,21 +158,20 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     if (isProcessing) return;
 
     if (!walletConnected || !publicKey) {
-      alert('Please connect wallet first');
+      setNotification({ message: 'Please connect wallet first', type: 'error' });
       return;
     }
 
-    // Validate inputs
     if (!transactionInput.amount || parseFloat(transactionInput.amount) <= 0) {
-      alert('Please enter a valid amount');
+      setNotification({ message: 'Please enter a valid amount', type: 'error' });
       return;
     }
     if (!transactionInput.token) {
-      alert('Please select a token');
+      setNotification({ message: 'Please select a token', type: 'error' });
       return;
     }
     if (!isDepositMode && !transactionInput.recipient) {
-      alert('Please enter a recipient address');
+      setNotification({ message: 'Please enter a recipient address', type: 'error' });
       return;
     }
 
@@ -169,31 +183,60 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         const result = await depositToZkPool(connection, wallet, transactionInput.token, transactionInput.amount);
 
         if (result.success) {
-          alert(`Successfully deposited ${transactionInput.amount} ${transactionInput.token}\nSignature: ${result.signature}`);
+          const txHash = result.signature ?? 'deposit_' + Date.now();
+          appendTx({
+            type: 'deposit',
+            timestamp: Date.now(),
+            txHash,
+            amount: transactionInput.amount,
+            token: transactionInput.token,
+          });
+          setTxList(getTxList());
+          setNotification({
+            message: result.signature
+              ? `Deposited ${transactionInput.amount} ${transactionInput.token}. Tx: ${result.signature.slice(0, 8)}...${result.signature.slice(-8)}`
+              : `Deposited ${transactionInput.amount} ${transactionInput.token}`,
+            type: 'success',
+          });
           setTransactionInput(prev => ({ ...prev, amount: "" }));
-          // Refresh balances
           await fetchWalletBalances();
           fetchZkPoolBalances();
         } else {
-          alert(`Deposit failed: ${result.error}`);
+          setNotification({ message: `Deposit failed: ${result.error}`, type: 'error' });
         }
       } else {
-        // All withdrawals are now private via ZK Pool
         console.log('Withdrawing from ZK Pool (private/anonymous)');
         const result = await withdrawFromZkPool(transactionInput.token, transactionInput.amount, transactionInput.recipient);
 
         if (result.success) {
-          alert(`Private withdrawal successful!\n${transactionInput.amount} ${transactionInput.token} sent to ${transactionInput.recipient}\nSignature: ${result.signature}`);
+          const txHash = result.signature ?? 'withdraw_' + Date.now();
+          appendTx({
+            type: 'withdraw',
+            timestamp: Date.now(),
+            txHash,
+            amount: transactionInput.amount,
+            token: transactionInput.token,
+          });
+          setTxList(getTxList());
+          setNotification({
+            message: result.signature
+              ? `Withdrew ${transactionInput.amount} ${transactionInput.token} to ${formatAddress(transactionInput.recipient)}. Tx: ${result.signature.slice(0, 8)}...${result.signature.slice(-8)}`
+              : `Withdrew ${transactionInput.amount} ${transactionInput.token} to ${formatAddress(transactionInput.recipient)}`,
+            type: 'success',
+          });
           setTransactionInput(prev => ({ ...prev, amount: "" }));
           await fetchWalletBalances();
           fetchZkPoolBalances();
         } else {
-          alert(`Private withdrawal failed: ${result.error}`);
+          setNotification({ message: `Withdrawal failed: ${result.error}`, type: 'error' });
         }
       }
     } catch (error: unknown) {
       console.error('Transaction failed:', error);
-      alert(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setNotification({
+        message: `Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        type: 'error',
+      });
     }
 
     setIsProcessing(false);
@@ -214,6 +257,24 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
   return (
     <div className={`userdash-view ${isLoaded ? 'loaded' : ''}`}>
+      {notification && (
+        <div className={`userdash-toast userdash-toast-${notification.type}`} role="alert">
+          {notification.type === 'success' ? (
+            <svg className="userdash-toast-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          ) : (
+            <svg className="userdash-toast-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+          )}
+          <span className="userdash-toast-message">{notification.message}</span>
+        </div>
+      )}
+
       <div className="userdash-content-wrapper">
         <div className="userdash-header">
           <div className="userdash-header-top">
@@ -238,7 +299,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               className="userdash-copy-button"
               onClick={() => {
                 navigator.clipboard.writeText(publicKey.toBase58());
-                alert('Address copied to clipboard!');
+                setNotification({ message: 'Address copied to clipboard', type: 'success' });
               }}
               title="Copy address"
             >
@@ -309,7 +370,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               )}
             </div>
             <div className="userdash-balance-description">
-              Your anonymous balance in the Noir ZK privacy pool (stored in browser)
+              Your anonymous balance in the Noir ZK pool
             </div>
           </div>
 
@@ -384,6 +445,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
             </button>
           </div>
         </div>
+
+        <TxList entries={txList} />
       </div>
     </div>
   );

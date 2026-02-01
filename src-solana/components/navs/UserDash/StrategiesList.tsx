@@ -92,7 +92,7 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
                         letterSpacing: '0.5px',
                         animation: 'pulse 2s infinite'
                     }}>
-                        ⏳ Processing
+                        Processing
                     </span>
                 );
         }
@@ -131,7 +131,7 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
                     fontWeight: 600,
                     margin: 0
                 }}>
-                    📋 Your Strategies
+                    Your Strategies
                 </h2>
                 <button
                     onClick={fetchStrategies}
@@ -147,7 +147,7 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
                         transition: 'all 0.2s'
                     }}
                 >
-                    {loading ? '🔄 Loading...' : '↻ Refresh'}
+                    {loading ? 'Loading...' : 'Refresh'}
                 </button>
             </div>
 
@@ -175,7 +175,6 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
                     borderRadius: '12px',
                     border: '1px dashed rgba(255,255,255,0.1)'
                 }}>
-                    <div style={{ fontSize: '40px', marginBottom: '12px' }}>📭</div>
                     No strategies yet. Create one in the Build view!
                 </div>
             )}

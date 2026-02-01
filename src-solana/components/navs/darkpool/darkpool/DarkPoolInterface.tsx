@@ -1,7 +1,7 @@
 // DarkPoolInterface.tsx - Main interface for dark pool trading
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useUserLedger } from "@/lib/siphon/hooks";
 import InitializeLedger from "./InitializeLedger";
 import BalanceDisplay from "./BalanceDisplay";
@@ -9,7 +9,7 @@ import DepositModal from "./DepositModal";
 import WithdrawModal from "./WithdrawModal";
 import OrderForm from "./OrderForm";
 import OrderList from "./OrderList";
-// import ConnectButton from "../swap_face/extensions/ConnectButton";
+import TxList, { getTxList, appendTx, type TxEntry } from "./TxList";
 import { WalletInfo } from "@/lib/walletManager";
 import { getBrowserWalletAdapter } from "@/lib/solanaWallet";
 import "./darkpool.css";
@@ -39,6 +39,27 @@ export default function DarkPoolInterface({
   const [view, setView] = useState<View>("overview");
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [balanceKey, setBalanceKey] = useState(0);
+  const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [txList, setTxList] = useState<TxEntry[]>([]);
+
+  useEffect(() => {
+    setTxList(getTxList());
+  }, []);
+
+  useEffect(() => {
+    if (!notification) return;
+    const t = setTimeout(() => setNotification(null), 4000);
+    return () => clearTimeout(t);
+  }, [notification]);
+
+  const notify = useCallback((message: string, type: "success" | "error") => {
+    setNotification({ message, type });
+  }, []);
+
+  const handleTxRecorded = useCallback((entry: TxEntry) => {
+    appendTx(entry);
+    setTxList(getTxList());
+  }, []);
 
   // 🎭 DEMO MODE: Bypass initialization for testing/demo
   // Set to true to skip ledger check and go straight to main interface
@@ -62,14 +83,14 @@ export default function DarkPoolInterface({
     checkLedgerExists();
   };
 
-  const handleDepositSuccess = () => {
+  const handleDepositSuccess = (_txHash?: string) => {
     setActiveModal(null);
-    setBalanceKey((prev) => prev + 1); // Force balance refresh
+    setBalanceKey((prev) => prev + 1);
   };
 
-  const handleWithdrawSuccess = () => {
+  const handleWithdrawSuccess = (_txHash?: string) => {
     setActiveModal(null);
-    setBalanceKey((prev) => prev + 1); // Force balance refresh
+    setBalanceKey((prev) => prev + 1);
   };
 
   const handleOrderSuccess = (orderId: string) => {
@@ -122,6 +143,25 @@ export default function DarkPoolInterface({
   // Main interface
   return (
     <div className="darkpool-interface">
+      {/* Toast notification - styled, no alert */}
+      {notification && (
+        <div className={`darkpool-toast darkpool-toast-${notification.type}`} role="alert">
+          {notification.type === "success" ? (
+            <svg className="darkpool-toast-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          ) : (
+            <svg className="darkpool-toast-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+          )}
+          <span className="darkpool-toast-message">{notification.message}</span>
+        </div>
+      )}
+
       {/* Demo Mode Banner */}
       {DEMO_MODE && (
         <div
@@ -153,7 +193,7 @@ export default function DarkPoolInterface({
         style={{ marginTop: DEMO_MODE ? "35px" : "40px" }}
       >
         <div className="header-left">
-          <h2>Dark Pool</h2>
+          <h2>DarkPools</h2>
         </div>
         <div className="header-right">
           <div className="wallet-badge">
@@ -227,6 +267,8 @@ export default function DarkPoolInterface({
                 </button>
               </div>
             </div>
+
+            <TxList entries={txList} />
 
             <div className="info-section">
               <div className="info-card">
@@ -303,6 +345,8 @@ export default function DarkPoolInterface({
           signMessage={signMessage}
           onClose={() => setActiveModal(null)}
           onSuccess={handleDepositSuccess}
+          onNotify={notify}
+          onTxRecorded={handleTxRecorded}
         />
       )}
 
@@ -312,6 +356,8 @@ export default function DarkPoolInterface({
           signMessage={signMessage}
           onClose={() => setActiveModal(null)}
           onSuccess={handleWithdrawSuccess}
+          onNotify={notify}
+          onTxRecorded={handleTxRecorded}
         />
       )}
     </div>

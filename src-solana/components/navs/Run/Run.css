@@ -19,7 +19,42 @@
 }
 
 .run-mode-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+}
+
+.run-mode-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.25rem;
+  width: fit-content;
+}
+
+.run-mode-tab {
+  padding: 0.5rem 1.25rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-source-code), monospace;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.run-mode-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.run-mode-tab.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-weight: 600;
 }
 
 .run-mode-header-content {

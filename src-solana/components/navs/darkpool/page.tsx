@@ -114,15 +114,27 @@ export default function DarkPoolPage() {
         position: "relative",
       }}
     >
-      <Nav onWalletConnected={handleWalletConnected} />
+      {/* Same width as strategies: 98vw container for nav */}
+      <div
+        className="dapp-main-container"
+        style={{
+          width: "98vw",
+          maxWidth: "none",
+          margin: "0 auto",
+        }}
+      >
+        <Nav onWalletConnected={handleWalletConnected} />
+      </div>
 
-      {/* DApp Interface - on top of everything */}
+      {/* DApp Interface - 98vw centered to match strategies */}
       <div
         style={{
           position: "fixed",
           top: 0,
-          left: 0,
-          width: "100%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "98vw",
+          maxWidth: "none",
           height: "100%",
           zIndex: 1000,
           display: "flex",
@@ -134,7 +146,7 @@ export default function DarkPoolPage() {
         <div
           className="dapp-container"
           style={{
-            width: "98vw",
+            width: "100%",
             height: "90vh",
             maxWidth: "none",
             pointerEvents: "auto",
@@ -193,8 +205,7 @@ export default function DarkPoolPage() {
                       flex: "0 0 50%",
                     }}
                   >
-                    🔵 AVAILABLE IN TESTNET - NEXT STAGE: MAINNET LAUNCH COMING
-                    SOON 🔵
+                   🔵 Currently on devnet - Mainnet launch Confirmed! 🔵
                   </div>
                   <div
                     style={{
@@ -208,8 +219,7 @@ export default function DarkPoolPage() {
                       flex: "0 0 50%",
                     }}
                   >
-                    🔵 AVAILABLE IN TESTNET - NEXT STAGE: MAINNET LAUNCH COMING
-                    SOON 🔵
+                    Currently on devnet, mainnet launch confirmed
                   </div>
                 </div>
               </div>
@@ -367,7 +377,7 @@ export default function DarkPoolPage() {
                         animation: "fadeIn 0.8s ease-in",
                       }}
                     >
-                      Dark Pool
+                      DarkPools
                     </h2>
                     <div
                       style={{

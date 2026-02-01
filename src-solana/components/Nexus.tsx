@@ -18,6 +18,22 @@ export default function Nexus({
   const [runningStrategies, setRunningStrategies] = useState<Map<string, { startTime: number; isRunning: boolean; loop: boolean }>>(new Map());
   const [savedScenes, setSavedScenes] = useState<Array<{ name: string; nodes: Node[]; edges: Edge[] }>>([]);
   const [currentFileName, setCurrentFileName] = useState<string>('untitled.io');
+
+  // Load saved strategies from localStorage so Run > My Alphas shows them
+  useEffect(() => {
+    const key = 'siphon-blueprint-scenes';
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as Array<{ name: string; nodes: Node[]; edges: Edge[] }>;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSavedScenes(parsed);
+        }
+      } catch (error) {
+        console.error('Failed to load saved scenes from localStorage:', error);
+      }
+    }
+  }, []);
   const [favoriteStrategies, setFavoriteStrategies] = useState<Set<string>>(new Set());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [walletConnected, setWalletConnected] = useState(false);

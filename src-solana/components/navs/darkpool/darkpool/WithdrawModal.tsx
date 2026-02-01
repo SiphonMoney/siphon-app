@@ -10,6 +10,8 @@ interface WithdrawModalProps {
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   onClose: () => void;
   onSuccess: () => void;
+  onNotify?: (message: string, type: "success" | "error") => void;
+  onTxRecorded?: (entry: { type: "withdraw"; timestamp: number; txHash: string; amount?: string; token?: string }) => void;
 }
 
 type TokenType = 'base' | 'quote';
@@ -19,7 +21,9 @@ export default function WithdrawModal({
   walletAddress,
   signMessage,
   onClose, 
-  onSuccess 
+  onSuccess,
+  onNotify,
+  onTxRecorded,
 }: WithdrawModalProps) {
   const [amount, setAmount] = useState('');
   const [tokenType, setTokenType] = useState<TokenType>('base');
@@ -31,11 +35,13 @@ export default function WithdrawModal({
 
   const handleWithdraw = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      setError('Please enter a valid amount');
+      const msg = "Please enter a valid amount";
+      setError(msg);
+      onNotify?.(msg, "error");
       return;
     }
 
-    setStatus('verifying');
+    setStatus("verifying");
     setError(null);
 
     try {
@@ -56,9 +62,11 @@ export default function WithdrawModal({
       await pollWithdrawalStatus(mockTxSig);
       
     } catch (err) {
-      console.error('Withdrawal failed:', err);
-      setError(err instanceof Error ? err.message : 'Withdrawal failed');
-      setStatus('failed');
+      const msg = err instanceof Error ? err.message : "Withdrawal failed";
+      console.error("Withdrawal failed:", err);
+      setError(msg);
+      onNotify?.(msg, "error");
+      setStatus("failed");
     }
   };
 
@@ -75,10 +83,10 @@ export default function WithdrawModal({
         if (!response.ok) {
           // Mock successful completion after 3 attempts
           if (attempts >= 3) {
-            setStatus('complete');
-            setTimeout(() => {
-              onSuccess();
-            }, 1000);
+            setStatus("complete");
+            onTxRecorded?.({ type: "withdraw", timestamp: Date.now(), txHash: txSig, amount, token: tokenName });
+            onNotify?.("Withdrawal completed successfully", "success");
+            setTimeout(() => onSuccess(), 1000);
             return;
           }
           throw new Error('Withdrawal status check failed');
@@ -86,17 +94,18 @@ export default function WithdrawModal({
 
         const data = await response.json();
         
-        if (data.status === 'executing') {
-          setStatus('executing');
-        } else if (data.status === 'complete') {
-          setStatus('complete');
-          setTimeout(() => {
-            onSuccess();
-          }, 1000);
+        if (data.status === "executing") {
+          setStatus("executing");
+        } else if (data.status === "complete") {
+          setStatus("complete");
+          onTxRecorded?.({ type: "withdraw", timestamp: Date.now(), txHash: txSig, amount, token: tokenName });
+          onNotify?.("Withdrawal completed successfully", "success");
+          setTimeout(() => onSuccess(), 1000);
           return;
-        } else if (data.status === 'failed') {
-          setStatus('failed');
-          setError('Backend execution failed');
+        } else if (data.status === "failed") {
+          setStatus("failed");
+          setError("Backend execution failed");
+          onNotify?.("Backend execution failed", "error");
           return;
         }
       } catch (err) {
@@ -104,17 +113,19 @@ export default function WithdrawModal({
         
         // Mock successful completion after attempts
         if (attempts >= 3) {
-          setStatus('complete');
-          setTimeout(() => {
-            onSuccess();
-          }, 1000);
+          setStatus("complete");
+          onTxRecorded?.({ type: "withdraw", timestamp: Date.now(), txHash: txSig, amount, token: tokenName });
+          onNotify?.("Withdrawal completed successfully", "success");
+          setTimeout(() => onSuccess(), 1000);
           return;
         }
       }
-      
+
       if (attempts >= maxAttempts) {
-        setStatus('failed');
-        setError('Withdrawal timeout - please check status manually');
+        const msg = "Withdrawal timeout - please check status manually";
+        setStatus("failed");
+        setError(msg);
+        onNotify?.(msg, "error");
         return;
       }
       

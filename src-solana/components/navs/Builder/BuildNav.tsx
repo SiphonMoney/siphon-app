@@ -44,9 +44,9 @@ export default function BuildNav({
   const dexes = ['Uniswap', 'Raydium', 'Jupiter', 'Orca', 'Serum', 'Meteora'];
   const strategies = ['Limit Order', 'Buy Dip', 'Sell Rally', 'DCA'];
   
-  // Active options
-  const activeChain = 'Sepolia';
-  const activeDex = 'Uniswap';
+  // Active options: Deposit/Withdraw on Solana, Swap on Jupiter
+  const activeChain = 'Solana';
+  const activeDex = 'Jupiter';
   const activeStrategy = 'Limit Order';
   
   const isChainActive = (chain: string) => chain === activeChain;

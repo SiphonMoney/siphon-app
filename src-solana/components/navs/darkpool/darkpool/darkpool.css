@@ -1897,3 +1897,145 @@
   border-radius: 8px;
   padding: 20px;
 }
+
+/* Toast notification - nicely styled, no alert */
+.darkpool-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-family: var(--font-source-code), monospace;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: darkpool-toast-in 0.35s ease-out;
+  max-width: 90vw;
+}
+
+.darkpool-toast-icon {
+  flex-shrink: 0;
+}
+
+.darkpool-toast-message {
+  line-height: 1.4;
+}
+
+.darkpool-toast-success {
+  background: linear-gradient(135deg, rgba(0, 200, 83, 0.25) 0%, rgba(0, 150, 60, 0.2) 100%);
+  border: 1px solid rgba(0, 200, 83, 0.5);
+  color: #69f0ae;
+}
+
+.darkpool-toast-success .darkpool-toast-icon {
+  color: #69f0ae;
+}
+
+.darkpool-toast-error {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.25) 0%, rgba(200, 50, 40, 0.2) 100%);
+  border: 1px solid rgba(244, 67, 54, 0.5);
+  color: #ff8a80;
+}
+
+.darkpool-toast-error .darkpool-toast-icon {
+  color: #ff8a80;
+}
+
+@keyframes darkpool-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Transaction list (deposit/withdraw history) */
+.tx-list-section {
+  margin-top: 24px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tx-list-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  font-family: var(--font-source-code), monospace;
+}
+
+.tx-list-empty {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-family: var(--font-source-code), monospace;
+  margin: 0;
+  padding: 12px 0;
+}
+
+.tx-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tx-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-family: var(--font-source-code), monospace;
+  font-size: 12px;
+}
+
+.tx-type {
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  min-width: 72px;
+}
+
+.tx-type-deposit {
+  color: #69f0ae;
+}
+
+.tx-type-withdraw {
+  color: #ff8a80;
+}
+
+.tx-amount {
+  color: rgba(255, 255, 255, 0.85);
+  min-width: 5em;
+}
+
+.tx-time {
+  color: rgba(255, 255, 255, 0.5);
+  flex: 1;
+}
+
+.tx-hash {
+  color: rgba(33, 150, 243, 0.9);
+  text-decoration: none;
+}
+
+.tx-hash:hover {
+  text-decoration: underline;
+}
+
+.tx-hash-muted {
+  color: rgba(255, 255, 255, 0.4);
+  cursor: default;
+}
