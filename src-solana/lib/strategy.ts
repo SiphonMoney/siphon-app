@@ -10,7 +10,7 @@ export interface StrategyParams {
 
 export async function createStrategy(strategyData: StrategyParams) {
   try {
-    const PAYLOAD_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "https://43.207.34.231.sslip.io";
+    const PAYLOAD_URL = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "https://35.177.18.115.sslip.io";
     const apiToken = process.env.NEXT_PUBLIC_API_TOKEN || "";
 
     const headers: HeadersInit = {
