@@ -179,6 +179,20 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
                 </div>
             )}
 
+            {loading && strategies.length === 0 && (
+                <div style={{
+                    padding: '60px 20px',
+                    textAlign: 'center',
+                    color: 'rgba(255,255,255,0.5)',
+                    fontSize: '14px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: '12px',
+                    border: '1px dashed rgba(255,255,255,0.1)'
+                }}>
+                    Loading your strategies...
+                </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {strategies.map((strategy) => (
                     <div
