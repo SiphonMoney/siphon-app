@@ -1,0 +1,228 @@
+{
+  "version": "0.1.0",
+  "name": "siphon_zk_pool",
+  "metadata": {
+    "address": "3CVsp1zayXhNsT8Ktrh85rTewvBJxWy8VcUtQAKdnQMb"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        { "name": "admin", "isMut": true, "isSigner": true },
+        { "name": "poolConfig", "isMut": true, "isSigner": false },
+        { "name": "merkleTree", "isMut": true, "isSigner": false },
+        { "name": "poolVault", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "relayer", "type": "publicKey" },
+        { "name": "feeRecipient", "type": "publicKey" },
+        { "name": "feeBps", "type": "u16" }
+      ]
+    },
+    {
+      "name": "depositSol",
+      "accounts": [
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "poolConfig", "isMut": false, "isSigner": false },
+        { "name": "merkleTree", "isMut": true, "isSigner": false },
+        { "name": "poolVault", "isMut": true, "isSigner": false },
+        { "name": "commitmentRecord", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "commitment", "type": { "array": ["u8", 32] } },
+        { "name": "encryptedOutput", "type": "bytes" },
+        { "name": "amount", "type": "u64" },
+        { "name": "leafIndex", "type": "u64" }
+      ]
+    },
+    {
+      "name": "depositSpl",
+      "accounts": [
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "poolConfig", "isMut": false, "isSigner": false },
+        { "name": "merkleTree", "isMut": true, "isSigner": false },
+        { "name": "tokenMint", "isMut": false, "isSigner": false },
+        { "name": "depositorTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "poolTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "poolVault", "isMut": false, "isSigner": false },
+        { "name": "commitmentRecord", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "commitment", "type": { "array": ["u8", 32] } },
+        { "name": "encryptedOutput", "type": "bytes" },
+        { "name": "amount", "type": "u64" },
+        { "name": "leafIndex", "type": "u64" }
+      ]
+    },
+    {
+      "name": "updateRoot",
+      "accounts": [
+        { "name": "relayer", "isMut": false, "isSigner": true },
+        { "name": "poolConfig", "isMut": false, "isSigner": false },
+        { "name": "merkleTree", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "newRoot", "type": { "array": ["u8", 32] } }
+      ]
+    },
+    {
+      "name": "withdrawSol",
+      "accounts": [
+        { "name": "relayer", "isMut": true, "isSigner": true },
+        { "name": "poolConfig", "isMut": false, "isSigner": false },
+        { "name": "merkleTree", "isMut": true, "isSigner": false },
+        { "name": "poolVault", "isMut": true, "isSigner": false },
+        { "name": "nullifierAccount", "isMut": true, "isSigner": false },
+        { "name": "recipient", "isMut": true, "isSigner": false },
+        { "name": "feeRecipient", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "inputs", "type": { "defined": "WithdrawInputs" } },
+        { "name": "recipient", "type": "publicKey" },
+        { "name": "amount", "type": "u64" },
+        { "name": "fee", "type": "u64" }
+      ]
+    },
+    {
+      "name": "withdrawSpl",
+      "accounts": [
+        { "name": "relayer", "isMut": true, "isSigner": true },
+        { "name": "poolConfig", "isMut": false, "isSigner": false },
+        { "name": "merkleTree", "isMut": true, "isSigner": false },
+        { "name": "poolVault", "isMut": false, "isSigner": false },
+        { "name": "tokenMint", "isMut": false, "isSigner": false },
+        { "name": "poolTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "recipientTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "feeRecipientTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "nullifierAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "inputs", "type": { "defined": "WithdrawInputs" } },
+        { "name": "recipient", "type": "publicKey" },
+        { "name": "amount", "type": "u64" },
+        { "name": "fee", "type": "u64" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "PoolConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "admin", "type": "publicKey" },
+          { "name": "relayer", "type": "publicKey" },
+          { "name": "feeBps", "type": "u16" },
+          { "name": "feeRecipient", "type": "publicKey" },
+          { "name": "verifierProgram", "type": "publicKey" },
+          { "name": "paused", "type": "bool" },
+          { "name": "bump", "type": "u8" },
+          { "name": "treeBump", "type": "u8" },
+          { "name": "vaultBump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "MerkleTree",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "publicKey" },
+          { "name": "nextIndex", "type": "u64" },
+          { "name": "currentRoot", "type": { "array": ["u8", 32] } },
+          { "name": "rootHistory", "type": { "array": ["u8", 1024] } },
+          { "name": "rootHistoryIndex", "type": "u64" },
+          { "name": "height", "type": "u8" },
+          { "name": "bump", "type": "u8" },
+          { "name": "padding", "type": { "array": ["u8", 6] } }
+        ]
+      }
+    },
+    {
+      "name": "NullifierAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "nullifierHash", "type": { "array": ["u8", 32] } },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "CommitmentRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "index", "type": "u64" },
+          { "name": "commitment", "type": { "array": ["u8", 32] } },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "WithdrawInputs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "nullifierHash", "type": { "array": ["u8", 32] } },
+          { "name": "stateRoot", "type": { "array": ["u8", 32] } },
+          { "name": "newCommitment", "type": { "array": ["u8", 32] } }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "CommitmentInserted",
+      "fields": [
+        { "name": "index", "type": "u64", "index": false },
+        { "name": "commitment", "type": { "array": ["u8", 32] }, "index": false },
+        { "name": "encryptedOutput", "type": "bytes", "index": false },
+        { "name": "amount", "type": "u64", "index": false },
+        { "name": "mint", "type": { "option": "publicKey" }, "index": false }
+      ]
+    },
+    {
+      "name": "WithdrawalProcessed",
+      "fields": [
+        { "name": "nullifierHash", "type": { "array": ["u8", 32] }, "index": false },
+        { "name": "recipient", "type": "publicKey", "index": false },
+        { "name": "amount", "type": "u64", "index": false },
+        { "name": "fee", "type": "u64", "index": false },
+        { "name": "mint", "type": { "option": "publicKey" }, "index": false },
+        { "name": "newCommitment", "type": { "option": { "array": ["u8", 32] } }, "index": false },
+        { "name": "newIndex", "type": { "option": "u64" }, "index": false }
+      ]
+    },
+    {
+      "name": "RootUpdated",
+      "fields": [
+        { "name": "newRoot", "type": { "array": ["u8", 32] }, "index": false },
+        { "name": "rootIndex", "type": "u64", "index": false }
+      ]
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "ProtocolPaused", "msg": "Protocol is paused" },
+    { "code": 6001, "name": "UnauthorizedAdmin", "msg": "Unauthorized: caller is not admin" },
+    { "code": 6002, "name": "UnauthorizedRelayer", "msg": "Unauthorized: caller is not relayer" },
+    { "code": 6003, "name": "TreeFull", "msg": "Merkle tree is full" },
+    { "code": 6004, "name": "InvalidCommitment", "msg": "Invalid commitment: must be non-zero" },
+    { "code": 6005, "name": "NullifierAlreadySpent", "msg": "Nullifier already spent (double-spend attempt)" },
+    { "code": 6006, "name": "InvalidStateRoot", "msg": "State root not found in root history" },
+    { "code": 6007, "name": "InvalidAmount", "msg": "Invalid amount: must be greater than zero" },
+    { "code": 6008, "name": "InsufficientBalance", "msg": "Insufficient pool balance" },
+    { "code": 6009, "name": "InvalidFeeConfig", "msg": "Invalid fee configuration" },
+    { "code": 6010, "name": "Overflow", "msg": "Arithmetic overflow" }
+  ]
+}
