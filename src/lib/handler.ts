@@ -1,14 +1,14 @@
 import { getSigner, getProvider, TOKEN_MAP, getTokenAllowance, approveToken } from './nexus';
 import { ethers, Interface, Log, Contract, TransactionResponse, TransactionReceipt, BrowserProvider, Signer} from 'ethers';
 import { generateCommitmentData, generateZKData, TokenInfo } from './zkHandler';
-import entrypointArtifact from "../../contract/artifacts/src/Entrypoint.sol/Entrypoint.json";
+import entrypointArtifact from "./abi/Entrypoint.json";
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
 
 // --------- Constants ----------
 const VAULT_CHAIN_ID = 11155111; // Sepolia id
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const ENTRYPOINT_ADDRESS = '0x8Be4A7A074468F571271192A0A0824cf6F08a1f6';
+const ENTRYPOINT_ADDRESS = '0xCd42793bda2E4ca65E47428329A839194DC3eeaD';
 
 // --------- ABIs & interface helpers ----------
 const entrypointAbi = entrypointArtifact.abi as ethers.InterfaceAbi;
@@ -181,23 +181,21 @@ export async function deposit(_token: string, _amount: string) {
     const merkleTreeAddress: string = await vaultContract.merkleTree();
     console.log("MerkleTree address:", merkleTreeAddress);
 
-    const depositLog = receipt.logs
-      .filter((l): l is Log => l.address.toLowerCase() === merkleTreeAddress.toLowerCase())
-      .map(l => {
-        try {
-          return merkleTreeInterface.parseLog(l);
-        } catch {
-          return null;
-        }
-      })
-      .find((pl): pl is ethers.LogDescription => pl?.name === 'LeafInserted');
+    const LEAF_INSERTED_TOPIC = ethers.id("LeafInserted(uint256,uint256,uint256)");
+    const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+    const leafLog = receipt.logs.find(
+      (l): l is Log =>
+        l.address.toLowerCase() === merkleTreeAddress.toLowerCase() &&
+        l.topics[0] === LEAF_INSERTED_TOPIC
+    );
 
-    if (!depositLog) {
+    if (!leafLog) {
       console.error("All logs from receipt:", receipt.logs);
       throw new Error("'LeafInserted' event log not found in transaction receipt");
     }
 
-    const commitment = depositLog.args._leaf.toString();
+    const [, leafBN] = abiCoder.decode(['uint256', 'uint256', 'uint256'], leafLog.data);
+    const commitment = leafBN.toString();
 
     // Update localStorage with commitment (use commitment as final key)
     finalDepositId = `${VAULT_CHAIN_ID}-${_token}-${commitment}`;
@@ -235,7 +233,9 @@ export async function payExecutionFee(
   _stateRoot: string,
   _nullifier: string,
   _newCommitment: string,
-  _proof: (string | bigint)[]
+  _pA: [string, string],
+  _pB: [[string, string], [string, string]],
+  _pC: [string, string]
 ) {
   console.log("💳 payExecutionFee() called", { 
     _token, 
@@ -295,10 +295,13 @@ export async function payExecutionFee(
         tokenAddress,
         decExecutionPrice.toString(),
         decAmount.toString(),
-        _stateRoot || "0",
+        _stateRoot,
         _nullifier,
         _newCommitment,
-        _proof
+        _pA,
+        _pB,
+        _pC,
+        { value: token.symbol === 'ETH' ? decExecutionPrice : 0n }
       );
       console.log("✅ payExecutionFee.staticCall succeeded - proof validated (dry-run)");
     } catch (err: unknown) {
@@ -314,10 +317,13 @@ export async function payExecutionFee(
         tokenAddress,
         decExecutionPrice.toString(),
         decAmount.toString(),
-        _stateRoot || "0",
+        _stateRoot,
         _nullifier,
         _newCommitment,
-        _proof
+        _pA,
+        _pB,
+        _pC,
+        { value: token.symbol === 'ETH' ? decExecutionPrice : 0n }
       ) as TransactionResponse;
       console.log("✅ Fee payment tx sent:", tx.hash);
 
@@ -453,10 +459,12 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         tokenAddress,
         _recipient,
         withdrawalTxData.amount.toString(),
-        withdrawalTxData.stateRoot || "0",
+        withdrawalTxData.stateRoot,
         withdrawalTxData.nullifierHash.toString(),
         withdrawalTxData.newCommitment.toString(),
-        withdrawalTxData.proof
+        withdrawalTxData.pA,
+        withdrawalTxData.pB,
+        withdrawalTxData.pC
       );
       console.log("withdraw.staticCall succeeded - proof validated on-chain (dry-run).");
     } catch (err: unknown) {
@@ -472,10 +480,12 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         tokenAddress,
         _recipient,
         withdrawalTxData.amount.toString(),
-        withdrawalTxData.stateRoot || "0",
+        withdrawalTxData.stateRoot,
         withdrawalTxData.nullifierHash.toString(),
         withdrawalTxData.newCommitment.toString(),
-        withdrawalTxData.proof
+        withdrawalTxData.pA,
+        withdrawalTxData.pB,
+        withdrawalTxData.pC
       ) as TransactionResponse;
       console.log("Withdraw tx sent:", tx.hash);
 

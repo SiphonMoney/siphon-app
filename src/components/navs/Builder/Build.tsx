@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback } from "react";
-import { 
-  ReactFlow, 
-  ReactFlowProvider, 
-  Background, 
-  Controls, 
-  MiniMap, 
-  addEdge, 
-  Connection, 
-  Node, 
-  Edge, 
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  Controls,
+  MiniMap,
+  addEdge,
+  Connection,
+  Node,
+  Edge,
   Position,
   applyNodeChanges,
   applyEdgeChanges,
@@ -21,6 +21,8 @@ import '@xyflow/react/dist/style.css';
 import "./Build.css";
 import BuildNav from "./BuildNav";
 import { CustomNode } from "./BuildNodes";
+import { createStrategy } from "../../../lib/strategy";
+import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -176,9 +178,89 @@ export default function Build({
     setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
   }, [setNodes, setEdges]);
   
-  const onExecuteStrategy = useCallback(() => {
+  const onExecuteStrategy = useCallback(async () => {
     console.log('Executing strategy with nodes:', nodes);
-    // TODO: Implement strategy execution logic
+
+    const depositNode  = nodes.find(n => n.data.type === 'deposit');
+    const strategyNode = nodes.find(n => n.data.type === 'strategy');
+    const swapNode     = nodes.find(n => n.data.type === 'swap');
+    const withdrawNode = nodes.find(n => n.data.type === 'withdraw');
+
+    if (!depositNode)  { alert('Add a Deposit node with a coin and amount first.'); return; }
+    if (!strategyNode) { alert('Add a Strategy node with a price goal first.'); return; }
+
+    const assetIn   = (depositNode.data.coin  as string || 'ETH').toUpperCase();
+    const amountStr = (depositNode.data.amount as string || '0');
+    const amount    = parseFloat(amountStr);
+    const assetOut  = (swapNode?.data.toCoin as string || withdrawNode?.data.coin as string || assetIn).toUpperCase();
+    const priceGoal = parseFloat(strategyNode.data.priceGoal as string || '0');
+    const recipient = (withdrawNode?.data.wallet as string || '').trim();
+
+    if (!amount || amount <= 0) { alert('Deposit node needs a valid amount.'); return; }
+    if (!priceGoal || priceGoal <= 0) { alert('Strategy node needs a valid price goal.'); return; }
+    if (!recipient) { alert('Withdraw node needs a recipient wallet address.'); return; }
+
+    // Token config for ZK proof generation (Sepolia)
+    const CHAIN_ID = 11155111;
+    const TOKEN_CONFIG: Record<string, TokenInfo> = {
+      ETH:  { symbol: 'ETH',  decimals: 18, address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' },
+      USDC: { symbol: 'USDC', decimals: 6,  address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
+      WBTC: { symbol: 'WBTC', decimals: 8,  address: '0x92f3B59a79bFf5dc60c0d59eA13a44D082B2bdFC' },
+      USDT: { symbol: 'USDT', decimals: 6,  address: '0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0' },
+    };
+    const token = TOKEN_CONFIG[assetIn];
+    if (!token) { alert(`Unsupported asset: ${assetIn}`); return; }
+
+    // Generate ZK withdrawal proof now (frontend is the only place with the secret)
+    alert(`Generating ZK proof for ${amountStr} ${assetIn}... this may take a moment.`);
+    console.log('[Strategy] Generating ZK proof...');
+
+    const zkResult = await generateZKData(CHAIN_ID, token, amountStr, recipient);
+    if ('error' in zkResult) {
+      alert(`❌ ZK proof failed: ${zkResult.error}`);
+      return;
+    }
+
+    const txData = zkResult.withdrawalTxData;
+    const zkProof = {
+      stateRoot:     txData.stateRoot,
+      nullifierHash: txData.nullifierHash,
+      newCommitment: txData.newCommitment,
+      pA: txData.pA,
+      pB: txData.pB,
+      pC: txData.pC,
+    };
+
+    console.log('[Strategy] ZK proof generated:', { stateRoot: txData.stateRoot, nullifierHash: txData.nullifierHash });
+
+    const strategyData = {
+      user_id:           recipient,
+      strategy_type:     'LIMIT_SELL_RALLY',
+      asset_in:          assetIn,
+      asset_out:         assetOut,
+      amount,
+      upper_bound:       priceGoal,
+      lower_bound:       0,
+      recipient_address: recipient,
+      zk_proof:          zkProof,
+    };
+
+    console.log('[Strategy] Submitting to payload generator:', { asset_in: assetIn, asset_out: assetOut, amount, upper_bound: priceGoal });
+
+    const result = await createStrategy(strategyData);
+    if (result.success) {
+      // Mark the deposit as spent and save the new change commitment
+      if (zkResult.spentDepositKey) {
+        const spent = JSON.parse(localStorage.getItem(zkResult.spentDepositKey) || '{}');
+        localStorage.setItem(zkResult.spentDepositKey, JSON.stringify({ ...spent, spent: true }));
+      }
+      if (zkResult.newDepositKey && zkResult.newDeposit) {
+        localStorage.setItem(zkResult.newDepositKey, JSON.stringify({ ...zkResult.newDeposit, spent: false }));
+      }
+      alert(`✅ Strategy registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when price hits $${priceGoal}.`);
+    } else {
+      alert(`❌ Strategy failed: ${result.error}`);
+    }
   }, [nodes]);
   
   const onRestart = useCallback(() => {

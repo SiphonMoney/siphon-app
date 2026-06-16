@@ -1,4 +1,4 @@
-import { ethers, Contract, Log } from 'ethers';
+import { ethers, Contract } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
 import { prepareWithdrawalTransaction } from "./generateProof";
@@ -32,9 +32,11 @@ export interface WithdrawalTxData {
   amount: string;
   nullifierHash: string;
   newCommitment: string;
-  proof: (string | bigint)[];
+  stateRoot: string;
+  pA: [string, string];
+  pB: [[string, string], [string, string]];
+  pC: [string, string];
   publicSignals?: string[];
-  stateRoot?: string;
 }
 
 export interface ZKData {
@@ -82,8 +84,6 @@ export async function generateCommitmentData(
   const precommitmentHash = BigInt(F.toObject(poseidon([nullifierMod, secretMod])));
   const precommitment = precommitmentHash;
 
-  console.log("Generated secret (mod):", secretMod.toString());
-  console.log("Generated nullifier (mod):", nullifierMod.toString());
   console.log("Precommitment:", precommitment.toString());
 
   // Note: commitment will be added after deposit transaction
@@ -114,30 +114,27 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   console.log("MerkleTree address:", merkleTreeAddress);
 
   const merkleTree = new Contract(merkleTreeAddress, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider);
-  const filter = merkleTree.filters.LeafInserted();
-  const logs = await merkleTree.queryFilter(filter, 0, 'latest');
-  console.log("Fetched LeafInserted logs count:", logs.length);
 
-  const merkleTreeInterface = new ethers.Interface(merkleTreeAbiJson.abi as ethers.InterfaceAbi);
-  const decoded = logs.map(l => {
-    try {
-      return merkleTreeInterface.parseLog(l as Log);
-    } catch (e) {
-      console.warn("Failed to parse MerkleTree log:", e);
-      return null;
-    }
-  }).filter(Boolean) as ethers.LogDescription[];
+  // LeafInserted(uint256 _index, uint256 _leaf, uint256 _root) — all non-indexed
+  // topic[0] = keccak256("LeafInserted(uint256,uint256,uint256)")
+  const LEAF_INSERTED_TOPIC = ethers.id("LeafInserted(uint256,uint256,uint256)");
+  const rawLogs = await provider.getLogs({
+    address: merkleTreeAddress,
+    topics: [LEAF_INSERTED_TOPIC],
+    fromBlock: 0,
+    toBlock: 'latest',
+  });
+  console.log("Fetched LeafInserted raw logs:", rawLogs.length);
 
-  // Sort by index
-  decoded.sort((a, b) => {
-    const ia = BigInt(a.args._index.toString());
-    const ib = BigInt(b.args._index.toString());
-    if (ia < ib) return -1;
-    if (ia > ib) return 1;
-    return 0;
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+  const parsed = rawLogs.map(log => {
+    const [index, leaf] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+    return { index: BigInt(index.toString()), leaf: BigInt(leaf.toString()) };
   });
 
-  const leaves = decoded.map(d => BigInt(d.args._leaf));
+  parsed.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
+
+  const leaves = parsed.map(p => p.leaf);
   console.log("Parsed leaves count:", leaves.length);
 
   return leaves;
@@ -248,71 +245,50 @@ export async function generateZKData(
   console.log("Derived newNullifier:", newNullifier.toString());
   console.log("Change Value:", changeValue.toString());
 
-  // 5) Generate Merkle proof for fixed 32-level tree
-  // We already have 'leaves' and 'leafIndex' from Step 2
+  // 5) Build Merkle proof using filledSubtrees + zeros from the contract
+  // This mirrors the incremental insertion logic in MerkleTree.sol exactly.
+  const tokenAddress5 = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
+  const provider5 = getProvider();
+  if (!provider5) return { error: "Provider not found" };
+  const entrypoint5 = await getEntrypointContract(provider5);
+  const vaultAddr5 = await entrypoint5.getVault(tokenAddress5);
+  const vault5 = new Contract(vaultAddr5, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider5);
+  const merkleTreeAddr5 = await vault5.merkleTree();
+  const merkleTree5 = new Contract(merkleTreeAddr5, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider5);
+
+  // Fetch on-chain state
+  const onChainRoot = BigInt((await merkleTree5.getRoot()).toString());
+  const filledSubtrees: bigint[] = await Promise.all(
+    Array.from({ length: TREE_DEPTH }, (_, i) => merkleTree5.filledSubtrees(i).then((v: bigint) => BigInt(v.toString())))
+  );
+  const zeros: bigint[] = await Promise.all(
+    Array.from({ length: TREE_DEPTH }, (_, i) => merkleTree5.zeros(i).then((v: bigint) => BigInt(v.toString())))
+  );
+
+  console.log("✅ On-chain root:", onChainRoot.toString());
+
+  // Reconstruct path using the incremental tree state at insertion time.
+  // At leafIndex, for each level: if the leaf was a right child (odd index),
+  // the sibling is filledSubtrees[level] (the previously filled left subtree).
+  // If it was a left child (even index), the sibling is zeros[level].
   const pathElements: bigint[] = [];
   const pathIndices: number[] = [];
-
-  // Compute pathIndices for ALL 32 levels
-  let currentIndex = leafIndex;
+  let idx = leafIndex;
   for (let level = 0; level < TREE_DEPTH; level++) {
-    const isRight = currentIndex % 2;
+    const isRight = idx % 2;
     pathIndices.push(isRight);
-    currentIndex = Math.floor(currentIndex / 2);
+    if (isRight === 1) {
+      // leaf is right child — sibling is the filled left subtree at this level
+      pathElements.push(filledSubtrees[level]);
+    } else {
+      // leaf is left child — sibling is the zero value at this level
+      pathElements.push(zeros[level]);
+    }
+    idx = Math.floor(idx / 2);
   }
 
-  console.log("Path indices:", pathIndices.slice(0, 12));
-
-  // Build tree level by level
-  let nodesAtLevel = leaves.length;
-  let currentLevel: bigint[] = [...leaves];
-
-  console.log(`Starting with ${nodesAtLevel} leaves`);
-
-  currentIndex = leafIndex;
-  for (let level = 0; level < TREE_DEPTH; level++) {
-    const isRight = pathIndices[level];
-    const siblingIndex = isRight ? currentIndex - 1 : currentIndex + 1;
-    const sibling = (siblingIndex < nodesAtLevel) ? (currentLevel[siblingIndex] ?? 0n) : 0n;
-    pathElements.push(sibling);
-
-    const nodesAtNextLevel = Math.floor((nodesAtLevel + 1) / 2);
-    const nextLevel: bigint[] = new Array(nodesAtNextLevel);
-
-    if (level < 5) {
-      console.log(
-        `Level ${level}: idx=${currentIndex}, nodesAtLevel=${nodesAtLevel}, ` +
-        `nodesAtNextLevel=${nodesAtNextLevel}, isRight=${isRight}, ` +
-        `sibling[${siblingIndex}]=${sibling.toString().substring(0, 20)}...`
-      );
-    }
-
-    for (let i = 0; i < nodesAtNextLevel; i++) {
-      const leftIdx = i * 2;
-      const rightIdx = i * 2 + 1;
-      const left = (leftIdx < nodesAtLevel) ? (currentLevel[leftIdx] ?? 0n) : 0n;
-      const right = (rightIdx < nodesAtLevel) ? (currentLevel[rightIdx] ?? 0n) : 0n;
-      const hash = BigInt(F.toObject(poseidon([left, right])));
-      nextLevel[i] = hash;
-
-      if (level < 5 && i < 4) {
-        console.log(
-          `  -> hash(node[${leftIdx}]=${left.toString().substring(0, 15)}..., ` +
-          `node[${rightIdx}]=${right.toString().substring(0, 15)}...) -> ` +
-          `[${i}]=${hash.toString().substring(0, 20)}...`
-        );
-      }
-    }
-
-    currentLevel = nextLevel;
-    nodesAtLevel = nodesAtNextLevel;
-    currentIndex = Math.floor(currentIndex / 2);
-  }
-
-  const computedRoot = currentLevel[0] ?? 0n;
-  console.log("✅ Extracted pathElements (length:", pathElements.length, ")");
-  console.log("✅ Extracted pathIndices (length:", pathIndices.length, ")");
-  console.log("✅ Computed root:", computedRoot.toString());
+  console.log("✅ pathElements built (length:", pathElements.length, ")");
+  console.log("✅ pathIndices:", pathIndices.slice(0, 8));
 
   // 6) Generate new commitment
   const newPrecommitment = BigInt(F.toObject(poseidon([newNullifier, newSecret])));
@@ -333,8 +309,7 @@ export async function generateZKData(
     pathElements: pathElements,
     pathIndices: pathIndices,
     recipient: _recipient,
-    stateRoot: computedRoot.toString(),
-    publicInputsHash: 0n
+    stateRoot: onChainRoot.toString(),
   });
 
   const withdrawalTxData = rawWithdrawalTxData as unknown as WithdrawalTxData;
@@ -349,18 +324,17 @@ export async function generateZKData(
     publicSignals: withdrawalTxData.publicSignals ?? "none"
   });
 
-  // 8) Validate proof format
-  if (!Array.isArray(withdrawalTxData.proof)) {
-    console.error("Proof is not array:", withdrawalTxData.proof);
-    return { error: "Proof has invalid format" };
+  // 8) Validate proof format (Groth16: pA[2], pB[2][2], pC[2])
+  if (!Array.isArray(withdrawalTxData.pA) || withdrawalTxData.pA.length !== 2 ||
+      !Array.isArray(withdrawalTxData.pB) || withdrawalTxData.pB.length !== 2 ||
+      !Array.isArray(withdrawalTxData.pC) || withdrawalTxData.pC.length !== 2) {
+    console.error("Groth16 proof components missing or malformed:", withdrawalTxData.pA, withdrawalTxData.pB, withdrawalTxData.pC);
+    return { error: "Proof has invalid Groth16 format" };
   }
 
-  if (withdrawalTxData.proof.length !== 24) {
-    console.error("Proof length mismatch:", withdrawalTxData.proof.length, "expected 24");
-    return { error: `Proof length ${withdrawalTxData.proof.length} != 24` };
-  }
-
-  console.log("Proof sample first 4 elements:", withdrawalTxData.proof.slice(0, 4));
+  console.log("pA:", withdrawalTxData.pA);
+  console.log("pB:", withdrawalTxData.pB);
+  console.log("pC:", withdrawalTxData.pC);
 
   // 9) Package ZK Data
   const zkData: ZKData = {

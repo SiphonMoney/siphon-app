@@ -1,11 +1,11 @@
 import { ethers } from 'ethers';
 import { generateZKData } from './zkHandler'; // Removed encodeProof as it's not needed
-import entrypointArtifact from "../../contract/artifacts/src/Entrypoint.sol/Entrypoint.json";
+import entrypointArtifact from "./abi/Entrypoint.json";
 
 const SEPOLIA_CHAIN_ID = 11155111;
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
-const ENTRYPOINT_ADDRESS = '0x8Be4A7A074468F571271192A0A0824cf6F08a1f6';
+const ENTRYPOINT_ADDRESS = '0xCd42793bda2E4ca65E47428329A839194DC3eeaD';
 const FEE = 3000;
 const MIN_AMOUNT_OUT = 0;
 
@@ -62,22 +62,15 @@ export async function instantSwap(
             return { success: false, error: zkData.error };
         }
 
-        const withdrawalTxData = zkData.withdrawalTxData as {
-            recipient: string;
-            amount: string;
-            nullifierHash: string;
-            newCommitment: string;
-            proof: (string | bigint)[]; // proof can be string[] or bigint[]
-            publicSignals: string[];
-            stateRoot: string; // stateRoot is now part of withdrawalTxData
-        };
+        const withdrawalTxData = zkData.withdrawalTxData;
 
         const zkProofStruct = {
-            stateRoot: withdrawalTxData.stateRoot,
-            nullifier: withdrawalTxData.nullifierHash,
+            stateRoot:     withdrawalTxData.stateRoot,
+            nullifier:     withdrawalTxData.nullifierHash,
             newCommitment: withdrawalTxData.newCommitment,
-            // Ensure proof elements are BigInts for ethers
-            proof: withdrawalTxData.proof.map(p => typeof p === 'string' ? BigInt(p) : p)
+            pA: withdrawalTxData.pA,
+            pB: withdrawalTxData.pB,
+            pC: withdrawalTxData.pC,
         };
 
 

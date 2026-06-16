@@ -1,192 +1,127 @@
-// prepareWithdrawalTransaction function orchestrates the entire process, generating the proof > converting it to calldata, and packaging it with recipient, amount and hashes for submission to the contract
-
 import { buildPoseidon } from "circomlibjs";
-const WASM_PATH = '/zk/main.wasm';
-const ZKEY_PATH = '/zk/circuit.zkey';
 import * as snarkjs from 'snarkjs';
 
+const WASM_PATH = '/zk/main.wasm';
+const ZKEY_PATH = '/zk/circuit.zkey';
 
 /**
-* Generate ZK proof for withdrawal
-* @param {Object} withdrawalData - all withdrawal parameters
-* @param {string} withdrawalData.existingValue - Original deposited value
-* @param {string} withdrawalData.existingNullifier - Original nullifier
-* @param {string} withdrawalData.existingSecret - Original secret
-* @param {string} withdrawalData.withdrawnValue - Amount to withdraw
-* @param {string} withdrawalData.newNullifier - New nullifier for remaining balance
-* @param {string} withdrawalData.newSecret - New secret for remaining balance
-* @param {Array} withdrawalData.pathElements - Merkle proof path elements
-* @param {Array} withdrawalData.pathIndices - Merkle proof path indices
-* @returns {Promise<import("./types").IZKProofResult>} { proof, publicSignals, nullifierHash, newCommitment }
-*/
-
-
+ * Generate Groth16 ZK proof for withdrawal.
+ * Public signals order (matches circuit): [withdrawnValue, stateRoot, newCommitment, nullifierHash, recipient]
+ */
 export async function generateWithdrawalProof(withdrawalData) {
-try {
-   console.log("Initializing Poseidon hash...");
-   const poseidon = await buildPoseidon();
-   const F = poseidon.F;
+  const poseidon = await buildPoseidon();
+  const F = poseidon.F;
 
-   // compute all required values
-   const existingValue = BigInt(withdrawalData.existingValue);
-   const existingNullifier = BigInt(withdrawalData.existingNullifier);
-   const existingSecret = BigInt(withdrawalData.existingSecret);
-   const withdrawnValue = BigInt(withdrawalData.withdrawnValue);
-   const newNullifier = BigInt(withdrawalData.newNullifier);
-   const newSecret = BigInt(withdrawalData.newSecret);
-   const stateRoot = withdrawalData.stateRoot;
+  const existingValue     = BigInt(withdrawalData.existingValue);
+  const existingNullifier = BigInt(withdrawalData.existingNullifier);
+  const existingSecret    = BigInt(withdrawalData.existingSecret);
+  const withdrawnValue    = BigInt(withdrawalData.withdrawnValue);
+  const newNullifier      = BigInt(withdrawalData.newNullifier);
+  const newSecret         = BigInt(withdrawalData.newSecret);
+  const stateRoot         = withdrawalData.stateRoot;
+  const recipient         = withdrawalData.recipient;
 
-   // Client-side check for valid withdrawal amount
-   if (existingValue < withdrawnValue) {
-     throw new Error("Withdrawal amount exceeds existing value.");
-   }
+  if (existingValue < withdrawnValue) {
+    throw new Error("Withdrawal amount exceeds existing value.");
+  }
 
-   console.log("Computing commitments (to match circuit)...");
-  
-   const nullifierHash = F.toString(poseidon([existingNullifier]));
-   const existingPrecommitment = F.toString(poseidon([existingNullifier, existingSecret]));
-   const remainingValue = existingValue - withdrawnValue;
-   const newPrecommitment = F.toString(poseidon([newNullifier, newSecret]));
-   const newCommitment = F.toString(poseidon([remainingValue, newPrecommitment]));
+  const nullifierHash    = F.toString(poseidon([existingNullifier]));
+  const remainingValue   = existingValue - withdrawnValue;
+  const newPrecommitment = F.toString(poseidon([newNullifier, newSecret]));
+  const newCommitment    = F.toString(poseidon([remainingValue, newPrecommitment]));
 
-const input = {
-     withdrawnValue: withdrawnValue.toString(),
-     stateRoot: stateRoot.toString(),
-     newCommitment: newCommitment,
-     nullifierHash: nullifierHash,
-    
-     // Private inputs
-     existingValue: existingValue.toString(),
-     existingNullifier: existingNullifier.toString(),
-     existingSecret: existingSecret.toString(),
-     newNullifier: newNullifier.toString(),
-     newSecret: newSecret.toString(),
-     pathElements: withdrawalData.pathElements.map(el => el.toString()),
-     pathIndices: withdrawalData.pathIndices
-   };
-   console.log("Circuit inputs prepared:", input);
+  // recipient as uint160 decimal string (matches circuit `recipient` signal)
+  const recipientField = BigInt(recipient).toString();
 
-  // Generate witness
-   console.log("Generating witness...");
-   const { proof, publicSignals } = await snarkjs.plonk.fullProve(
-     input,
-     WASM_PATH,
-     ZKEY_PATH
-   );
-   console.log("Proof generated successfully!");
-   console.log("Public signals:", publicSignals);
+  const input = {
+    // Public inputs (must match circuit signal order)
+    withdrawnValue:    withdrawnValue.toString(),
+    stateRoot:         stateRoot.toString(),
+    newCommitment:     newCommitment,
+    nullifierHash:     nullifierHash,
+    recipient:         recipientField,
+    // Private inputs
+    existingValue:     existingValue.toString(),
+    existingNullifier: existingNullifier.toString(),
+    existingSecret:    existingSecret.toString(),
+    newNullifier:      newNullifier.toString(),
+    newSecret:         newSecret.toString(),
+    pathElements:      withdrawalData.pathElements.map(el => el.toString()),
+    pathIndices:       withdrawalData.pathIndices,
+  };
 
-   return {
-     proof,
-     publicSignals,
-     nullifierHash,
-     newCommitment,
-     stateRoot
-   };
-   
- } catch (error) {
-   console.error("Error generating proof:", error);
-   throw error;
- }
+  console.log("[generateProof] Running Groth16 fullProve...");
+  const t0 = Date.now();
+  const { proof, publicSignals } = await snarkjs.groth16.fullProve(input, WASM_PATH, ZKEY_PATH);
+  console.log(`[generateProof] Proof generated in ${Date.now() - t0}ms`);
+
+  return { proof, publicSignals, nullifierHash, newCommitment, stateRoot };
 }
 
 /**
-* Convert proof to Solidity calldata format
-* @param {Object} proof - The proof object from snarkjs
-* @returns {Array<string>} Array of 24 uint256 strings for Solidity
-*/
+ * Convert Groth16 proof to Solidity pA / pB / pC calldata format.
+ * snarkjs groth16 proof fields: pi_a, pi_b, pi_c
+ * BN254 G2 points: snarkjs gives [x[0], x[1]] as [c0, c1]; Solidity verifier expects [c1, c0].
+ */
 export function proofToCalldata(proof) {
- // The verifier expects a proof uint256[24] array
- // snarkjs returns proof components as bigint or string, need ot convert all to decimal strings
- const proofArray = [
-   proof.A[0], proof.A[1],
-   proof.B[0], proof.B[1],
-   proof.C[0], proof.C[1],
-   proof.Z[0], proof.Z[1],
-   proof.T1[0], proof.T1[1],
-   proof.T2[0], proof.T2[1],
-   proof.T3[0], proof.T3[1],
-   proof.Wxi[0], proof.Wxi[1],
-   proof.Wxiw[0], proof.Wxiw[1],
-   proof.eval_a,
-   proof.eval_b,
-   proof.eval_c,
-   proof.eval_s1,
-   proof.eval_s2,
-   proof.eval_zw
- ];
- 
- // Convert all elements to BigInt, then to string to ensure proper formatting
- return proofArray.map(x => {
-   if (typeof x === 'bigint') return x.toString();
-   if (typeof x === 'number') return BigInt(x).toString();
-   if (typeof x === 'string') return BigInt(x).toString();
-   return x.toString();
- });
+  const str = v => BigInt(v).toString();
+
+  return {
+    pA: [str(proof.pi_a[0]), str(proof.pi_a[1])],
+    pB: [
+      [str(proof.pi_b[0][1]), str(proof.pi_b[0][0])],
+      [str(proof.pi_b[1][1]), str(proof.pi_b[1][0])],
+    ],
+    pC: [str(proof.pi_c[0]), str(proof.pi_c[1])],
+  };
 }
 
 /**
-* Verify proof locally before submitting (optional but recommended)
-* @param {Object} proof - The proof object
-* @param {Array} publicSignals - The public signals
-* @returns {Promise<boolean>} True if valid
-*/
+ * Verify proof locally against the verification key before submitting on-chain.
+ */
 export async function verifyProofLocally(proof, publicSignals) {
- try {
-   // Load verification key
-   const vKey = await fetch('/zk/verification_key.json').then(r => r.json());
-   const isValid = await snarkjs.plonk.verify(vKey, publicSignals, proof);
-   console.log("Local verification:", isValid ? "✅ Valid" : "❌ Invalid");
-  
-   return isValid;
- } catch (error) {
-   console.error("Local verification error:", error);
-   return false;
- }
+  try {
+    const vKey = await fetch('/zk/verification_key.json').then(r => r.json());
+    const isValid = await snarkjs.groth16.verify(vKey, publicSignals, proof);
+    console.log("[generateProof] Local verification:", isValid ? "✅ Valid" : "❌ Invalid");
+    return isValid;
+  } catch (err) {
+    console.error("[generateProof] Local verification error:", err);
+    return false;
+  }
 }
 
 /**
-* @param {Object} params - Withdrawal parameters
-* @returns {Promise<Object>} - Transaction data ready for contract call
-*/
+ * Full pipeline: generate Groth16 proof and return everything handler.ts needs
+ * to call withdraw() on-chain.
+ */
 export async function prepareWithdrawalTransaction(params) {
-const {
-   existingValue,
-   existingNullifier,
-   existingSecret,
-   withdrawnValue,
-   newNullifier,
-   newSecret,
-   pathElements,
-   pathIndices,
-   recipient,
-   stateRoot
- } = params;
+  const {
+    existingValue, existingNullifier, existingSecret,
+    withdrawnValue, newNullifier, newSecret,
+    pathElements, pathIndices,
+    recipient, stateRoot,
+  } = params;
 
-   // proof generation
-   const { proof, publicSignals, nullifierHash, newCommitment } =
-     await generateWithdrawalProof({
-       existingValue,
-       existingNullifier,
-       existingSecret,
-       withdrawnValue,
-       newNullifier,
-       newSecret,
-       pathElements,
-       pathIndices,
-       stateRoot
-     });
+  const { proof, publicSignals, nullifierHash, newCommitment } =
+    await generateWithdrawalProof({
+      existingValue, existingNullifier, existingSecret,
+      withdrawnValue, newNullifier, newSecret,
+      pathElements, pathIndices,
+      recipient, stateRoot,
+    });
 
-   // Convert proof to calldata
-   const proofBytes = proofToCalldata(proof);
-   
-   return {
-     recipient,
-     amount: withdrawnValue,
-     nullifierHash,
-     newCommitment,
-     proof: proofBytes,
-     publicSignals,
-     stateRoot
-   };
+  const { pA, pB, pC } = proofToCalldata(proof);
+
+  return {
+    recipient,
+    amount:       withdrawnValue,
+    nullifierHash,
+    newCommitment,
+    stateRoot,
+    pA,
+    pB,
+    pC,
+    publicSignals,
+  };
 }

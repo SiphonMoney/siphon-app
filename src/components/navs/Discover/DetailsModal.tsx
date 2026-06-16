@@ -320,118 +320,39 @@ export default function DetailsModal({
       const tokenInfo = tokenMap[assetIn || 'USDC'];
       if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
 
-      // Calculate execution price in user's token
-      addLog('Calculating execution price...');
-      const tokenPrice = coinPrices[assetIn || 'USDC'] || (assetIn === 'ETH' ? 3000 : 1);
-      const executionPriceInToken = totalCost / tokenPrice;
-      
-      if (executionPriceInToken <= 0) {
-        throw new Error('Invalid execution price calculation');
-      }
-
-      // Round execution price to token's decimal places to avoid precision issues
-      const executionPriceRounded = parseFloat(executionPriceInToken.toFixed(tokenInfo.decimals));
-      const executionPriceStr = executionPriceRounded.toFixed(tokenInfo.decimals);
-
-      addLog(`Execution price: ${executionPriceStr} ${assetIn} ($${totalCost.toFixed(2)})`);
-
-      // Check if user has sufficient balance
-      const userBalance = parseFloat(amountStr);
-      if (userBalance < executionPriceRounded) {
-        throw new Error(`Insufficient balance. Need ${executionPriceStr} ${assetIn}, have ${userBalance} ${assetIn}`);
-      }
-
-      const remainingBalance = userBalance - executionPriceRounded;
-      const remainingBalanceStr = remainingBalance.toFixed(tokenInfo.decimals);
-      addLog(`Balance check: ${userBalance} ${assetIn} - ${executionPriceStr} ${assetIn} = ${remainingBalanceStr} ${assetIn} remaining`);
-
-      if (remainingBalance <= 0) {
-        throw new Error('Insufficient balance remaining for strategy execution after fee payment');
-      }
-
-      // Step 1: Pay execution fee
-      addLog('Paying execution fee...');
-      const vaultContractAddress = "0x8Be4A7A074468F571271192A0A0824cf6F08a1f6"; // Corrected Entrypoint address
-      
-      // Generate ZK proof for fee payment (deducting execution price from commitment)
-      const feeZkResult = await generateZKData(
+      // Generate ZK proof for strategy execution using full deposit amount
+      addLog('Generating ZK proof for strategy...');
+      const zkResult = await generateZKData(
         11155111,
         tokenInfo,
-        executionPriceStr, // Fee amount in user's token (properly formatted)
-        vaultContractAddress // Recipient is vault (we're updating commitment, not withdrawing)
-      );
-
-      if ('error' in feeZkResult) {
-        throw new Error(`Fee payment proof generation failed: ${feeZkResult.error}`);
-      }
-
-      addLog('Fee payment proof generated');
-      
-      const feePaymentResult = await payExecutionFee(
-        assetIn || 'USDC',
-        executionPriceStr, // Execution price in user's token (properly formatted)
-        executionPriceStr, // Amount for proof verification (must match the proof's withdrawnValue)
-        feeZkResult.withdrawalTxData.stateRoot || "0",
-        feeZkResult.withdrawalTxData.nullifierHash.toString(),
-        feeZkResult.withdrawalTxData.newCommitment.toString(),
-        feeZkResult.withdrawalTxData.proof
-      );
-
-      if (!feePaymentResult.success) {
-        throw new Error(`Fee payment failed: ${feePaymentResult.error}`);
-      }
-
-      addLog(`✅ Fee payment successful! Transaction: ${feePaymentResult.transactionHash}`);
-
-      // Save new commitment after fee payment to localStorage (so it can be used for strategy execution)
-      if (feeZkResult.newDeposit && feeZkResult.newDepositKey) {
-        localStorage.setItem(feeZkResult.newDepositKey, JSON.stringify({ ...feeZkResult.newDeposit, spent: false }));
-        addLog('Saved new commitment after fee payment for strategy execution');
-      }
-
-      // Mark fee payment deposit as spent
-      if (feeZkResult.spentDepositKey) {
-        const feeOldData = JSON.parse(localStorage.getItem(feeZkResult.spentDepositKey) || '{}');
-        feeOldData.spent = true;
-        localStorage.setItem(feeZkResult.spentDepositKey, JSON.stringify(feeOldData));
-      }
-
-      // Step 2: Generate ZK proof for strategy execution with remaining balance
-      // This will use the new commitment created after fee payment
-      addLog('Generating strategy execution proof with remaining balance...');
-      const zkResult = await generateZKData(
-        11155111, 
-        tokenInfo,
-        remainingBalanceStr, // Use remaining balance after fee (properly formatted)
-        vaultContractAddress
+        amountStr,
+        recipient
       );
 
       if ('error' in zkResult) {
         throw new Error(zkResult.error);
       }
 
-      addLog('Strategy execution proof generated');
+      addLog('ZK proof generated');
       const { withdrawalTxData, newDeposit, newDepositKey, spentDepositKey } = zkResult;
 
       addLog('Building strategy payload...');
       const strategyPayload = {
-        user_id: "user_123",
-        strategy_type: "LIMIT_ORDER",
+        user_id: recipient,
+        strategy_type: "LIMIT_SELL_RALLY",
         asset_in: assetIn || "USDC",
         asset_out: assetOut,
-        amount: amount,
+        amount: parseFloat(amountStr),
         upper_bound: targetPrice,
         lower_bound: 0.0,
         recipient_address: recipient,
-        // This pool address needs to be dynamically determined based on asset_in, asset_out, and fee
-        // For now, using a hardcoded WETH/USDC 0.05% pool on Sepolia
-        pool_address: "0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1",
         zk_proof: {
-          proof: withdrawalTxData.proof,
+          pA: withdrawalTxData.pA,
+          pB: withdrawalTxData.pB,
+          pC: withdrawalTxData.pC,
           nullifierHash: withdrawalTxData.nullifierHash,
           newCommitment: withdrawalTxData.newCommitment,
-          atomicAmount: withdrawalTxData.amount, // This is `_amountIn` for the `publicInputs`
-          root: withdrawalTxData.stateRoot
+          stateRoot: withdrawalTxData.stateRoot,
         }
       };
 
@@ -439,20 +360,16 @@ export default function DetailsModal({
       const result = await createStrategy(strategyPayload);
 
       if (result.success) {
-        addLog('Payload received, processing execution...');
-        addLog('Strategy execution completed!');
-        showToast('Strategy execution completed!', 'success');
+        addLog('Strategy registered! Waiting for price trigger...');
+        showToast('Strategy registered!', 'success');
 
-        // Handle strategy execution deposits (fee payment deposits already handled above)
         if (newDeposit && newDepositKey) {
             localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
-            addLog('Saved new commitment after strategy execution');
         }
         if (spentDepositKey) {
             const oldData = JSON.parse(localStorage.getItem(spentDepositKey) || '{}');
             oldData.spent = true;
             localStorage.setItem(spentDepositKey, JSON.stringify(oldData));
-            addLog('Marked strategy execution deposit as spent');
         }
 
         addLog('Execution completed successfully!');
