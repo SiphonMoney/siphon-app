@@ -45,6 +45,7 @@ export default function ThreeEffect() {
   const particleSystemRef = useRef<{ destroy?: () => void } | null>(null);
   const scannerRef = useRef<{ destroy?: () => void } | null>(null);
   const lastTimeRef = useRef(0);
+  const particleInitAttemptedRef = useRef(false);
 
   useEffect(() => {
     
@@ -90,6 +91,7 @@ export default function ThreeEffect() {
   }, []);
 
   useEffect(() => {
+    let isDisposed = false;
     // Load Three.js dynamically
     const loadThree = async () => {
       if (typeof window !== 'undefined' && !window.THREE) {
@@ -105,7 +107,9 @@ export default function ThreeEffect() {
     };
 
     loadThree().then(() => {
+      if (isDisposed || particleInitAttemptedRef.current) return;
       if (typeof window !== 'undefined' && window.THREE && particleCanvasRef.current) {
+        particleInitAttemptedRef.current = true;
         initParticleSystem();
       }
     });
@@ -134,12 +138,15 @@ export default function ThreeEffect() {
     }
 
     return () => {
+      isDisposed = true;
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
       }
       if (particleSystemRef.current) {
         particleSystemRef.current.destroy?.();
       }
+      particleSystemRef.current = null;
+      particleInitAttemptedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -801,6 +808,22 @@ export default function ThreeEffect() {
     if (!window.THREE || !particleCanvasRef.current) return;
 
     const THREE = window.THREE;
+    const hasWebGLSupport = (() => {
+      const testCanvas = document.createElement("canvas");
+      return !!(
+        window.WebGLRenderingContext &&
+        (testCanvas.getContext("webgl") || testCanvas.getContext("experimental-webgl"))
+      );
+    })();
+    if (!hasWebGLSupport) {
+      return;
+    }
+
+    if (particleSystemRef.current) {
+      particleSystemRef.current.destroy?.();
+      particleSystemRef.current = null;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SceneClass = THREE.Scene as any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -818,11 +841,19 @@ export default function ThreeEffect() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const RendererClass = THREE.WebGLRenderer as any;
-    const renderer = new RendererClass({
-      canvas: particleCanvasRef.current,
-      alpha: true,
-      antialias: true,
-    });
+    let renderer: any;
+    try {
+      renderer = new RendererClass({
+        canvas: particleCanvasRef.current,
+        alpha: true,
+        antialias: true,
+        powerPreference: "high-performance",
+        failIfMajorPerformanceCaveat: false,
+      });
+    } catch (error) {
+      console.warn("ThreeEffect: failed to create WebGL renderer", error);
+      return;
+    }
     renderer.setSize(window.innerWidth, 250);
     renderer.setClearColor(0x000000, 0);
 

@@ -1,0 +1,85 @@
+import type { Edge, Node } from "@xyflow/react";
+import { createFlowFromParsed } from "./createNodes";
+import { applyFollowUpAnswer, applyIntentFromMessage, mergeParsed } from "./parseFollowUp";
+import { parsePrompt } from "./parsePrompt";
+import { getNextQuestion } from "./questions";
+import { syncFlowStructure } from "./syncFlow";
+import type { BuilderAgentSession, BuilderAgentTurnResult } from "./types";
+
+function buildSession(parsed: ReturnType<typeof parsePrompt>, transcript: string[]): BuilderAgentSession {
+  const next = getNextQuestion(parsed);
+  return {
+    parsed,
+    pendingField: next?.field ?? null,
+    transcript,
+  };
+}
+
+function applyFlowFromParsed(
+  parsed: ReturnType<typeof parsePrompt>,
+  existingNodes: Node[],
+  existingEdges: Edge[]
+): { nodes: Node[]; edges: Edge[] } {
+  if (existingNodes.length === 0) {
+    return createFlowFromParsed(parsed);
+  }
+  return syncFlowStructure(existingNodes, existingEdges, parsed);
+}
+
+export function processBuilderTurn(
+  input: string,
+  session: BuilderAgentSession | null,
+  existingNodes: Node[],
+  existingEdges: Edge[]
+): BuilderAgentTurnResult {
+  const trimmed = input.trim();
+
+  if (!session) {
+    const parsed = parsePrompt(trimmed);
+    const transcript = [trimmed];
+    const { nodes, edges } = createFlowFromParsed(parsed);
+    const nextSession = buildSession(parsed, transcript);
+    const next = getNextQuestion(parsed);
+
+    return {
+      nodes,
+      edges,
+      session: nextSession,
+      botMessage: next?.question ?? null,
+    };
+  }
+
+  let parsed = { ...session.parsed };
+  const transcript = [...session.transcript, trimmed];
+
+  if (session.pendingField) {
+    parsed = applyFollowUpAnswer(session.pendingField, trimmed, parsed);
+  } else {
+    const patch = parsePrompt(trimmed);
+    parsed = mergeParsed(parsed, {
+      coin: patch.coin,
+      toCoin: patch.toCoin,
+      amount: patch.amount,
+      priceGoal: patch.priceGoal,
+      intervals: patch.intervals,
+      wallet: patch.wallet,
+      strategy: patch.strategy,
+      includeSwap: patch.includeSwap || parsed.includeSwap,
+      includeWithdraw: patch.includeWithdraw || parsed.includeWithdraw,
+    });
+    parsed.raw = `${parsed.raw}\n${trimmed}`.trim();
+  }
+
+  parsed = applyIntentFromMessage(trimmed, parsed);
+
+  const { nodes, edges } = applyFlowFromParsed(parsed, existingNodes, existingEdges);
+  const nextSession = buildSession(parsed, transcript);
+  const next = getNextQuestion(parsed);
+
+  return {
+    nodes,
+    edges,
+    session: nextSession,
+    botMessage: next?.question ?? null,
+  };
+}

@@ -69,7 +69,16 @@ export default function Nexus({
 
   return (
     <div className="pro-mode-wrapper" style={{ height: '100%', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div className="pro-mode-content" style={{ paddingTop: '2rem', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="pro-mode-content"
+        style={{
+          paddingTop: viewMode === "blueprint" ? "0.25rem" : "2rem",
+          height: "100%",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {viewMode === 'discover' ? (
           <Discover
             isLoaded={isLoaded}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -15,14 +15,19 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
   NodeChange,
-  EdgeChange
+  EdgeChange,
+  useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import "./Build.css";
 import BuildNav from "./BuildNav";
+import BuildAiPrompt from "./BuildAiPrompt";
+import BuildNodeContextMenu from "./BuildNodeContextMenu";
 import { CustomNode } from "./BuildNodes";
 import { createStrategy } from "../../../lib/strategy";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
+import { processBuilderTurn } from "../../../builder_agent";
+import type { BuilderAgentSession } from "../../../builder_agent";
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -36,6 +41,29 @@ interface BuildProps {
   setSavedScenes: (scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }> | ((scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>) => Array<{ name: string; nodes: Node[]; edges: Edge[] }>)) => void;
 }
 
+interface NodeContextMenuState {
+  nodeId: string;
+  x: number;
+  y: number;
+}
+
+function BlueprintFlowViewport({ nodes }: { nodes: Node[] }) {
+  const { fitView } = useReactFlow();
+  const nodeStructureKey = nodes.map((node) => node.id).join("|");
+
+  useEffect(() => {
+    if (nodes.length === 0) return;
+
+    const frame = requestAnimationFrame(() => {
+      void fitView({ padding: 0.2, duration: 200 });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [nodeStructureKey, nodes.length, fitView]);
+
+  return null;
+}
+
 export default function Build({
   isLoaded = true,
   nodes,
@@ -47,6 +75,11 @@ export default function Build({
   savedScenes,
   setSavedScenes
 }: BuildProps) {
+  const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState | null>(null);
+  const [isBuilderAgentLoading, setIsBuilderAgentLoading] = useState(false);
+  const [builderSession, setBuilderSession] = useState<BuilderAgentSession | null>(null);
+  const [builderBotMessage, setBuilderBotMessage] = useState<string | null>(null);
+  const [builderPrompt, setBuilderPrompt] = useState("");
   const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
   
   // Active tokens
@@ -176,7 +209,52 @@ export default function Build({
   const onDeleteNode = useCallback((nodeId: string) => {
     setNodes((nds) => nds.filter((node) => node.id !== nodeId));
     setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setNodeContextMenu((current) => (current?.nodeId === nodeId ? null : current));
   }, [setNodes, setEdges]);
+
+  const onDuplicateNode = useCallback((nodeId: string) => {
+    setNodes((nds) => {
+      const source = nds.find((node) => node.id === nodeId);
+      if (!source) return nds;
+
+      const blockType = (source.data.type as string) || "block";
+      const duplicate: Node = {
+        ...source,
+        id: `${blockType}-${Date.now()}`,
+        position: {
+          x: source.position.x + 48,
+          y: source.position.y + 48,
+        },
+        data: { ...source.data },
+        style: source.style ? { ...source.style } : source.style,
+        selected: true,
+      };
+
+      return [
+        ...nds.map((node) => ({ ...node, selected: false })),
+        duplicate,
+      ];
+    });
+  }, [setNodes]);
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setNodeContextMenu({
+      nodeId: node.id,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }, []);
+
+  const onPaneContextMenu = useCallback((event: React.MouseEvent | MouseEvent) => {
+    event.preventDefault();
+    setNodeContextMenu(null);
+  }, []);
+
+  const onCanvasContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+  }, []);
   
   const onExecuteStrategy = useCallback(async () => {
     console.log('Executing strategy with nodes:', nodes);
@@ -267,6 +345,9 @@ export default function Build({
     setNodes([]);
     setEdges([]);
     setCurrentFileName('untitled.io');
+    setBuilderSession(null);
+    setBuilderBotMessage(null);
+    setBuilderPrompt("");
   }, [setNodes, setEdges, setCurrentFileName]);
   
   const saveScene = useCallback((sceneName: string) => {
@@ -305,30 +386,50 @@ export default function Build({
       localStorage.setItem('siphon-blueprint-scenes', JSON.stringify(updatedScenes));
     }
   }, [savedScenes, setSavedScenes]);
+
+  const onBuilderPromptSubmit = useCallback(async (prompt: string) => {
+    setIsBuilderAgentLoading(true);
+    try {
+      const result = processBuilderTurn(prompt, builderSession, nodes, edges);
+      setNodes(result.nodes);
+      setEdges(result.edges);
+      setBuilderSession(result.session);
+      setBuilderBotMessage(result.botMessage);
+      setBuilderPrompt("");
+      setNodeContextMenu(null);
+    } finally {
+      setIsBuilderAgentLoading(false);
+    }
+  }, [builderSession, nodes, edges, setNodes, setEdges]);
   
   return (
     <div className={`blueprint-view ${isLoaded ? 'loaded' : ''}`}>
       <ReactFlowProvider>
-        <BuildNav
-          nodes={nodes}
-          currentFileName={currentFileName}
-          savedScenes={savedScenes}
-          onAddNode={onAddNode}
-          onSaveScene={saveScene}
-          onLoadScene={loadScene}
-          onDeleteScene={deleteScene}
-          onRestart={onRestart}
-          onExecuteStrategy={onExecuteStrategy}
-          setCurrentFileName={setCurrentFileName}
-        />
-        
-        <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
+        <div className="blueprint-workspace">
+          <BuildNav
+            nodes={nodes}
+            currentFileName={currentFileName}
+            savedScenes={savedScenes}
+            onAddNode={onAddNode}
+            onSaveScene={saveScene}
+            onLoadScene={loadScene}
+            onDeleteScene={deleteScene}
+            onRestart={onRestart}
+            onExecuteStrategy={onExecuteStrategy}
+            setCurrentFileName={setCurrentFileName}
+          />
+
+          <div className="blueprint-canvas" onContextMenu={onCanvasContextMenu}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeContextMenu={onNodeContextMenu}
+          onPaneContextMenu={onPaneContextMenu}
+          onPaneClick={() => setNodeContextMenu(null)}
+          onMoveStart={() => setNodeContextMenu(null)}
           onNodesDelete={(nodesToDelete) => {
             nodesToDelete.forEach((node) => onDeleteNode(node.id));
           }}
@@ -365,9 +466,54 @@ export default function Build({
           proOptions={{ hideAttribution: true }}
         >
           <Background />
-          <Controls />
-          <MiniMap />
+          <BlueprintFlowViewport nodes={nodes} />
+          <Controls position="bottom-left" />
+          <MiniMap
+            position="bottom-right"
+            style={{ width: 168, height: 112 }}
+            pannable
+            zoomable
+            bgColor="rgba(0, 0, 0, 0.85)"
+            maskColor="rgba(0, 0, 0, 0.55)"
+            maskStrokeColor="rgba(255, 255, 255, 0.35)"
+            nodeStrokeWidth={2}
+            nodeColor={(node) => {
+              switch (node.data?.type) {
+                case "strategy":
+                  return "rgba(255, 193, 7, 0.75)";
+                case "deposit":
+                  return "rgba(96, 165, 250, 0.75)";
+                case "swap":
+                  return "rgba(167, 139, 250, 0.75)";
+                case "withdraw":
+                  return "rgba(74, 222, 128, 0.75)";
+                default:
+                  return "rgba(255, 255, 255, 0.4)";
+              }
+            }}
+            nodeStrokeColor="rgba(255, 255, 255, 0.55)"
+          />
         </ReactFlow>
+
+        {nodeContextMenu && (
+          <BuildNodeContextMenu
+            x={nodeContextMenu.x}
+            y={nodeContextMenu.y}
+            nodeLabel={nodes.find((node) => node.id === nodeContextMenu.nodeId)?.data.label as string | undefined}
+            onDelete={() => onDeleteNode(nodeContextMenu.nodeId)}
+            onDuplicate={() => onDuplicateNode(nodeContextMenu.nodeId)}
+            onClose={() => setNodeContextMenu(null)}
+          />
+        )}
+          </div>
+
+          <BuildAiPrompt
+            value={builderPrompt}
+            onChange={setBuilderPrompt}
+            onSubmit={onBuilderPromptSubmit}
+            isLoading={isBuilderAgentLoading}
+            botMessage={builderBotMessage}
+          />
         </div>
       </ReactFlowProvider>
     </div>

@@ -122,67 +122,77 @@ export default function BuildNav({
     <>
       <div className="blueprint-top-bar">
         <div className="blueprint-actions-left">
-          <div className="blueprint-saved-scenes desktop-only" style={{ position: 'relative' }}>
+          <div className="blueprint-file-group">
+            <div className="blueprint-saved-scenes desktop-only">
+              <button 
+                className="blueprint-icon-btn blueprint-folder-btn"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowSavedScenesDropdown(!showSavedScenesDropdown);
+                }}
+                title="Saved Scenes"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </button>
+              {showSavedScenesDropdown && (
+                <div className="blueprint-scenes-dropdown">
+                  {savedScenes.length === 0 ? (
+                    <div className="blueprint-scenes-empty">No saved scenes</div>
+                  ) : (
+                    savedScenes.map((scene) => (
+                      <div key={scene.name} className="blueprint-scene-item">
+                        <button
+                          className="blueprint-scene-load"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLoadScene(scene.name);
+                          }}
+                        >
+                          {scene.name}
+                        </button>
+                        <button
+                          className="blueprint-scene-delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteScene(scene.name);
+                          }}
+                          title="Delete scene"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
             <button 
-              className="blueprint-icon-btn"
+              className="blueprint-icon-btn blueprint-folder-btn mobile-only"
               onClick={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
-                setShowSavedScenesDropdown(!showSavedScenesDropdown);
+                setShowOpenModal(true);
               }}
-              title="Saved Scenes"
+              title="Open Scene"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
               </svg>
             </button>
-            {showSavedScenesDropdown && (
-              <div className="blueprint-scenes-dropdown">
-                {savedScenes.length === 0 ? (
-                  <div className="blueprint-scenes-empty">No saved scenes</div>
-                ) : (
-                  savedScenes.map((scene) => (
-                    <div key={scene.name} className="blueprint-scene-item">
-                      <button
-                        className="blueprint-scene-load"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLoadScene(scene.name);
-                        }}
-                      >
-                        {scene.name}
-                      </button>
-                      <button
-                        className="blueprint-scene-delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteScene(scene.name);
-                        }}
-                        title="Delete scene"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+            <input
+              type="text"
+              className="blueprint-file-name-input"
+              value={currentFileName}
+              onChange={(e) => setCurrentFileName(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              spellCheck={false}
+              aria-label="Scene file name"
+            />
           </div>
-          {/* Mobile: Open button */}
           <button 
-            className="blueprint-icon-btn mobile-only"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowOpenModal(true);
-            }}
-            title="Open Scene"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-          </button>
-          <button 
-            className={`blueprint-icon-btn ${saveSuccess ? 'save-success' : ''}`}
+            className={`blueprint-save-btn ${saveSuccess ? 'save-success' : ''}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -194,19 +204,24 @@ export default function BuildNav({
             title="Save Scene"
           >
             {saveSuccess ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="checkmark-icon">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="checkmark-icon">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Saved</span>
+              </>
             ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-              </svg>
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                <span>Save</span>
+              </>
             )}
           </button>
-          <span className="blueprint-file-name">{currentFileName}</span>
-          <span className="blueprint-actions-label desktop-only" style={{ marginLeft: '1rem' }}>Add:</span>
+          <span className="blueprint-actions-label desktop-only" style={{ marginLeft: '0.5rem' }}>Add:</span>
           <div className="blueprint-actions-buttons desktop-only" style={{ position: 'relative' }}>
             <button 
               className="blueprint-action-btn"
