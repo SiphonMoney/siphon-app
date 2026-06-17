@@ -99,9 +99,7 @@ export function resolveScheduleIntervalSeconds(fields: {
   return undefined;
 }
 
-export type ScheduleTrigger = "after" | "at";
-
-export function secondsUntilTime(atTime: string): number | undefined {
+function secondsUntilTime(atTime: string): number | undefined {
   const raw = String(atTime).trim();
   if (!raw) return undefined;
   const match = raw.match(/^(\d{1,2}):(\d{2})$/);
@@ -118,7 +116,7 @@ export function secondsUntilTime(atTime: string): number | undefined {
   return Math.floor((target.getTime() - now.getTime()) / 1000);
 }
 
-/** When the schedule fires: delay after X, or at clock time — not recurring cadence. */
+/** Start delay before downstream execution — not recurring cadence. */
 export function resolveScheduleStartDelaySeconds(fields: {
   scheduleTrigger?: string | null;
   scheduleValue?: string | null;
@@ -126,8 +124,7 @@ export function resolveScheduleStartDelaySeconds(fields: {
   scheduleAt?: string | null;
   intervalSeconds?: string | null;
 }): number | undefined {
-  const trigger = (fields.scheduleTrigger || "after") as ScheduleTrigger;
-  if (trigger === "at") {
+  if (fields.scheduleTrigger === "at") {
     return secondsUntilTime(String(fields.scheduleAt ?? ""));
   }
   const value = String(fields.scheduleValue ?? "").trim();

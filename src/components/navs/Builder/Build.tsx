@@ -357,8 +357,6 @@ export default function Build({
         intervalSeconds: null,
         scheduleValue: null,
         scheduleUnit: 'blocks',
-        scheduleTrigger: 'after',
-        scheduleAt: '',
         maxSlippageBps: null,
         intervals: null,
         repeatCount: null,
@@ -523,7 +521,7 @@ export default function Build({
         if (
           node.data.type === 'control' &&
           String(node.data.controlKind || '').toLowerCase() === 'schedule' &&
-          (field === 'scheduleValue' || field === 'scheduleUnit' || field === 'scheduleTrigger' || field === 'scheduleAt')
+          (field === 'scheduleValue' || field === 'scheduleUnit')
         ) {
           const delay = resolveScheduleStartDelaySeconds(updatedData);
           if (delay !== undefined) {

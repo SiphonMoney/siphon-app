@@ -844,9 +844,7 @@ export function runStrategySimulation(nodes: Node[], edges: Edge[]): SimulationR
         ok
           ? `Schedule: start in ${delay}s (smoke test skips wait)`
           : "Invalid schedule configuration",
-        node.data.scheduleTrigger === "at"
-          ? `At ${node.data.scheduleAt}`
-          : `After ${node.data.scheduleValue} ${node.data.scheduleUnit}`
+        `After ${node.data.scheduleValue} ${node.data.scheduleUnit}`
       );
       continue;
     }

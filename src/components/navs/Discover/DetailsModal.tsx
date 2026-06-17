@@ -180,14 +180,12 @@ export default function DetailsModal({
     if (nodeData?.type === 'control') {
       const kind = String(nodeData.controlKind || '').toLowerCase();
       if (kind === 'schedule' && isRunModeView) {
-        tags.push({ label: 'Trigger', field: 'scheduleTrigger', options: ['after', 'at'] });
         tags.push({ label: 'Value', field: 'scheduleValue' });
         tags.push({
           label: 'Unit',
           field: 'scheduleUnit',
-          options: ['seconds', 'minutes', 'hours'],
+          options: ['blocks', 'seconds', 'minutes', 'hours'],
         });
-        tags.push({ label: 'At', field: 'scheduleAt' });
       }
       return tags;
     }

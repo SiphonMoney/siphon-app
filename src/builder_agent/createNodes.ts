@@ -230,7 +230,6 @@ export function createRecurringFlowFromParsed(
         label: "Schedule",
         type: "control",
         controlKind: "schedule",
-        scheduleTrigger: "after",
         scheduleValue: parsed.scheduleValue ?? "1",
         scheduleUnit: parsed.scheduleUnit ?? "minutes",
         chain: null,

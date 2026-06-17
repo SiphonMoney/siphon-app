@@ -95,6 +95,13 @@
   gap: 0.4rem;
 }
 
+.node-schedule-prefix {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  font-family: var(--font-source-code), monospace;
+}
+
 .node-input,
 .node-select {
   background: rgba(0, 0, 0, 0.5);

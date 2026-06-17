@@ -1,7 +1,7 @@
 "use client";
 
 import { Handle, Position } from '@xyflow/react';
-import { normalizeStrategyKind, type ScheduleTrigger, type ScheduleUnit, displayScheduleFromSeconds } from "../../../lib/strategySpec";
+import { normalizeStrategyKind, type ScheduleUnit, displayScheduleFromSeconds } from "../../../lib/strategySpec";
 import { simHighlightClass } from "./simHighlight";
 import type { SimHighlightStatus } from "./useCanvasSimulation";
 import "./BuildNodes.css";
@@ -209,8 +209,6 @@ interface NodeData {
   controlKind?: string;
   scheduleValue?: string;
   scheduleUnit?: string;
-  scheduleTrigger?: string;
-  scheduleAt?: string;
   repeatCount?: string;
   [key: string]: unknown;
 }
@@ -306,7 +304,8 @@ function LimitOrderPriceEditor({
   onChangeTree: (json: string) => void;
 }) {
   const segments = parseLimitOrderSegments(conditionTreeRaw);
-  const hasOrSegments = segments.length > 1 || segments.some((s) => s.type === "or");
+  const lastSegment = segments[segments.length - 1];
+  const andModeActive = lastSegment?.type === "and";
 
   const commit = (next: LimitOrderSegment[]) => {
     onChangeTree(JSON.stringify(segmentsToConditionTree(next)));
@@ -314,15 +313,21 @@ function LimitOrderPriceEditor({
 
   const addAnd = () => {
     const next = [...segments];
-    const andIndex = next.findIndex((s) => s.type === "and");
-    if (andIndex >= 0) {
-      const andSeg = next[andIndex] as { type: "and"; leaves: ConditionNode[] };
-      next[andIndex] = {
+    const lastIndex = next.length - 1;
+    const last = next[lastIndex];
+
+    if (last?.type === "and") {
+      next[lastIndex] = {
         type: "and",
-        leaves: [...andSeg.leaves, createDefaultPriceConditionTree()],
+        leaves: [...last.leaves, createDefaultPriceConditionTree()],
+      };
+    } else if (last?.type === "or") {
+      next[lastIndex] = {
+        type: "and",
+        leaves: [last.leaf, createDefaultPriceConditionTree()],
       };
     } else {
-      next.unshift({ type: "and", leaves: [createDefaultPriceConditionTree()] });
+      next.push({ type: "and", leaves: [createDefaultPriceConditionTree()] });
     }
     commit(next);
   };
@@ -426,10 +431,10 @@ function LimitOrderPriceEditor({
       </div>
 
       <div style={{ display: 'flex', gap: '4px' }}>
-        <button type="button" onClick={addAnd} style={combinatorBtnStyle(!hasOrSegments)}>
+        <button type="button" onClick={addAnd} style={combinatorBtnStyle(andModeActive)}>
           + AND
         </button>
-        <button type="button" onClick={addOr} style={combinatorBtnStyle(hasOrSegments)}>
+        <button type="button" onClick={addOr} style={combinatorBtnStyle(!andModeActive)}>
           + OR
         </button>
       </div>
@@ -954,55 +959,32 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
         {data.type === 'control' && (
           <div className="node-inputs">
             {((data.controlKind as string) || '').toLowerCase() === 'schedule' && (() => {
-              const trigger = ((data.scheduleTrigger as string) || 'after') as ScheduleTrigger;
               const afterFields = getScheduleFields(data);
               return (
                 <div className="node-input-row node-input-row--schedule">
+                  <span className="node-schedule-prefix">After</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="node-input node-input--schedule-value"
+                    placeholder="0"
+                    value={afterFields.value}
+                    onChange={(e) => handleChange('scheduleValue', e.target.value)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
+                  />
                   <select
-                    className="node-select node-select--trigger"
-                    value={trigger}
-                    onChange={(e) => handleChange('scheduleTrigger', e.target.value)}
+                    className="node-select node-select--unit"
+                    value={afterFields.unit}
+                    onChange={(e) => handleChange('scheduleUnit', e.target.value)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onFocus={(e) => e.stopPropagation()}
                   >
-                    <option value="after">After</option>
-                    <option value="at">At</option>
+                    <option value="blocks">Blocks</option>
+                    <option value="seconds">Seconds</option>
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
                   </select>
-                  {trigger === 'after' ? (
-                    <>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        className="node-input node-input--schedule-value"
-                        placeholder="0"
-                        value={afterFields.value}
-                        onChange={(e) => handleChange('scheduleValue', e.target.value)}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onFocus={(e) => e.stopPropagation()}
-                      />
-                      <select
-                        className="node-select node-select--unit"
-                        value={afterFields.unit}
-                        onChange={(e) => handleChange('scheduleUnit', e.target.value)}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onFocus={(e) => e.stopPropagation()}
-                      >
-                        <option value="blocks">Blocks</option>
-                        <option value="seconds">Seconds</option>
-                        <option value="minutes">Minutes</option>
-                        <option value="hours">Hours</option>
-                      </select>
-                    </>
-                  ) : (
-                    <input
-                      type="time"
-                      className="node-input node-input--time"
-                      value={(data.scheduleAt as string) || ''}
-                      onChange={(e) => handleChange('scheduleAt', e.target.value)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onFocus={(e) => e.stopPropagation()}
-                    />
-                  )}
                 </div>
               );
             })()}

@@ -52,7 +52,7 @@ export function buildRunModeValuesFromNodes(nodes: Node[]): Record<string, Recor
       setIfPresent(step, "loopIntervalValue", d.loopIntervalValue);
       setIfPresent(step, "loopIntervalUnit", d.loopIntervalUnit || "hours");
     } else if (type === "control") {
-      for (const field of ["scheduleTrigger", "scheduleValue", "scheduleUnit", "scheduleAt"]) {
+      for (const field of ["scheduleValue", "scheduleUnit"]) {
         setIfPresent(step, field, d[field]);
       }
     }
