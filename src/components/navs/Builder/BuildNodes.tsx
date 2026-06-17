@@ -1,7 +1,7 @@
 "use client";
 
 import { Handle, Position } from '@xyflow/react';
-import { normalizeStrategyKind, SINGLE_PRICE_STRATEGIES, type ScheduleTrigger, type ScheduleUnit, displayScheduleFromSeconds } from "../../../lib/strategySpec";
+import { normalizeStrategyKind, type ScheduleTrigger, type ScheduleUnit, displayScheduleFromSeconds } from "../../../lib/strategySpec";
 import { simHighlightClass } from "./simHighlight";
 import type { SimHighlightStatus } from "./useCanvasSimulation";
 import "./BuildNodes.css";
@@ -21,6 +21,140 @@ export const PYTH_PRICE_FEED_IDS: Record<string, string> = {
   BTC: "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
   USDC: "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
 };
+
+export function createDefaultPriceConditionTree(): ConditionNode {
+  return {
+    op: "LEAF",
+    asset: "ETH",
+    condition: "LTE",
+    bound: 1500,
+    price_feed_id: PYTH_PRICE_FEED_IDS.ETH,
+  };
+}
+
+export function createDefaultLimitOrderTree(): ConditionNode {
+  return {
+    op: "AND",
+    conditions: [createDefaultPriceConditionTree()],
+  };
+}
+
+export type LimitOrderSegment =
+  | { type: "and"; leaves: ConditionNode[] }
+  | { type: "or"; leaf: ConditionNode };
+
+function extractPriceLeaves(node: ConditionNode): ConditionNode[] {
+  return (node.conditions ?? []).filter((c) => c.op === "LEAF");
+}
+
+export function parseLimitOrderSegments(raw: unknown): LimitOrderSegment[] {
+  const tree = parseConditionTree(raw);
+  if (tree.op === "AND") {
+    const leaves = extractPriceLeaves(tree);
+    return [{ type: "and", leaves: leaves.length ? leaves : [createDefaultPriceConditionTree()] }];
+  }
+  if (tree.op === "OR") {
+    const segments: LimitOrderSegment[] = [];
+    for (const child of tree.conditions ?? []) {
+      if (child.op === "AND") {
+        const leaves = extractPriceLeaves(child);
+        if (leaves.length) segments.push({ type: "and", leaves });
+      } else if (child.op === "LEAF") {
+        segments.push({ type: "or", leaf: child });
+      }
+    }
+    if (!segments.length) {
+      return [{ type: "and", leaves: [createDefaultPriceConditionTree()] }];
+    }
+    return segments;
+  }
+  if (tree.op === "LEAF") {
+    return [{ type: "and", leaves: [tree] }];
+  }
+  return [{ type: "and", leaves: [createDefaultPriceConditionTree()] }];
+}
+
+export function segmentsToConditionTree(segments: LimitOrderSegment[]): ConditionNode {
+  if (!segments.length) {
+    return createDefaultLimitOrderTree();
+  }
+  if (segments.length === 1 && segments[0].type === "and") {
+    return { op: "AND", conditions: segments[0].leaves };
+  }
+  return {
+    op: "OR",
+    conditions: segments.map((seg) =>
+      seg.type === "and" ? { op: "AND", conditions: seg.leaves } : seg.leaf
+    ),
+  };
+}
+
+export function parseConditionTree(raw: unknown): ConditionNode {
+  if (typeof raw === "string") {
+    try {
+      return parseConditionTree(JSON.parse(raw));
+    } catch {
+      return createDefaultPriceConditionTree();
+    }
+  }
+  if (raw && typeof raw === "object" && "op" in raw) {
+    return raw as ConditionNode;
+  }
+  return createDefaultPriceConditionTree();
+}
+
+export function validatePriceConditionTree(
+  tree: ConditionNode
+): { valid: boolean; error?: string } {
+  if (tree.op === "LEAF") {
+    const bound = Number(tree.bound);
+    if (!tree.asset) return { valid: false, error: "Limit Order needs an asset for each price condition." };
+    if (!Number.isFinite(bound) || bound <= 0) {
+      return { valid: false, error: "Limit Order needs a valid price on each condition." };
+    }
+    return { valid: true };
+  }
+
+  if (tree.op === "AND" || tree.op === "OR") {
+    const children = tree.conditions ?? [];
+    if (children.length === 0) {
+      return {
+        valid: false,
+        error: `Limit Order ${tree.op} group needs at least one price condition.`,
+      };
+    }
+    for (const child of children) {
+      if (tree.op === "OR" && child.op === "AND") {
+        const leaves = extractPriceLeaves(child);
+        if (!leaves.length) {
+          return { valid: false, error: "Limit Order AND group needs at least one price condition." };
+        }
+        for (const leaf of leaves) {
+          const leafResult = validatePriceConditionTree(leaf);
+          if (!leafResult.valid) return leafResult;
+        }
+        continue;
+      }
+      if (child.op !== "LEAF") {
+        return { valid: false, error: "Limit Order has an unsupported condition type." };
+      }
+      const childResult = validatePriceConditionTree(child);
+      if (!childResult.valid) return childResult;
+    }
+    return { valid: true };
+  }
+
+  return { valid: false, error: "Limit Order has an unsupported condition type." };
+}
+
+export function validatePriceConditionTreeRaw(
+  raw: string | null | undefined
+): { valid: boolean; error?: string } {
+  if (!raw?.trim()) {
+    return { valid: false, error: "Limit Order needs at least one price condition." };
+  }
+  return validatePriceConditionTree(parseConditionTree(raw));
+}
 
 export const CHAIN_LABEL_TO_ID: Record<string, string> = {
   Sepolia: "11155111",
@@ -91,6 +225,218 @@ function getScheduleFields(data: NodeData): { value: string; unit: ScheduleUnit 
   return displayScheduleFromSeconds(data.intervalSeconds as string);
 }
 
+function PriceLeafRow({
+  leaf,
+  onChange,
+  onDelete,
+}: {
+  leaf: ConditionNode;
+  onChange: (leaf: ConditionNode) => void;
+  onDelete?: () => void;
+}) {
+  const handleLeafChange = (field: string, value: string | number) => {
+    const updated = { ...leaf, [field]: value };
+    if (field === "asset") {
+      updated.price_feed_id = PYTH_PRICE_FEED_IDS[value as string] || "";
+    }
+    onChange(updated);
+  };
+
+  return (
+    <div className="limit-order-leaf-row">
+      <select
+        className="node-select limit-order-asset"
+        value={leaf.asset || 'ETH'}
+        onChange={(e) => handleLeafChange('asset', e.target.value)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onFocus={(e) => e.stopPropagation()}
+      >
+        <option value="ETH">ETH</option>
+        <option value="BTC">BTC</option>
+        <option value="SOL">SOL</option>
+        <option value="USDC">USDC</option>
+      </select>
+      <select
+        className="node-select limit-order-cmp"
+        value={leaf.condition || 'LTE'}
+        onChange={(e) => handleLeafChange('condition', e.target.value)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onFocus={(e) => e.stopPropagation()}
+      >
+        <option value="LTE">≤</option>
+        <option value="GTE">≥</option>
+      </select>
+      <input
+        type="text"
+        inputMode="decimal"
+        className="node-input limit-order-price"
+        placeholder="Price"
+        value={leaf.bound === undefined ? '' : leaf.bound}
+        onChange={(e) => handleLeafChange('bound', parseFloat(e.target.value) || 0)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onFocus={(e) => e.stopPropagation()}
+      />
+      {onDelete ? (
+        <button
+          type="button"
+          className="limit-order-delete"
+          onClick={onDelete}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          ✕
+        </button>
+      ) : (
+        <span className="limit-order-delete-spacer" aria-hidden />
+      )}
+    </div>
+  );
+}
+
+function OrDivider() {
+  return (
+    <div className="limit-order-or-divider">OR</div>
+  );
+}
+
+function LimitOrderPriceEditor({
+  conditionTreeRaw,
+  onChangeTree,
+}: {
+  conditionTreeRaw: string | undefined;
+  onChangeTree: (json: string) => void;
+}) {
+  const segments = parseLimitOrderSegments(conditionTreeRaw);
+  const hasOrSegments = segments.length > 1 || segments.some((s) => s.type === "or");
+
+  const commit = (next: LimitOrderSegment[]) => {
+    onChangeTree(JSON.stringify(segmentsToConditionTree(next)));
+  };
+
+  const addAnd = () => {
+    const next = [...segments];
+    const andIndex = next.findIndex((s) => s.type === "and");
+    if (andIndex >= 0) {
+      const andSeg = next[andIndex] as { type: "and"; leaves: ConditionNode[] };
+      next[andIndex] = {
+        type: "and",
+        leaves: [...andSeg.leaves, createDefaultPriceConditionTree()],
+      };
+    } else {
+      next.unshift({ type: "and", leaves: [createDefaultPriceConditionTree()] });
+    }
+    commit(next);
+  };
+
+  const addOr = () => {
+    const next = [...segments];
+    if (next.length === 1 && next[0].type === "and") {
+      next.push({ type: "or", leaf: createDefaultPriceConditionTree() });
+    } else {
+      next.push({ type: "or", leaf: createDefaultPriceConditionTree() });
+    }
+    commit(next);
+  };
+
+  const updateAndLeaf = (segIndex: number, leafIndex: number, leaf: ConditionNode) => {
+    const next = [...segments];
+    const seg = next[segIndex];
+    if (seg.type !== "and") return;
+    const leaves = [...seg.leaves];
+    leaves[leafIndex] = leaf;
+    next[segIndex] = { type: "and", leaves };
+    commit(next);
+  };
+
+  const removeAndLeaf = (segIndex: number, leafIndex: number) => {
+    const next = [...segments];
+    const seg = next[segIndex];
+    if (seg.type !== "and") return;
+    const leaves = seg.leaves.filter((_, i) => i !== leafIndex);
+    if (!leaves.length) {
+      if (next.length === 1) {
+        leaves.push(createDefaultPriceConditionTree());
+      } else {
+        next.splice(segIndex, 1);
+        commit(next);
+        return;
+      }
+    }
+    next[segIndex] = { type: "and", leaves };
+    commit(next);
+  };
+
+  const updateOrLeaf = (segIndex: number, leaf: ConditionNode) => {
+    const next = [...segments];
+    next[segIndex] = { type: "or", leaf };
+    commit(next);
+  };
+
+  const removeOrSegment = (segIndex: number) => {
+    if (segments.length <= 1) return;
+    commit(segments.filter((_, i) => i !== segIndex));
+  };
+
+  const combinatorBtnStyle = (active: boolean) => ({
+    flex: 1,
+    background: active ? 'rgba(255, 193, 7, 0.3)' : 'rgba(255, 255, 255, 0.05)',
+    color: 'white',
+    border: active ? '1px solid #ffc107' : '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: '4px',
+    fontSize: '10px',
+    padding: '6px 4px',
+    cursor: 'pointer',
+    fontWeight: 'bold' as const,
+    fontFamily: 'monospace',
+  });
+
+  return (
+    <div onMouseDown={(e) => e.stopPropagation()}>
+      <div className="limit-order-conditions">
+        {segments.map((seg, segIndex) => (
+          <div key={segIndex}>
+            {segIndex > 0 && <OrDivider />}
+            {seg.type === "and" ? (
+              <div className="limit-order-and-block">
+                {seg.leaves.map((leaf, leafIndex) => (
+                  <div key={leafIndex}>
+                    {leafIndex > 0 && <div className="limit-order-and-separator" />}
+                    <PriceLeafRow
+                      leaf={leaf}
+                      onChange={(updated) => updateAndLeaf(segIndex, leafIndex, updated)}
+                      onDelete={
+                        seg.leaves.length > 1 || segments.length > 1
+                          ? () => removeAndLeaf(segIndex, leafIndex)
+                          : undefined
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="limit-order-or-block">
+                <PriceLeafRow
+                  leaf={seg.leaf}
+                  onChange={(updated) => updateOrLeaf(segIndex, updated)}
+                  onDelete={segments.length > 1 ? () => removeOrSegment(segIndex) : undefined}
+                />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <button type="button" onClick={addAnd} style={combinatorBtnStyle(!hasOrSegments)}>
+          + AND
+        </button>
+        <button type="button" onClick={addOr} style={combinatorBtnStyle(hasOrSegments)}>
+          + OR
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
 
 interface CustomNodeProps {
@@ -107,13 +453,16 @@ interface CustomNodeProps {
 function TreeBuilderNode({
   node,
   onChange,
-  onDelete
+  onDelete,
+  pricesOnly = false,
 }: {
   node: ConditionNode;
   onChange: (newNode: ConditionNode) => void;
   onDelete?: () => void;
+  pricesOnly?: boolean;
 }) {
   const handleOpChange = (newOp: "LEAF" | "AND" | "OR" | "NOT") => {
+    if (pricesOnly && newOp === "NOT") return;
     if (newOp === "LEAF") {
       onChange({
         op: "LEAF",
@@ -212,10 +561,10 @@ function TreeBuilderNode({
             fontFamily: 'monospace'
           }}
         >
-          <option value="LEAF">Condition</option>
-          <option value="AND">AND Group</option>
-          <option value="OR">OR Group</option>
-          <option value="NOT">NOT Wrap</option>
+          <option value="LEAF">Price</option>
+          <option value="AND">AND (all)</option>
+          <option value="OR">OR (any)</option>
+          {!pricesOnly && <option value="NOT">NOT Wrap</option>}
         </select>
 
         {onDelete && (
@@ -302,13 +651,14 @@ function TreeBuilderNode({
             <TreeBuilderNode
               key={idx}
               node={child}
+              pricesOnly={pricesOnly}
               onChange={(newChild) => handleChildChange(idx, newChild)}
               onDelete={() => handleRemoveChild(idx)}
             />
           ))}
 
           {node.op !== "NOT" && (
-            <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => handleAddChild('LEAF')}
                 style={{
@@ -323,7 +673,7 @@ function TreeBuilderNode({
                   fontFamily: 'monospace'
                 }}
               >
-                + Add Limit
+                {pricesOnly ? '+ Price' : '+ Add Limit'}
               </button>
               <button
                 onClick={() => handleAddChild('AND')}
@@ -339,8 +689,26 @@ function TreeBuilderNode({
                   fontFamily: 'monospace'
                 }}
               >
-                + Add Group
+                {pricesOnly ? '+ AND' : '+ Add Group'}
               </button>
+              {pricesOnly && (
+                <button
+                  onClick={() => handleAddChild('OR')}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '9px',
+                    padding: '3px 6px',
+                    cursor: 'pointer',
+                    flex: 1,
+                    fontFamily: 'monospace'
+                  }}
+                >
+                  + OR
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -508,92 +876,51 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                 onFocus={(e) => e.stopPropagation()}
               />
             </div>
-            {data.wallet && (() => {
-              const err = validateRecipientAddress(data.wallet, chainLabelToId(data.chain as string));
-              return err ? (
-                <div style={{ color: '#ff6b6b', fontSize: '10px', marginTop: '4px', textAlign: 'left', textTransform: 'none', fontFamily: 'monospace' }}>
-                  ⚠️ {err}
-                </div>
-              ) : null;
-            })()}
           </div>
           );
         })()}
 
-        {data.type === 'strategy' && (
+        {data.type === 'strategy' && (() => {
+          const strategyKind = normalizeStrategyKind((data.strategy as string) || undefined);
+
+          if (strategyKind === 'Limit Order') {
+            return (
+              <div className="node-inputs">
+                <LimitOrderPriceEditor
+                  conditionTreeRaw={data.conditionTree as string | undefined}
+                  onChangeTree={(json) => handleChange('conditionTree', json)}
+                />
+              </div>
+            );
+          }
+
+          if (strategyKind === 'Stop Loss' || strategyKind === 'Take Profit') {
+            return (
+              <div className="node-inputs">
+                <input
+                  type="text"
+                  className="node-input"
+                  placeholder={strategyKind === 'Stop Loss' ? 'Stop price' : 'Target price'}
+                  value={data.priceGoal || ''}
+                  onChange={(e) => handleChange('priceGoal', e.target.value)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onFocus={(e) => e.stopPropagation()}
+                />
+                <input
+                  type="text"
+                  className="node-input"
+                  placeholder="% of position (default 100)"
+                  value={(data.positionPct as string) || ''}
+                  onChange={(e) => handleChange('positionPct', e.target.value)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onFocus={(e) => e.stopPropagation()}
+                />
+              </div>
+            );
+          }
+
+          return (
           <div className="node-inputs">
-            {/* Mode selection toggle */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-              <button
-                onClick={() => { handleChange('useTree', 'false'); handleChange('conditionTree', ''); }}
-                style={{
-                  flex: 1,
-                  background: data.useTree !== 'true' ? 'rgba(255, 193, 7, 0.3)' : 'rgba(255, 255, 255, 0.05)',
-                  color: 'white',
-                  border: data.useTree !== 'true' ? '1px solid #ffc107' : '1px solid transparent',
-                  borderRadius: '4px', fontSize: '10px', padding: '4px', cursor: 'pointer',
-                  fontWeight: 'bold', fontFamily: 'monospace'
-                }}
-              >Legacy Mode</button>
-              <button
-                onClick={() => {
-                  handleChange('useTree', 'true');
-                  const defaultTree: ConditionNode = { op: "LEAF", asset: "ETH", condition: "LTE", bound: 1500, price_feed_id: PYTH_PRICE_FEED_IDS.ETH };
-                  handleChange('conditionTree', JSON.stringify(defaultTree));
-                }}
-                style={{
-                  flex: 1,
-                  background: data.useTree === 'true' ? 'rgba(255, 193, 7, 0.3)' : 'rgba(255, 255, 255, 0.05)',
-                  color: 'white',
-                  border: data.useTree === 'true' ? '1px solid #ffc107' : '1px solid transparent',
-                  borderRadius: '4px', fontSize: '10px', padding: '4px', cursor: 'pointer',
-                  fontWeight: 'bold', fontFamily: 'monospace'
-                }}
-              >Multi-Asset</button>
-            </div>
-
-            {data.useTree !== 'true' ? (
-              <>
-                {(normalizeStrategyKind((data.strategy as string) || undefined) === 'Limit Order') && (
-                  <select
-                    className="node-select"
-                    value={(data.side as string) || 'buy'}
-                    onChange={(e) => handleChange('side', e.target.value)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <option value="buy">Buy</option>
-                    <option value="sell">Sell</option>
-                  </select>
-                )}
-
-                {SINGLE_PRICE_STRATEGIES.includes(normalizeStrategyKind((data.strategy as string) || undefined)) && (
-                  <>
-                    <input
-                      type="text"
-                      className="node-input"
-                      placeholder={
-                        normalizeStrategyKind((data.strategy as string) || undefined) === 'Stop Loss' ? 'Stop price' :
-                        normalizeStrategyKind((data.strategy as string) || undefined) === 'Take Profit' ? 'Target price' : 'Goal price'
-                      }
-                      value={data.priceGoal || ''}
-                      onChange={(e) => handleChange('priceGoal', e.target.value)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onFocus={(e) => e.stopPropagation()}
-                    />
-                    {(data.strategy === 'Stop Loss' || data.strategy === 'Take Profit') && (
-                      <input
-                        type="text"
-                        className="node-input"
-                        placeholder="% of position (default 100)"
-                        value={(data.positionPct as string) || ''}
-                        onChange={(e) => handleChange('positionPct', e.target.value)}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onFocus={(e) => e.stopPropagation()}
-                      />
-                    )}
-                  </>
-                )}
-
                 {data.strategy === 'Range' && (
                   <>
                     <input type="text" className="node-input" placeholder="Range low"
@@ -620,19 +947,9 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                   <input type="text" className="node-input" placeholder="Intervals"
                     value={(data.intervals as string) || ''} onChange={(e) => handleChange('intervals', e.target.value)} onMouseDown={(e) => e.stopPropagation()} />
                 )}
-              </>
-            ) : (
-              <div onMouseDown={(e) => e.stopPropagation()}>
-                {(() => {
-                  let parsedTree: ConditionNode;
-                  try { parsedTree = JSON.parse(data.conditionTree as string); }
-                  catch { parsedTree = { op: "LEAF", asset: "ETH", condition: "LTE", bound: 1500, price_feed_id: PYTH_PRICE_FEED_IDS.ETH }; }
-                  return <TreeBuilderNode node={parsedTree} onChange={(newTree) => handleChange('conditionTree', JSON.stringify(newTree))} />;
-                })()}
-              </div>
-            )}
           </div>
-        )}
+          );
+        })()}
 
         {data.type === 'control' && (
           <div className="node-inputs">

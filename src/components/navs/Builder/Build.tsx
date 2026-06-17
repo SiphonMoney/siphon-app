@@ -60,7 +60,7 @@ import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
 import { createStrategy } from "../../../lib/strategy";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
-import { validateRecipientAddress, chainLabelToId } from "./BuildNodes";
+import { validateRecipientAddress, chainLabelToId, validatePriceConditionTreeRaw, createDefaultLimitOrderTree } from "./BuildNodes";
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -316,7 +316,11 @@ export default function Build({
     const isControl = type === 'control';
     const controlKind = isControl ? (chainOrDexOrStrategy || '').toLowerCase() : null;
     const isStrategy = type === 'strategy';
+    const strategyKind = isStrategy ? normalizeStrategyKind(chainOrDexOrStrategy) : null;
     const blockType = isControl ? 'control' : type;
+    const defaultConditionTree = strategyKind === 'Limit Order'
+      ? JSON.stringify(createDefaultLimitOrderTree())
+      : null;
 
     return {
       id: `${blockType}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -339,9 +343,11 @@ export default function Build({
         wallet: null,
         amountSource: type === 'withdraw' ? 'fixed' : null,
         linkedFromNodeId: null,
-        side: isStrategy && normalizeStrategyKind(chainOrDexOrStrategy) !== 'Limit Order'
-          ? defaultSideForKind(normalizeStrategyKind(chainOrDexOrStrategy))
+        side: isStrategy && strategyKind !== 'Limit Order'
+          ? defaultSideForKind(strategyKind!)
           : null,
+        useTree: strategyKind === 'Limit Order' ? 'true' : null,
+        conditionTree: defaultConditionTree,
         priceGoal: null,
         positionPct: null,
         rangeLow: null,
@@ -641,22 +647,24 @@ export default function Build({
     const assetOut  = (swapNode?.data.toCoin as string || withdrawNode?.data.coin as string || assetIn).toUpperCase();
 
     // Parse strategy mode and custom condition tree
-    const useTree = strategyNode.data.useTree === 'true';
+    const useTree = strategyKind === 'Limit Order' || strategyNode.data.useTree === 'true';
     let conditionTree = null;
-    let priceGoal = 0;
 
     if (useTree) {
       const rawTree = strategyNode.data.conditionTree as string;
-      if (!rawTree) { alert('Please build your custom strategy conditions.'); return; }
+      const treeValidation = validatePriceConditionTreeRaw(rawTree);
+      if (!treeValidation.valid) {
+        alert(treeValidation.error ?? 'Please build your Limit Order price conditions.');
+        return;
+      }
       try {
         conditionTree = JSON.parse(rawTree);
       } catch {
-        alert('Invalid custom strategy condition tree JSON.'); return;
+        alert('Invalid price condition tree.'); return;
       }
     } else {
       const validation = validateStrategyFields(strategyKind, strategyFields);
       if (!validation.valid) { alert(validation.error ?? 'Strategy parameters are incomplete.'); return; }
-      priceGoal = parseFloat(strategyNode.data.priceGoal as string || '0');
     }
 
     const recipient = (withdrawNode?.data.wallet as string || '').trim();

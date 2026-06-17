@@ -20,6 +20,7 @@ import {
   type StrategyKind,
   type StrategyPayload,
 } from "./strategySpec";
+import { validatePriceConditionTreeRaw } from "../components/navs/Builder/BuildNodes";
 
 export type SimStepStatus = "ok" | "warn" | "error" | "pending";
 
@@ -251,14 +252,28 @@ function resolveGraphContext(
     : null;
 
   if (strategyKind && strategyFields) {
-    const validation = validateStrategyFields(strategyKind, strategyFields);
-    if (!validation.valid) {
-      addIssue(
-        issues,
-        "error",
-        validation.error ?? "Strategy parameters are incomplete.",
-        strategyNode?.id
+    if (strategyKind === "Limit Order") {
+      const treeValidation = validatePriceConditionTreeRaw(
+        strategyNode?.data.conditionTree as string | undefined
       );
+      if (!treeValidation.valid) {
+        addIssue(
+          issues,
+          "error",
+          treeValidation.error ?? "Limit Order price conditions are incomplete.",
+          strategyNode?.id
+        );
+      }
+    } else {
+      const validation = validateStrategyFields(strategyKind, strategyFields);
+      if (!validation.valid) {
+        addIssue(
+          issues,
+          "error",
+          validation.error ?? "Strategy parameters are incomplete.",
+          strategyNode?.id
+        );
+      }
     }
   }
 
@@ -722,6 +737,9 @@ function describeStrategyTrigger(
     return `DCA on interval (scheduler)`;
   }
   const price = fields?.priceGoal ?? (payload.upper_bound || payload.lower_bound);
+  if (kind === "Limit Order") {
+    return "Limit Order multi-price trigger";
+  }
   const pct =
     kind === "Stop Loss" || kind === "Take Profit"
       ? resolvePositionPct(fields ?? {})
