@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
-import { ReactFlow, ReactFlowProvider, Background, Node, Edge, Handle, Position, ReactFlowInstance } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+import React, { useState, useEffect, useMemo } from "react";
+import type { Node, Edge } from '@xyflow/react';
 import "./Discover.css";
+import StrategyPreviewFlow from "../Builder/StrategyPreviewFlow";
+import { getModalStepNodes } from "../../../lib/builderLayout";
+import { getRunStepFieldValue } from "../../../lib/runModeValues";
 import { createStrategy } from "../../../lib/strategy";
 import { generateZKData } from "../../../lib/zkHandler";
 import { walletManager } from "../../../lib/walletManager";
@@ -13,7 +15,7 @@ import { formatAmount as formatAmountUtil, calculateExchange as calculateExchang
 
 interface NodeData {
   label?: string;
-  type?: 'deposit' | 'swap' | 'withdraw' | 'strategy';
+  type?: 'deposit' | 'swap' | 'withdraw' | 'strategy' | 'repeatGroup' | 'control';
   coin?: string;
   toCoin?: string;
   amount?: string;
@@ -66,6 +68,7 @@ interface DetailsModalProps {
   savedScenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>;
   setSavedScenes: (scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }> | ((scenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>) => Array<{ name: string; nodes: Node[]; edges: Edge[] }>)) => void;
   setShowSuccessNotification: (show: boolean) => void;
+  fromBuilder?: boolean;
 }
 
 export default function DetailsModal({
@@ -92,10 +95,9 @@ export default function DetailsModal({
   setCurrentFileName,
   savedScenes,
   setSavedScenes,
-  setShowSuccessNotification
+  setShowSuccessNotification,
+  fromBuilder = false,
 }: DetailsModalProps) {
-  const flowRef = useRef<HTMLDivElement>(null);
-  const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [coinPrices, setCoinPrices] = useState<Record<string, number>>({});
@@ -103,6 +105,11 @@ export default function DetailsModal({
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'loading' } | null>(null);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
+
+  const stepNodes = useMemo(
+    () => getModalStepNodes(modalStrategyNodes, modalStrategyEdges),
+    [modalStrategyNodes, modalStrategyEdges]
+  );
 
   const getStepTags = (nodeData: NodeData, isRunModeView: boolean): StepTag[] => {
     const tags: StepTag[] = [];
@@ -116,8 +123,7 @@ export default function DetailsModal({
     if (nodeData?.type === 'strategy') {
       const strategyKind = nodeData.strategy || '';
       if (strategyKind === 'Limit Order') {
-        tags.push({ label: 'Type', field: 'type', options: isRunModeView ? ['Buy', 'Sell'] : undefined });
-        tags.push({ label: 'PriceGoal', field: 'priceGoal' });
+        tags.push({ label: 'Goal Price', field: 'priceGoal' });
       } else if (strategyKind === 'Range') {
         tags.push({ label: 'Range Low', field: 'rangeLow' });
         tags.push({ label: 'Range High', field: 'rangeHigh' });
@@ -130,28 +136,69 @@ export default function DetailsModal({
         tags.push({ label: 'Interval', field: 'intervals' });
       } else if (strategyKind === 'Stop Loss' || strategyKind === 'Take Profit') {
         tags.push({ label: 'PriceGoal', field: 'priceGoal' });
+        tags.push({ label: 'Position %', field: 'positionPct' });
       }
       return tags;
     }
 
     if (nodeData?.type === 'swap') {
-      tags.push({ label: 'Dex Type', field: 'dexType', options: isRunModeView ? ['Uniswap'] : undefined });
-      tags.push({ label: 'Token B', field: 'coinB', options: isRunModeView ? ['ETH', 'USDC'] : undefined });
+      tags.push({ label: 'Dex', field: 'dexType', options: isRunModeView ? ['Uniswap'] : undefined });
+      if (isRunModeView) {
+        tags.push({ label: 'From', field: 'coin', options: ['ETH', 'USDC'] });
+        tags.push({ label: 'Amount', field: 'amount' });
+      }
+      tags.push({ label: 'To', field: 'coinB', options: isRunModeView ? ['ETH', 'USDC'] : undefined });
       return tags;
     }
 
     if (nodeData?.type === 'withdraw') {
       tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Sepolia'] : undefined });
+      if (isRunModeView) {
+        tags.push({ label: 'Coin', field: 'coin', options: ['ETH', 'USDC'] });
+        tags.push({ label: 'Amount', field: 'amount' });
+      }
       tags.push({ label: 'Address', field: 'address' });
+      return tags;
+    }
+
+    if (nodeData?.type === 'repeatGroup') {
+      if (!isRunModeView) return tags;
+      tags.push({
+        label: 'Mode',
+        field: 'repeatMode',
+        options: ['until_funds', 'count'],
+      });
+      tags.push({ label: 'Count', field: 'repeatCount' });
+      tags.push({ label: 'Every', field: 'loopIntervalValue' });
+      tags.push({
+        label: 'Unit',
+        field: 'loopIntervalUnit',
+        options: ['blocks', 'seconds', 'minutes', 'hours'],
+      });
+      return tags;
+    }
+
+    if (nodeData?.type === 'control') {
+      const kind = String(nodeData.controlKind || '').toLowerCase();
+      if (kind === 'schedule' && isRunModeView) {
+        tags.push({ label: 'Trigger', field: 'scheduleTrigger', options: ['after', 'at'] });
+        tags.push({ label: 'Value', field: 'scheduleValue' });
+        tags.push({
+          label: 'Unit',
+          field: 'scheduleUnit',
+          options: ['seconds', 'minutes', 'hours'],
+        });
+        tags.push({ label: 'At', field: 'scheduleAt' });
+      }
       return tags;
     }
 
     return tags;
   };
 
-  // Fetch prices once when modal opens
+  // Fetch prices only when entering Run mode (not on plain details open)
   useEffect(() => {
-    if (isOpen && !pricesLoaded) {
+    if (isOpen && isRunMode && !pricesLoaded) {
       const fetchPrices = async () => {
         try {
           const prices = await fetchCoinPrices();
@@ -183,15 +230,15 @@ export default function DetailsModal({
       };
       fetchPrices();
     }
-  }, [isOpen, pricesLoaded]);
+  }, [isOpen, isRunMode, pricesLoaded]);
 
-  // Reset prices when modal closes
+  // Reset prices when modal closes or when exiting Run mode
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || !isRunMode) {
       setPricesLoaded(false);
       setCoinPrices({});
     }
-  }, [isOpen]);
+  }, [isOpen, isRunMode]);
 
   // Check wallet connection status
   useEffect(() => {
@@ -458,35 +505,28 @@ export default function DetailsModal({
   };
 
   const handleEdit = () => {
-    const discoverStrategiesKey = 'siphon-discover-strategies';
-    const stored = localStorage.getItem(discoverStrategiesKey);
-    if (stored) {
-      try {
-        const strategiesData = JSON.parse(stored);
-        const strategyData = strategiesData[selectedStrategy.name];
-        if (strategyData && strategyData.nodes && strategyData.edges) {
-          setNodes(strategyData.nodes as Node[]);
-          setEdges(strategyData.edges as Edge[]);
-          setCurrentFileName(`${selectedStrategy.name}.io`);
-          setViewMode('blueprint');
-          handleClose();
-          
-          const existingScene = savedScenes.find(s => s.name === selectedStrategy.name);
-          if (!existingScene) {
-            const newScene = {
-              name: selectedStrategy.name,
-              nodes: strategyData.nodes as Node[],
-              edges: strategyData.edges as Edge[]
-            };
-            const updatedScenes = [...savedScenes, newScene];
-            setSavedScenes(updatedScenes);
-            localStorage.setItem('siphon-blueprint-scenes', JSON.stringify(updatedScenes));
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load strategy for editing:', error);
+    if (modalStrategyNodes.length > 0 && modalStrategyEdges.length > 0) {
+      setNodes(modalStrategyNodes as Node[]);
+      setEdges(modalStrategyEdges as Edge[]);
+      setCurrentFileName(`${selectedStrategy.name}.io`);
+      setViewMode('blueprint');
+      handleClose();
+
+      const existingScene = savedScenes.find(s => s.name === selectedStrategy.name);
+      if (!existingScene) {
+        const newScene = {
+          name: selectedStrategy.name,
+          nodes: modalStrategyNodes as Node[],
+          edges: modalStrategyEdges as Edge[]
+        };
+        const updatedScenes = [...savedScenes, newScene];
+        setSavedScenes(updatedScenes);
+        localStorage.setItem('siphon-blueprint-scenes', JSON.stringify(updatedScenes));
       }
+      return;
     }
+
+    showToast('No graph loaded for this strategy yet.', 'error');
   };
 
   const handleSave = () => {
@@ -535,7 +575,10 @@ export default function DetailsModal({
             </div>
         </div>
       )}
-      <div className={`strategy-modal-overlay ${isExecuting ? 'darkened' : ''}`} onClick={handleClose}>
+      <div
+        className={`strategy-modal-overlay ${isExecuting ? 'darkened' : ''}`}
+        onClick={fromBuilder ? undefined : handleClose}
+      >
         <div className="strategy-modal" onClick={(e) => e.stopPropagation()}>
         <div className="strategy-modal-header">
           <div className="strategy-modal-header-name">
@@ -564,18 +607,20 @@ export default function DetailsModal({
                   const swapNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'swap');
                   
                   const depositStepId = depositNodes.length > 0 ? depositNodes[0].id : null;
-                  const depositStepValues = depositStepId ? runModeValues[depositStepId] || {} : {};
-                  const inputCoin = depositStepValues['tokenA'] || (depositNodes.length > 0 && (depositNodes[0].data as NodeData)?.coin 
-                    ? (depositNodes[0].data as NodeData).coin 
-                    : 'USDC');
-                  
+                  const depositData = depositNodes.length > 0 ? (depositNodes[0].data as NodeData) : undefined;
+                  const inputCoin =
+                    getRunStepFieldValue(runModeValues, depositStepId || '', 'tokenA', depositData || {}) ||
+                    'USDC';
+
                   const swapStepId = swapNodes.length > 0 ? swapNodes[0].id : null;
-                  const swapStepValues = swapStepId ? runModeValues[swapStepId] || {} : {};
-                  const outputCoin = swapStepValues['coinB'] || (swapNodes.length > 0 && (swapNodes[0].data as NodeData)?.toCoin
-                    ? (swapNodes[0].data as NodeData).toCoin
-                    : inputCoin);
-                  
-                  const inputAmount = parseFloat(depositStepValues['amount'] || '0') || 0;
+                  const swapData = swapNodes.length > 0 ? (swapNodes[0].data as NodeData) : undefined;
+                  const outputCoin =
+                    getRunStepFieldValue(runModeValues, swapStepId || '', 'coinB', swapData || {}) ||
+                    inputCoin;
+
+                  const inputAmount = parseFloat(
+                    getRunStepFieldValue(runModeValues, depositStepId || '', 'amount', depositData || {}) || '0'
+                  ) || 0;
                   
                   const outputAmountNum = calculateExchange(
                     inputAmount, 
@@ -616,11 +661,11 @@ export default function DetailsModal({
                 {/* Steps Section for Run Mode */}
                 <div className="strategy-modal-steps-section">
                   <div className="strategy-modal-steps-header">
-                    <span className="strategy-modal-steps-label">Steps ({selectedStrategy.nodes})</span>
+                    <span className="strategy-modal-steps-label">Steps ({stepNodes.length})</span>
                   </div>
-                  {modalStrategyNodes.length > 0 && (
+                  {stepNodes.length > 0 && (
                     <div className="strategy-steps-list">
-                      {modalStrategyNodes.map((node, index) => {
+                      {stepNodes.map((node, index) => {
                         const nodeData = node.data as NodeData;
                         
                         const tags = getStepTags(nodeData, true);
@@ -666,58 +711,12 @@ export default function DetailsModal({
                             <div className="strategy-step-content">
                               <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
                               <div className="strategy-step-details">
-                                {nodeData?.type === 'withdraw' ? (
-                                  <div className="strategy-step-withdraw-row">
-                                    <div className="strategy-step-input-wrapper">
-                                      <select
-                                        className="strategy-step-select"
-                                        value={stepValues['chain'] || ''}
-                                        onChange={(e) => {
-                                          setRunModeValues(prev => ({
-                                            ...prev,
-                                            [stepId]: {
-                                              ...prev[stepId],
-                                              chain: e.target.value
-                                            }
-                                          }));
-                                        }}
-                                      >
-                                        <option value="">Chain</option>
-                                        <option value="Sepolia">Sepolia</option>
-                                      </select>
-                                    </div>
-                                    <div className="strategy-step-input-wrapper">
-                                      <input
-                                        type="text"
-                                        className="strategy-step-input"
-                                        placeholder="Address"
-                                        value={stepValues['address'] || ''}
-                                        onChange={(e) => {
-                                          setRunModeValues(prev => ({
-                                            ...prev,
-                                            [stepId]: {
-                                              ...prev[stepId],
-                                              address: e.target.value
-                                            }
-                                          }));
-                                        }}
-                                      />
-                                    </div>
-                                    <button
-                                      className="strategy-step-my-wallet-btn"
-                                      onClick={handleMyWallet}
-                                      type="button"
-                                    >
-                                      My Wallet
-                                    </button>
-                                  </div>
-                                ) : (
-                                  tags.map((tag, idx) => (
+                                {tags.map((tag, idx) => (
                                     <div key={idx} className="strategy-step-input-wrapper">
                                       {tag.options ? (
                                         <select
                                           className="strategy-step-select"
-                                          value={stepValues[tag.field] || ''}
+                                          value={getRunStepFieldValue(runModeValues, stepId, tag.field, nodeData)}
                                           onChange={(e) => {
                                             setRunModeValues(prev => ({
                                               ...prev,
@@ -729,16 +728,23 @@ export default function DetailsModal({
                                           }}
                                         >
                                           <option value="">{tag.label}</option>
-                                          {tag.options.map(opt => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
+                                          {tag.field === 'repeatMode' ? (
+                                            <>
+                                              <option value="until_funds">Until funds end</option>
+                                              <option value="count">N times</option>
+                                            </>
+                                          ) : (
+                                            tag.options.map(opt => (
+                                              <option key={opt} value={opt}>{opt}</option>
+                                            ))
+                                          )}
                                         </select>
                                       ) : (
                                         <input
                                           type="text"
                                           className="strategy-step-input"
                                           placeholder={tag.label}
-                                          value={stepValues[tag.field] || ''}
+                                          value={getRunStepFieldValue(runModeValues, stepId, tag.field, nodeData)}
                                           onChange={(e) => {
                                             setRunModeValues(prev => ({
                                               ...prev,
@@ -751,7 +757,15 @@ export default function DetailsModal({
                                         />
                                       )}
                                     </div>
-                                  ))
+                                  ))}
+                                {nodeData?.type === 'withdraw' && (
+                                  <button
+                                    className="strategy-step-my-wallet-btn"
+                                    onClick={handleMyWallet}
+                                    type="button"
+                                  >
+                                    My Wallet
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -762,7 +776,20 @@ export default function DetailsModal({
                   )}
                 </div>
               </div>
-              
+
+              <div className="strategy-modal-aside">
+              <div className="strategy-modal-preview">
+                <h3 className="strategy-preview-title">Strategy Preview</h3>
+                <div className="strategy-preview-flow">
+                  <StrategyPreviewFlow
+                    nodes={modalStrategyNodes}
+                    edges={modalStrategyEdges}
+                    flowKey={flowKey}
+                    isLoading={isFlowLoading}
+                    minHeight={200}
+                  />
+                </div>
+              </div>
               {/* Run Configuration Panel */}
               <div className={`strategy-modal-run-config ${isFading ? 'fade-out' : 'fade-in'} ${isExecuting ? 'darkened' : ''}`}>
                 <h3 className="strategy-run-config-title">Run Configuration</h3>
@@ -822,6 +849,7 @@ export default function DetailsModal({
                     </span>
                   </div>
                 </div>
+              </div>
               </div>
             </React.Fragment>
           ) : (
@@ -916,11 +944,11 @@ export default function DetailsModal({
                 
                 <div className="strategy-modal-steps-section">
                   <div className="strategy-modal-steps-header">
-                    <span className="strategy-modal-steps-label">Steps ({selectedStrategy.nodes})</span>
+                    <span className="strategy-modal-steps-label">Steps ({stepNodes.length})</span>
                   </div>
-                  {modalStrategyNodes.length > 0 && (
+                  {stepNodes.length > 0 && (
                     <div className="strategy-steps-list">
-                      {modalStrategyNodes.map((node, index) => {
+                      {stepNodes.map((node, index) => {
                         const nodeData = node.data as NodeData;
                         
                         const tags = getStepTags(nodeData, false);
@@ -949,106 +977,12 @@ export default function DetailsModal({
               <div className="strategy-modal-preview">
                 <h3 className="strategy-preview-title">Strategy Preview</h3>
                 <div className="strategy-preview-flow">
-                  {isFlowLoading ? (
-                    <div className="strategy-preview-placeholder">
-                      <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="7" height="7" />
-                        <rect x="14" y="3" width="7" height="7" />
-                        <rect x="14" y="14" width="7" height="7" />
-                        <rect x="3" y="14" width="7" height="7" />
-                      </svg>
-                      <p>Loading strategy preview...</p>
-                    </div>
-                  ) : modalStrategyNodes.length > 0 ? (
-                    <div ref={flowRef} style={{ width: '100%', height: '100%', minHeight: '240px', position: 'relative' }}>
-                      <ReactFlowProvider key={flowKey}>
-                        <ReactFlow
-                          key={`flow-${flowKey}`}
-                          nodes={modalStrategyNodes}
-                          edges={modalStrategyEdges}
-                          onInit={(instance) => {
-                            reactFlowInstance.current = instance;
-                            setTimeout(() => {
-                              instance.fitView({ padding: 0.2, duration: 400 });
-                            }, 100);
-                          }}
-                          nodeTypes={{
-                            custom: ({ data }: { data: NodeData }) => {
-                              const nodeData = data as NodeData;
-                              const isStrategy = nodeData.type === 'strategy';
-                              return (
-                                <div 
-                                  className={`blueprint-custom-node ${isStrategy ? 'strategy-node' : ''}`} 
-                                  style={{ 
-                                    position: 'relative',
-                                    background: isStrategy ? 'rgba(255, 193, 7, 0.2)' : undefined,
-                                    border: isStrategy ? '1px solid rgba(255, 193, 7, 0.5)' : undefined
-                                  }}
-                                >
-                                  <Handle type="target" position={Position.Left} style={{ background: 'rgba(255, 255, 255, 0.3)' }} />
-                                  <div className="node-content">
-                                    <div className="node-title">{nodeData.label}</div>
-                                    {nodeData.type === 'deposit' && nodeData.coin && (
-                                      <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {nodeData.coin} {nodeData.amount ? `- ${nodeData.amount}` : ''}
-                                      </div>
-                                    )}
-                                    {nodeData.type === 'swap' && (
-                                      <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {nodeData.coin || 'From'} → {nodeData.toCoin || 'To'} {nodeData.amount ? `- ${nodeData.amount}` : ''}
-                                      </div>
-                                    )}
-                                    {nodeData.type === 'withdraw' && (
-                                      <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {nodeData.coin || 'Coin'} {nodeData.amount ? `- ${nodeData.amount}` : ''}
-                                      </div>
-                                    )}
-                                    {nodeData.type === 'strategy' && nodeData.strategy && (
-                                      <div className="node-preview-info" style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '0.5rem' }}>
-                                        {nodeData.strategy} {nodeData.coin ? `- ${nodeData.coin}` : ''} {nodeData.amount ? `- ${nodeData.amount}` : ''}
-                                      </div>
-                                    )}
-                                    {nodeData.chain && (
-                                      <div className="node-preview-info" style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '0.25rem' }}>
-                                        {nodeData.chain}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <Handle type="source" position={Position.Right} style={{ background: 'rgba(255, 255, 255, 0.3)' }} />
-                                </div>
-                              );
-                            }
-                          }}
-                          defaultEdgeOptions={{
-                            style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 },
-                            type: 'smoothstep'
-                          }}
-                          fitView
-                          minZoom={0.3}
-                          maxZoom={1.5}
-                          nodesDraggable={false}
-                          nodesConnectable={false}
-                          elementsSelectable={false}
-                          panOnDrag={true}
-                          zoomOnScroll={true}
-                          zoomOnPinch={true}
-                          proOptions={{ hideAttribution: true }}
-                        >
-                          <Background color="rgba(255, 255, 255, 0.02)" gap={16} size={1} />
-                        </ReactFlow>
-                      </ReactFlowProvider>
-                    </div>
-                  ) : (
-                    <div className="strategy-preview-placeholder">
-                      <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="7" height="7" />
-                        <rect x="14" y="3" width="7" height="7" />
-                        <rect x="14" y="14" width="7" height="7" />
-                        <rect x="3" y="14" width="7" height="7" />
-                      </svg>
-                      <p>Loading strategy preview...</p>
-                    </div>
-                  )}
+                  <StrategyPreviewFlow
+                    nodes={modalStrategyNodes}
+                    edges={modalStrategyEdges}
+                    flowKey={flowKey}
+                    isLoading={isFlowLoading}
+                  />
                 </div>
               </div>
             </React.Fragment>

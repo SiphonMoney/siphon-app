@@ -25,6 +25,16 @@
   text-overflow: ellipsis;
 }
 
+.build-node-context-menu-section {
+  padding: 0.35rem 0.65rem 0.15rem;
+  color: rgba(147, 197, 253, 0.75);
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .build-node-context-menu-item {
   width: 100%;
   border: none;

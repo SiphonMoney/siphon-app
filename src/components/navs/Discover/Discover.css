@@ -2052,6 +2052,24 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
+.strategy-modal-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.strategy-modal-aside .strategy-modal-preview {
+  flex: 1;
+  min-height: 200px;
+}
+
+.strategy-modal-aside .strategy-modal-run-config {
+  height: auto;
+  min-height: 220px;
+  flex-shrink: 0;
+}
+
 .strategy-modal-run-config {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;

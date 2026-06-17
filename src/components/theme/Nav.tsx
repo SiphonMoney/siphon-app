@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import ConnectButton from "../extensions/ConnectButton";
@@ -21,6 +21,18 @@ export default function Nav({ onWalletConnected }: NavProps) {
   const isPro = pathname === "/dapp" || pathname === "/dapp/pro";
   
   const [proViewMode, setProViewMode] = useState<'blueprint' | 'run' | 'discover'>('discover');
+
+  useEffect(() => {
+    const handleViewModeChange = (event: CustomEvent) => {
+      const mode = event.detail as 'blueprint' | 'run' | 'discover';
+      setProViewMode(mode);
+    };
+
+    window.addEventListener('pro-view-mode-change', handleViewModeChange as EventListener);
+    return () => {
+      window.removeEventListener('pro-view-mode-change', handleViewModeChange as EventListener);
+    };
+  }, []);
 
   const handleProViewModeChange = (mode: 'blueprint' | 'run' | 'discover') => {
     setProViewMode(mode);
@@ -109,7 +121,7 @@ export default function Nav({ onWalletConnected }: NavProps) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
-              Run
+              Runs
             </button>
           </div>
         </div>

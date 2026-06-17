@@ -1,19 +1,78 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Node, Edge } from '@xyflow/react';
 import "./BuildNav.css";
+
+type ActionCategory = 'wallet' | 'triggers' | 'control' | 'defi';
+type WalletAction = 'deposit' | 'withdraw';
+type MobilePicker = ActionCategory | 'wallet-deposit' | 'wallet-withdraw' | null;
+
+const CATEGORY_META: Record<ActionCategory, { label: string; icon: ReactNode }> = {
+  wallet: {
+    label: 'Wallet',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" />
+        <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
+      </svg>
+    ),
+  },
+  triggers: {
+    label: 'Triggers',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </svg>
+    ),
+  },
+  control: {
+    label: 'Control',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <line x1="4" y1="21" x2="4" y2="14" />
+        <line x1="4" y1="10" x2="4" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12" y2="3" />
+        <line x1="20" y1="21" x2="20" y2="16" />
+        <line x1="20" y1="12" x2="20" y2="3" />
+        <line x1="1" y1="14" x2="7" y2="14" />
+        <line x1="9" y1="8" x2="15" y2="8" />
+        <line x1="17" y1="16" x2="23" y2="16" />
+      </svg>
+    ),
+  },
+  defi: {
+    label: 'DeFi',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M7 16V4m0 0L3 8m4-4 4 4" />
+        <path d="M17 8v12m0 0 4-4m-4 4-4-4" />
+      </svg>
+    ),
+  },
+};
+
+interface SubmenuState {
+  category: ActionCategory;
+  x: number;
+  walletAction?: WalletAction;
+}
 
 interface BuildNavProps {
   nodes: Node[];
   currentFileName: string;
   savedScenes: Array<{ name: string; nodes: Node[]; edges: Edge[] }>;
-  onAddNode: (type: 'deposit' | 'withdraw' | 'swap' | 'strategy', chainOrDexOrStrategy?: string) => void;
+  onAddNode: (type: 'deposit' | 'withdraw' | 'swap' | 'strategy' | 'control', chainOrDexOrStrategy?: string) => void;
   onSaveScene: (sceneName: string) => void;
   onLoadScene: (sceneName: string) => void;
   onDeleteScene: (sceneName: string) => void;
   onRestart: () => void;
-  onExecuteStrategy: () => void;
+  onSimulate: () => void;
+  isSimulating?: boolean;
+  onOpenRun: () => void;
   setCurrentFileName: (name: string) => void;
 }
 
@@ -26,32 +85,33 @@ export default function BuildNav({
   onLoadScene,
   onDeleteScene,
   onRestart,
-  onExecuteStrategy,
+  onSimulate,
+  isSimulating = false,
+  onOpenRun,
   setCurrentFileName
 }: BuildNavProps) {
-  const [showSubmenu, setShowSubmenu] = useState<{ type: 'deposit' | 'withdraw' | 'swap' | 'strategy'; x: number; y: number } | null>(null);
+  const [showSubmenu, setShowSubmenu] = useState<SubmenuState | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [sceneName, setSceneName] = useState('');
   const [showSavedScenesDropdown, setShowSavedScenesDropdown] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showOpenModal, setShowOpenModal] = useState(false);
-  const [selectedAddType, setSelectedAddType] = useState<'deposit' | 'withdraw' | 'swap' | 'strategy' | null>(null);
+  const [mobilePicker, setMobilePicker] = useState<MobilePicker>(null);
   
   const submenuRef = useRef<HTMLDivElement>(null);
   
   const chains = ['Sepolia', 'Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
-  const dexes = ['Uniswap', 'Raydium', 'Jupiter', 'Orca', 'Serum', 'Meteora'];
-  const strategies = ['Limit Order', 'Stop Loss', 'Take Profit', 'Range', 'TWAP', 'DCA'];
-  
-  const activeStrategies = strategies;
+  const strategies = ['Limit Order', 'Stop Loss', 'Take Profit'];
+  const controls = ['Schedule', 'Loop'];
+  const defiActions = [
+    { label: 'Swap', active: true },
+    { label: 'Lend', active: false },
+    { label: 'Borrow', active: false },
+  ];
   
   const isChainActive = (chain: string) => chain === activeChain;
-  const isDexActive = (dex: string) => dex === activeDex;
   const activeChain = 'Sepolia';
-  const activeDex = 'Uniswap';
-  
-  const isStrategyActive = (strategy: string) => activeStrategies.includes(strategy);
   
   useEffect(() => {
     const handleOutsidePointerDown = (event: PointerEvent) => {
@@ -82,7 +142,7 @@ export default function BuildNav({
     }
   }, [showSavedScenesDropdown]);
   
-  const onActionClick = useCallback((type: 'deposit' | 'withdraw' | 'swap' | 'strategy', event: React.MouseEvent) => {
+  const onCategoryClick = useCallback((category: ActionCategory, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
@@ -90,12 +150,22 @@ export default function BuildNav({
     if (actionsButtons) {
       const buttonsRect = actionsButtons.getBoundingClientRect();
       setShowSubmenu({
-        type,
+        category,
         x: rect.left - buttonsRect.left,
-        y: 0
       });
     }
   }, []);
+
+  const submenuHeader = (submenu: SubmenuState) => {
+    if (submenu.category === 'wallet') {
+      if (submenu.walletAction === 'deposit') return 'Deposit from:';
+      if (submenu.walletAction === 'withdraw') return 'Withdraw to:';
+      return 'Wallet:';
+    }
+    if (submenu.category === 'triggers') return 'Triggers:';
+    if (submenu.category === 'control') return 'Control:';
+    return 'DeFi:';
+  };
   
   const handleSaveScene = useCallback(() => {
     if (!sceneName.trim()) {
@@ -123,7 +193,7 @@ export default function BuildNav({
   return (
     <>
       <div className="blueprint-top-bar">
-        <div className="blueprint-actions-left">
+        <div className="blueprint-toolbar-file">
           <div className="blueprint-file-group">
             <div className="blueprint-saved-scenes desktop-only">
               <button 
@@ -242,33 +312,23 @@ export default function BuildNav({
               <path d="M3 21v-5h5" />
             </svg>
           </button>
-          <span className="blueprint-actions-label desktop-only" style={{ marginLeft: '0.5rem' }}>Add:</span>
-          <div className="blueprint-actions-buttons desktop-only" style={{ position: 'relative' }}>
-            <button 
-              className="blueprint-action-btn"
-              onClick={(e) => onActionClick('deposit', e)}
-            >
-              Deposit
-            </button>
-            <button 
-              className="blueprint-action-btn"
-              onClick={(e) => onActionClick('strategy', e)}
-            >
-              Strategies
-            </button>
-            <button 
-              className="blueprint-action-btn"
-              onClick={(e) => onActionClick('swap', e)}
-            >
-              Swap
-            </button>
-            <button 
-              className="blueprint-action-btn"
-              onClick={(e) => onActionClick('withdraw', e)}
-            >
-              Withdraw
-            </button>
-            {showSubmenu && (
+
+          <div className="blueprint-toolbar-add desktop-only">
+            <span className="blueprint-actions-label">Add</span>
+            <div className="blueprint-actions-buttons">
+              {(Object.keys(CATEGORY_META) as ActionCategory[]).map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  className={`blueprint-action-btn blueprint-action-btn--${category}`}
+                  onClick={(e) => onCategoryClick(category, e)}
+                  title={`Add ${CATEGORY_META[category].label}`}
+                >
+                  <span className="blueprint-action-btn-icon">{CATEGORY_META[category].icon}</span>
+                  <span className="blueprint-action-btn-label">{CATEGORY_META[category].label}</span>
+                </button>
+              ))}
+              {showSubmenu && (
               <div 
                 ref={submenuRef}
                 className="blueprint-submenu-wrapper"
@@ -276,63 +336,125 @@ export default function BuildNav({
               >
                 <div 
                   className="blueprint-submenu"
-                  style={{
-                    left: `${showSubmenu.x}px`
-                  }}
+                  style={{ left: `${showSubmenu.x}px` }}
                 >
                   <div className="blueprint-submenu-header">
-                    {showSubmenu.type === 'deposit' 
-                      ? 'Deposit from:' 
-                      : showSubmenu.type === 'withdraw'
-                      ? 'Withdraw to:'
-                      : showSubmenu.type === 'swap'
-                      ? 'Swap on:'
-                      : 'Strategy:'}
+                    {showSubmenu.walletAction && (
+                      <button
+                        type="button"
+                        className="blueprint-submenu-back"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSubmenu({ ...showSubmenu, walletAction: undefined });
+                        }}
+                      >
+                        ← Back
+                      </button>
+                    )}
+                    {submenuHeader(showSubmenu)}
                   </div>
-                  {showSubmenu.type === 'strategy' ? (
-                    strategies.map((strategy) => {
-                      const isActive = isStrategyActive(strategy);
+                  {showSubmenu.category === 'wallet' && !showSubmenu.walletAction && (
+                    <>
+                      <button
+                        className="blueprint-submenu-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSubmenu({ ...showSubmenu, walletAction: 'deposit' });
+                        }}
+                      >
+                        Deposit
+                      </button>
+                      <button
+                        className="blueprint-submenu-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSubmenu({ ...showSubmenu, walletAction: 'withdraw' });
+                        }}
+                      >
+                        Withdraw
+                      </button>
+                    </>
+                  )}
+                  {showSubmenu.category === 'wallet' && showSubmenu.walletAction && (
+                    chains.map((chain) => {
+                      const isActive = isChainActive(chain);
                       return (
                         <button
-                          key={strategy}
+                          key={chain}
                           className={`blueprint-submenu-item ${!isActive ? 'inactive' : ''}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (isActive) {
-                              onAddNode(showSubmenu.type, strategy);
+                              onAddNode(showSubmenu.walletAction!, chain);
                               setShowSubmenu(null);
                             }
                           }}
                           disabled={!isActive}
                         >
-                          {strategy}
+                          {chain}
                         </button>
                       );
                     })
-                  ) : (showSubmenu.type === 'swap' ? dexes : chains).map((item) => {
-                    const isActive = showSubmenu.type === 'swap' ? isDexActive(item) : isChainActive(item);
-                    return (
+                  )}
+                  {showSubmenu.category === 'triggers' && (
+                    strategies.map((strategy) => (
                       <button
-                        key={item}
-                        className={`blueprint-submenu-item ${!isActive ? 'inactive' : ''}`}
+                        key={strategy}
+                        className="blueprint-submenu-item"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isActive) {
-                            onAddNode(showSubmenu.type, item);
+                          onAddNode('strategy', strategy);
+                          setShowSubmenu(null);
+                        }}
+                      >
+                        {strategy}
+                      </button>
+                    ))
+                  )}
+                  {showSubmenu.category === 'control' && (
+                    controls.map((control) => (
+                      <button
+                        key={control}
+                        className="blueprint-submenu-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddNode('control', control);
+                          setShowSubmenu(null);
+                        }}
+                      >
+                        {control}
+                      </button>
+                    ))
+                  )}
+                  {showSubmenu.category === 'defi' && (
+                    defiActions.map((action) => (
+                      <button
+                        key={action.label}
+                        className={`blueprint-submenu-item ${!action.active ? 'inactive' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (action.active) {
+                            onAddNode('swap');
                             setShowSubmenu(null);
                           }
                         }}
-                        disabled={!isActive}
+                        disabled={!action.active}
                       >
-                        {item}
+                        {action.label}
                       </button>
-                    );
-                  })}
+                    ))
+                  )}
                 </div>
               </div>
             )}
           </div>
-          {/* Mobile: Plus button - opens fullscreen modal (last on mobile) */}
+        </div>
+        </div>
+
+        <div className="blueprint-toolbar-spacer desktop-only" aria-hidden="true" />
+
+        <div className="blueprint-toolbar-end">
+          {/* Mobile: Plus button - opens fullscreen modal */}
           <button 
             className="blueprint-icon-btn mobile-only"
             onClick={(e) => {
@@ -346,20 +468,37 @@ export default function BuildNav({
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
-        </div>
-        <div className="blueprint-actions-right">
+          <button 
+            className="blueprint-run-btn desktop-only"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (nodes.length > 0) {
+                onOpenRun();
+              }
+            }}
+            disabled={nodes.length === 0}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            <span>Run</span>
+          </button>
           <button 
             className="blueprint-execute-btn desktop-only"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               if (nodes.length > 0) {
-                onExecuteStrategy();
+                onSimulate();
               }
             }}
-            disabled={nodes.length === 0}
+            disabled={nodes.length === 0 || isSimulating}
           >
-            Test Strategy
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            <span>{isSimulating ? "Simulating…" : "Simulate"}</span>
           </button>
         </div>
       </div>
@@ -432,96 +571,46 @@ export default function BuildNav({
         <div className="blueprint-mobile-modal-overlay" onClick={(e) => {
           e.stopPropagation();
           setShowAddModal(false);
-          setSelectedAddType(null);
+          setMobilePicker(null);
         }}>
           <div className="blueprint-mobile-modal" onClick={(e) => e.stopPropagation()}>
             <div className="blueprint-mobile-modal-header">
-              <h3>{selectedAddType ? (
-                selectedAddType === 'deposit' ? 'Deposit from:' :
-                selectedAddType === 'withdraw' ? 'Withdraw to:' :
-                selectedAddType === 'swap' ? 'Swap on:' :
-                'Strategy:'
-              ) : 'Add Node'}</h3>
+              <h3>{!mobilePicker ? 'Add Node' :
+                mobilePicker === 'wallet' ? 'Wallet:' :
+                mobilePicker === 'wallet-deposit' ? 'Deposit from:' :
+                mobilePicker === 'wallet-withdraw' ? 'Withdraw to:' :
+                mobilePicker === 'triggers' ? 'Triggers:' :
+                mobilePicker === 'control' ? 'Control:' : 'DeFi:'}</h3>
               <button 
                 className="blueprint-mobile-modal-close"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowAddModal(false);
-                  setSelectedAddType(null);
+                  setMobilePicker(null);
                 }}
               >
                 ×
               </button>
             </div>
             <div className="blueprint-mobile-modal-content">
-              {!selectedAddType ? (
+              {!mobilePicker ? (
                 <>
-                  <button 
-                    className="blueprint-mobile-modal-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedAddType('deposit');
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    <span>Deposit</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                  <button 
-                    className="blueprint-mobile-modal-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedAddType('strategy');
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                    <span>Strategies</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                  <button 
-                    className="blueprint-mobile-modal-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedAddType('swap');
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4" />
-                    </svg>
-                    <span>Swap</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                  <button 
-                    className="blueprint-mobile-modal-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedAddType('withdraw');
-                    }}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                    <span>Withdraw</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
+                  {(['wallet', 'triggers', 'control', 'defi'] as ActionCategory[]).map((cat) => (
+                    <button
+                      key={cat}
+                      className={`blueprint-mobile-modal-btn blueprint-mobile-modal-btn--${cat}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMobilePicker(cat);
+                      }}
+                    >
+                      <span className="blueprint-mobile-modal-btn-icon">{CATEGORY_META[cat].icon}</span>
+                      <span>{CATEGORY_META[cat].label}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}>
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                  ))}
                 </>
               ) : (
                 <>
@@ -529,7 +618,11 @@ export default function BuildNav({
                     className="blueprint-mobile-modal-back-btn"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedAddType(null);
+                      if (mobilePicker === 'wallet-deposit' || mobilePicker === 'wallet-withdraw') {
+                        setMobilePicker('wallet');
+                      } else {
+                        setMobilePicker(null);
+                      }
                     }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -537,51 +630,20 @@ export default function BuildNav({
                     </svg>
                     <span>Back</span>
                   </button>
-                  {selectedAddType === 'strategy' ? (
-                    strategies.map((strategy) => {
-                      const isActive = isStrategyActive(strategy);
-                      return (
-                        <button
-                          key={strategy}
-                          className={`blueprint-mobile-modal-btn ${!isActive ? 'inactive' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isActive) {
-                              onAddNode(selectedAddType, strategy);
-                              setShowAddModal(false);
-                              setSelectedAddType(null);
-                            }
-                          }}
-                          disabled={!isActive}
-                        >
-                          <span>{strategy}</span>
-                        </button>
-                      );
-                    })
-                  ) : selectedAddType === 'swap' ? (
-                    dexes.map((dex) => {
-                      const isActive = isDexActive(dex);
-                      return (
-                        <button
-                          key={dex}
-                          className={`blueprint-mobile-modal-btn ${!isActive ? 'inactive' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isActive) {
-                              onAddNode(selectedAddType, dex);
-                              setShowAddModal(false);
-                              setSelectedAddType(null);
-                            }
-                          }}
-                          disabled={!isActive}
-                        >
-                          <span>{dex}</span>
-                        </button>
-                      );
-                    })
-                  ) : (
+                  {mobilePicker === 'wallet' && (
+                    <>
+                      <button className="blueprint-mobile-modal-btn" onClick={(e) => { e.stopPropagation(); setMobilePicker('wallet-deposit'); }}>
+                        <span>Deposit</span>
+                      </button>
+                      <button className="blueprint-mobile-modal-btn" onClick={(e) => { e.stopPropagation(); setMobilePicker('wallet-withdraw'); }}>
+                        <span>Withdraw</span>
+                      </button>
+                    </>
+                  )}
+                  {(mobilePicker === 'wallet-deposit' || mobilePicker === 'wallet-withdraw') && (
                     chains.map((chain) => {
                       const isActive = isChainActive(chain);
+                      const walletType = mobilePicker === 'wallet-deposit' ? 'deposit' : 'withdraw';
                       return (
                         <button
                           key={chain}
@@ -589,9 +651,9 @@ export default function BuildNav({
                           onClick={(e) => {
                             e.stopPropagation();
                             if (isActive) {
-                              onAddNode(selectedAddType, chain);
+                              onAddNode(walletType, chain);
                               setShowAddModal(false);
-                              setSelectedAddType(null);
+                              setMobilePicker(null);
                             }
                           }}
                           disabled={!isActive}
@@ -601,6 +663,51 @@ export default function BuildNav({
                       );
                     })
                   )}
+                  {mobilePicker === 'triggers' && strategies.map((strategy) => (
+                    <button
+                      key={strategy}
+                      className="blueprint-mobile-modal-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddNode('strategy', strategy);
+                        setShowAddModal(false);
+                        setMobilePicker(null);
+                      }}
+                    >
+                      <span>{strategy}</span>
+                    </button>
+                  ))}
+                  {mobilePicker === 'control' && controls.map((control) => (
+                    <button
+                      key={control}
+                      className="blueprint-mobile-modal-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddNode('control', control);
+                        setShowAddModal(false);
+                        setMobilePicker(null);
+                      }}
+                    >
+                      <span>{control}</span>
+                    </button>
+                  ))}
+                  {mobilePicker === 'defi' && defiActions.map((action) => (
+                    <button
+                      key={action.label}
+                      className={`blueprint-mobile-modal-btn ${!action.active ? 'inactive' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (action.active) {
+                          onAddNode('swap');
+                          setShowAddModal(false);
+                          setMobilePicker(null);
+                        }
+                      }}
+                      disabled={!action.active}
+                    >
+                      <span>{action.label}</span>
+                    </button>
+                  ))}
                 </>
               )}
             </div>

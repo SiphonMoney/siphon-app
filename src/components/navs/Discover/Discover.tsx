@@ -10,8 +10,11 @@ import {
   StrategyData,
   strategyList,
   featuredStrategies,
+  createLimitOrderStrategy,
+  createOtherStrategies,
   initializeLimitOrderStrategy,
-  initializeDiscoverStrategies
+  initializeDiscoverStrategies,
+  formatStrategyGraphForModal,
 } from "./strategies";
 
 interface DiscoverProps {
@@ -59,6 +62,48 @@ export default function Discover({
   const [runDuration, setRunDuration] = useState<string>('1h');
   const [isFading, setIsFading] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
+
+  const getTemplateStrategyData = (strategyName: string): StrategyData | null => {
+    if (strategyName === 'Limit Order') {
+      const { nodes, edges } = createLimitOrderStrategy();
+      return { nodes, edges };
+    }
+    const other = createOtherStrategies();
+    return other[strategyName] ?? null;
+  };
+
+  const loadStrategyDataByName = (strategyName: string): { nodes: Node[]; edges: Edge[] } => {
+    // For built-in library templates, prefer code-defined graphs to guarantee consistency.
+    const templateFirst = getTemplateStrategyData(strategyName);
+    if (templateFirst?.nodes?.length && templateFirst?.edges?.length) {
+      return formatStrategyGraphForModal(templateFirst.nodes as Node[], templateFirst.edges as Edge[]);
+    }
+
+    const discoverStrategiesKey = 'siphon-discover-strategies';
+    const stored = localStorage.getItem(discoverStrategiesKey);
+    if (stored) {
+      try {
+        const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
+        const strategyData = strategiesData[strategyName];
+        if (strategyData?.nodes?.length && strategyData?.edges?.length) {
+          const formattedNodes = strategyData.nodes.map((node: Node) => ({
+            ...node,
+            type: node.type || 'custom',
+            position: node.position || { x: 0, y: 0 }
+          }));
+          const formattedEdges = strategyData.edges.map((edge: Edge) => ({
+            ...edge,
+            type: edge.type || 'smoothstep'
+          }));
+          return formatStrategyGraphForModal(formattedNodes, formattedEdges);
+        }
+      } catch (error) {
+        console.error('Failed to load strategy data from localStorage:', error);
+      }
+    }
+
+    return { nodes: [], edges: [] };
+  };
   
   // Initialize Limit Order strategy in localStorage
   useEffect(() => {
@@ -69,41 +114,10 @@ export default function Discover({
   useEffect(() => {
     if (showStrategyModal && selectedStrategy) {
       setIsFlowLoading(true);
-      const discoverStrategiesKey = 'siphon-discover-strategies';
-      const stored = localStorage.getItem(discoverStrategiesKey);
-      if (stored) {
-        try {
-          const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
-          const strategyData = strategiesData[selectedStrategy.name];
-          if (strategyData && strategyData.nodes && strategyData.edges) {
-            // Ensure nodes have proper structure
-            const formattedNodes = strategyData.nodes.map((node: Node) => ({
-              ...node,
-              type: node.type || 'custom',
-              position: node.position || { x: 0, y: 0 }
-            }));
-            const formattedEdges = strategyData.edges.map((edge: Edge) => ({
-              ...edge,
-              type: edge.type || 'smoothstep'
-            }));
-            setModalStrategyNodes(formattedNodes);
-            setModalStrategyEdges(formattedEdges);
-            setFlowKey(prev => prev + 1); // Force React Flow to re-render
-            console.log('Loaded strategy nodes:', formattedNodes.length, 'edges:', formattedEdges.length);
-          } else {
-            // If no data found, clear the nodes
-            setModalStrategyNodes([]);
-            setModalStrategyEdges([]);
-          }
-        } catch (error) {
-          console.error('Failed to load strategy data:', error);
-          setModalStrategyNodes([]);
-          setModalStrategyEdges([]);
-        }
-      } else {
-        setModalStrategyNodes([]);
-        setModalStrategyEdges([]);
-      }
+      const strategyGraph = loadStrategyDataByName(selectedStrategy.name);
+      setModalStrategyNodes(strategyGraph.nodes);
+      setModalStrategyEdges(strategyGraph.edges);
+      setFlowKey(prev => prev + 1); // Force React Flow to re-render
       // Small delay to ensure React Flow initializes properly
       setTimeout(() => {
         setIsFlowLoading(false);
@@ -586,6 +600,7 @@ export default function Discover({
       <div className={`discover-grid ${discoverViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
         {/* Strategy cards from strategies.tsx */}
         {strategyList
+        .filter(strategy => strategy.isActive !== false)
         .filter(strategy => {
           if (selectedCategory === 'all') return true;
           if (typeof selectedCategory === 'object' && selectedCategory instanceof Set) {
@@ -699,40 +714,10 @@ export default function Discover({
                     onClick={(e) => {
                     e.stopPropagation();
                     if (!strategy.isActive) return;
-                    // Load strategy node data immediately before opening modal
-                    const discoverStrategiesKey = 'siphon-discover-strategies';
-                    const stored = localStorage.getItem(discoverStrategiesKey);
-                    if (stored) {
-                      try {
-                        const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
-                        const strategyData = strategiesData[strategy.name];
-                        if (strategyData && strategyData.nodes && strategyData.edges) {
-                          // Ensure nodes have proper structure
-                          const formattedNodes = strategyData.nodes.map((node: Node) => ({
-                            ...node,
-                            type: node.type || 'custom',
-                            position: node.position || { x: 0, y: 0 }
-                          }));
-                          const formattedEdges = strategyData.edges.map((edge: Edge) => ({
-                            ...edge,
-                            type: edge.type || 'smoothstep'
-                          }));
-                          setModalStrategyNodes(formattedNodes);
-                          setModalStrategyEdges(formattedEdges);
-                          setFlowKey(prev => prev + 1);
-                        } else {
-                          setModalStrategyNodes([]);
-                          setModalStrategyEdges([]);
-                        }
-                      } catch (error) {
-                        console.error('Failed to load strategy data:', error);
-                        setModalStrategyNodes([]);
-                        setModalStrategyEdges([]);
-                      }
-                    } else {
-                      setModalStrategyNodes([]);
-                      setModalStrategyEdges([]);
-                    }
+                    const strategyGraph = loadStrategyDataByName(strategy.name);
+                    setModalStrategyNodes(strategyGraph.nodes);
+                    setModalStrategyEdges(strategyGraph.edges);
+                    setFlowKey(prev => prev + 1);
                     setSelectedStrategy(strategy);
                     setIsFlowLoading(false);
                     setShowStrategyModal(true);
@@ -791,7 +776,7 @@ export default function Discover({
             <div className="strategy-success-notification-text">
               <p className="strategy-success-notification-title">Strategy Started Successfully</p>
               <p className="strategy-success-notification-message">
-                Your strategy &quot;{selectedStrategy.name}&quot; is now running. You can find it in the <strong>Run</strong> tab under <strong>Running</strong>.
+                Your strategy &quot;{selectedStrategy.name}&quot; is now running. You can find it in the <strong>Runs</strong> tab under <strong>Running</strong>.
               </p>
             </div>
           </div>

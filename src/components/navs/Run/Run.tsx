@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Node, Edge } from '@xyflow/react';
 import StratDetails from "@/components/navs/Run/StratDetails";
 import "./Run.css";
@@ -37,23 +37,6 @@ export default function Run({
   const [strategyViewMode] = useState<'cards' | 'list'>('cards');
   const [selectedStrategy, setSelectedStrategy] = useState<{ name: string; nodes: Node[]; edges: Edge[] } | null>(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
-  const [publishedStrategies, setPublishedStrategies] = useState<Set<string>>(new Set());
-
-  // Load published strategies from localStorage
-  useEffect(() => {
-    const discoverStrategiesKey = 'siphon-discover-strategies';
-    const stored = localStorage.getItem(discoverStrategiesKey);
-    if (stored) {
-      try {
-        const strategiesData = JSON.parse(stored);
-        const published = new Set(Object.keys(strategiesData));
-        setPublishedStrategies(published);
-      } catch (error) {
-        console.error('Failed to load published strategies:', error);
-      }
-    }
-  }, []);
-
   const onEditStrategy = useCallback((sceneName: string) => {
     const scene = savedScenes.find(s => s.name === sceneName);
     if (scene) {
@@ -78,17 +61,6 @@ export default function Run({
   const stopStrategy = useCallback((sceneName: string) => {
     const newRunning = new Map(runningStrategies);
     newRunning.delete(sceneName);
-    setRunningStrategies(newRunning);
-  }, [runningStrategies, setRunningStrategies]);
-
-  const toggleLoop = useCallback((sceneName: string) => {
-    const newRunning = new Map(runningStrategies);
-    const existing = newRunning.get(sceneName);
-    if (existing) {
-      newRunning.set(sceneName, { ...existing, loop: !existing.loop });
-    } else {
-      newRunning.set(sceneName, { startTime: Date.now(), isRunning: false, loop: true });
-    }
     setRunningStrategies(newRunning);
   }, [runningStrategies, setRunningStrategies]);
 
@@ -155,54 +127,12 @@ export default function Run({
     }
   }, [setSavedScenes, runningStrategies, stopStrategy]);
 
-  const togglePublishStrategy = useCallback((sceneName: string) => {
-    const scene = savedScenes.find(s => s.name === sceneName);
-    if (!scene) return;
-
-    const discoverStrategiesKey = 'siphon-discover-strategies';
-    const stored = localStorage.getItem(discoverStrategiesKey);
-    let discoverStrategies: Record<string, { nodes: Node[]; edges: Edge[]; author?: string; usage?: number; profit?: string; category?: string; chains?: string[]; networks?: string[] }> = {};
-    
-    if (stored) {
-      try {
-        discoverStrategies = JSON.parse(stored);
-      } catch (error) {
-        console.error('Failed to load discover strategies:', error);
-      }
-    }
-
-    const isCurrentlyPublished = publishedStrategies.has(sceneName);
-    const newPublished = new Set(publishedStrategies);
-
-    if (isCurrentlyPublished) {
-      // Unpublish - remove from discover strategies
-      delete discoverStrategies[sceneName];
-      newPublished.delete(sceneName);
-    } else {
-      // Publish - add to discover strategies
-      discoverStrategies[sceneName] = {
-        nodes: scene.nodes,
-        edges: scene.edges,
-        author: 'You',
-        usage: 0,
-        profit: '+0.00%',
-        category: 'Custom',
-        chains: [],
-        networks: []
-      };
-      newPublished.add(sceneName);
-    }
-    
-    localStorage.setItem(discoverStrategiesKey, JSON.stringify(discoverStrategies));
-    setPublishedStrategies(newPublished);
-  }, [savedScenes, publishedStrategies]);
-
   return (
     <div className={`run-mode-view ${isLoaded ? 'loaded' : ''}`}>
       <div className="run-mode-header">
         <div className="run-mode-header-content">
           <div>
-            <h2 className="run-mode-title">Strategies</h2>
+            <h2 className="run-mode-title">Runs</h2>
             <p className="run-mode-subtitle">Run and monitor your saved trading strategies</p>
           </div>
           <div className="run-mode-header-right">
@@ -236,8 +166,6 @@ export default function Run({
               const runningData = runningStrategies.get(scene.name);
               const cost = calculateStrategyCost(scene);
               const nodeCount = scene.nodes.length;
-              const isLooping = runningData?.loop || false;
-              
               // Generate brief description based on nodes
               const getStrategyDescription = () => {
                 const nodeTypes = scene.nodes.map(n => n.data.type);
@@ -288,35 +216,11 @@ export default function Run({
                           <span className="strategy-meta-label">Estimated Output</span>
                           <span className="strategy-meta-value">{calculateEstimatedOutput(scene)}</span>
                         </div>
-                        {isLooping && (
-                          <div className="strategy-meta-row">
-                            <span className="strategy-meta-label">Loop</span>
-                            <span className="strategy-meta-item loop-indicator">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="23 4 23 10 17 10" />
-                                <polyline points="1 20 1 14 7 14" />
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                              </svg>
-                              Enabled
-                            </span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
                   <div className="strategy-card-actions">
                     <div className="strategy-card-actions-group">
-                      <button
-                        className={`strategy-publish-btn ${publishedStrategies.has(scene.name) ? 'active' : ''}`}
-                        onClick={() => togglePublishStrategy(scene.name)}
-                        title={publishedStrategies.has(scene.name) ? 'Make private' : 'Make public'}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill={publishedStrategies.has(scene.name) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                          <line x1="4" y1="22" x2="4" y2="15" />
-                        </svg>
-                        <span>{publishedStrategies.has(scene.name) ? 'Public' : 'Public'}</span>
-                      </button>
                       {isRunning ? (
                         <button
                           className="strategy-stop-btn"
@@ -338,17 +242,6 @@ export default function Run({
                           </svg>
                         </button>
                       )}
-                      <button
-                        className={`strategy-loop-toggle ${isLooping ? 'active' : ''}`}
-                        onClick={() => toggleLoop(scene.name)}
-                        title={isLooping ? 'Disable loop' : 'Enable loop'}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="23 4 23 10 17 10" />
-                          <polyline points="1 20 1 14 7 14" />
-                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                        </svg>
-                      </button>
                       <button
                         className="strategy-edit-btn"
                         onClick={() => onEditStrategy(scene.name)}

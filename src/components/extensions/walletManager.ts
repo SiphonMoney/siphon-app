@@ -30,7 +30,13 @@ class WalletManager {
         chainId?: string;
       };
 
-      // Switch to Sepolia network (chain ID: 11155111)
+      // Request account access first (more reliable user-gesture flow)
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' }) as string[];
+      if (accounts.length === 0) {
+        return { success: false, error: 'No accounts found' };
+      }
+
+      // Then switch to Sepolia network (chain ID: 11155111)
       try {
         await ethereum.request({
           method: 'wallet_switchEthereumChain',
@@ -62,11 +68,6 @@ class WalletManager {
           const errorMessage = switchError instanceof Error ? switchError.message : 'Failed to switch network';
           return { success: false, error: errorMessage };
         }
-      }
-
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' }) as string[];
-      if (accounts.length === 0) {
-        return { success: false, error: 'No accounts found' };
       }
 
       const address = accounts[0];

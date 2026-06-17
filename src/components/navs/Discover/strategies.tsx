@@ -5,6 +5,10 @@
  */
 
 import { Node, Edge, Position } from '@xyflow/react';
+import { layoutStrategyNodes } from '../../../lib/builderLayout';
+import { formatGraphForPreview } from '../../../lib/repeatGraph';
+import { applySwapToWithdrawLink } from '../../../lib/graphLinks';
+import { REPEAT_GROUP_DEFAULT_SIZE, syncRepeatGroups } from '../../../lib/repeatGraph';
 
 export interface StrategyMetadata {
   name: string;
@@ -67,7 +71,7 @@ export const strategyList: StrategyMetadata[] = [
     nodes: 4, 
     usage: 18, 
     profit: '+2.1%', 
-    description: 'Conservative DCA template for testing scheduled recurring buys with small sizes and explicit withdrawal routing.', 
+    description: 'Simple DCA: deposit once, then loop swap + withdraw on a cadence until funds end.', 
     category: 'trading', 
     chains: ['ethereum', 'base'], 
     networks: ['Ethereum', 'Base'],
@@ -77,7 +81,7 @@ export const strategyList: StrategyMetadata[] = [
   { 
     name: 'Grid Trading', 
     author: 'Siphon Team', 
-    nodes: 4, 
+    nodes: 5, 
     usage: 14, 
     profit: '+3.4%', 
     description: 'Range-based grid strategy template with bounded low/high levels and moderate grid count for safer test execution.', 
@@ -85,7 +89,7 @@ export const strategyList: StrategyMetadata[] = [
     chains: ['ethereum', 'base'], 
     networks: ['Ethereum', 'Base'],
     activeNetworks: ['Sepolia'],
-    isActive: true
+    isActive: false
   },
 ];
 
@@ -128,375 +132,244 @@ export const featuredStrategies: FeaturedStrategy[] = [
   }
 ];
 
+type BlockType = 'deposit' | 'strategy' | 'swap' | 'withdraw' | 'control' | 'repeatGroup';
+
+interface StrategyNodeTemplate {
+  id: string;
+  x: number;
+  y: number;
+  parentId?: string;
+  nodeType?: 'custom' | 'repeatGroup';
+  data: {
+    label: string;
+    type: BlockType;
+    chain?: string;
+    coin?: string;
+    amount?: string;
+    strategy?: string;
+    side?: string;
+    priceGoal?: string;
+    rangeLow?: string;
+    rangeHigh?: string;
+    gridLevels?: string;
+    sliceCount?: string;
+    intervalSeconds?: string;
+    maxSlippageBps?: string;
+    positionPct?: string;
+    controlKind?: string;
+    repeatMode?: string;
+    repeatCount?: string;
+    loopIntervalValue?: string;
+    loopIntervalUnit?: string;
+    loopIntervalSec?: string;
+    scheduleTrigger?: string;
+    scheduleValue?: string;
+    scheduleUnit?: string;
+    scheduleDelaySec?: string;
+    amountSource?: string;
+    linkedFromNodeId?: string;
+    dex?: string;
+    toCoin?: string;
+    wallet?: string;
+  };
+}
+
+interface StrategyEdgeTemplate {
+  source: string;
+  target: string;
+}
+
+interface StrategyTemplateSpec {
+  nodes: StrategyNodeTemplate[];
+  edges: StrategyEdgeTemplate[];
+}
+
+const BASE_NODE_STYLE = {
+  color: 'white',
+  borderRadius: '8px',
+  padding: '0.75rem',
+  minWidth: '200px',
+  textAlign: 'center' as const,
+  fontFamily: 'var(--font-source-code), monospace',
+  fontSize: '12px',
+  fontWeight: '600',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.5px'
+};
+
+const DEFAULT_NODE_STYLE = {
+  ...BASE_NODE_STYLE,
+  background: 'rgba(255, 255, 255, 0.12)',
+  border: '1px solid rgba(255, 255, 255, 0.3)'
+};
+
+const STRATEGY_NODE_STYLE = {
+  ...BASE_NODE_STYLE,
+  background: 'rgba(255, 193, 7, 0.2)',
+  border: '1px solid rgba(255, 193, 7, 0.5)'
+};
+
+const CONTROL_NODE_STYLE = {
+  ...BASE_NODE_STYLE,
+  background: 'rgba(59, 130, 246, 0.2)',
+  border: '1px solid rgba(59, 130, 246, 0.5)'
+};
+
+const EDGE_STYLE = { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 };
+
+// Declarative library: graph specs only, composed into existing Build nodes.
+const STRATEGY_LIBRARY_SPECS: Record<string, StrategyTemplateSpec> = {
+  'Limit Order': {
+    nodes: [
+      { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'USDC', amount: '1000' } },
+      { id: 'strategy', x: 400, y: 200, data: { label: 'Limit Order', type: 'strategy', strategy: 'Limit Order', priceGoal: '1.05' } },
+      { id: 'swap', x: 700, y: 200, data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'USDC', toCoin: 'ETH', amount: '1000' } },
+      { id: 'withdraw', x: 1000, y: 200, data: { label: 'Withdraw', type: 'withdraw', chain: 'Sepolia', coin: 'ETH', amount: '', amountSource: 'output', linkedFromNodeId: 'swap', wallet: '0x...' } },
+    ],
+    edges: [
+      { source: 'deposit', target: 'strategy' },
+      { source: 'strategy', target: 'swap' },
+      { source: 'swap', target: 'withdraw' },
+    ],
+  },
+  'DCA Accumulator': {
+    nodes: [
+      { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'USDC', amount: '300' } },
+      {
+        id: 'repeat',
+        x: 320,
+        y: 170,
+        nodeType: 'repeatGroup',
+        data: {
+          label: 'Loop',
+          type: 'repeatGroup',
+          repeatMode: 'until_funds',
+          repeatCount: '',
+          loopIntervalValue: '24',
+          loopIntervalUnit: 'hours',
+          loopIntervalSec: '86400',
+        },
+      },
+      {
+        id: 'swap',
+        parentId: 'repeat',
+        x: 20,
+        y: 52,
+        data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'USDC', toCoin: 'ETH', amount: '300' },
+      },
+      {
+        id: 'withdraw',
+        parentId: 'repeat',
+        x: 230,
+        y: 52,
+        data: { label: 'Withdraw', type: 'withdraw', chain: 'Sepolia', coin: 'ETH', amount: '', amountSource: 'output', linkedFromNodeId: 'swap', wallet: '0x...' },
+      },
+    ],
+    edges: [
+      { source: 'deposit', target: 'repeat' },
+      { source: 'swap', target: 'withdraw' },
+    ],
+  },
+  'Grid Trading': {
+    nodes: [
+      { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'USDC', amount: '1200' } },
+      { id: 'entry', x: 340, y: 200, data: { label: 'Limit Order', type: 'strategy', strategy: 'Limit Order', priceGoal: '2800' } },
+      { id: 'exit', x: 560, y: 200, data: { label: 'Take Profit', type: 'strategy', strategy: 'Take Profit', priceGoal: '3050', positionPct: '50' } },
+      { id: 'swap', x: 780, y: 200, data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'USDC', toCoin: 'ETH', amount: '1200' } },
+      { id: 'withdraw', x: 1000, y: 200, data: { label: 'Withdraw', type: 'withdraw', chain: 'Sepolia', coin: 'ETH', amount: '', amountSource: 'output', linkedFromNodeId: 'swap', wallet: '0x...' } },
+    ],
+    edges: [
+      { source: 'deposit', target: 'entry' },
+      { source: 'entry', target: 'exit' },
+      { source: 'exit', target: 'swap' },
+      { source: 'swap', target: 'withdraw' },
+    ],
+  },
+};
+
+function composeStrategyGraph(name: string): { nodes: Node[]; edges: Edge[] } {
+  const spec = STRATEGY_LIBRARY_SPECS[name];
+  if (!spec) return { nodes: [], edges: [] };
+
+  const nodes: Node[] = spec.nodes.map((node) => {
+    const isRepeat = node.nodeType === 'repeatGroup' || node.data.type === 'repeatGroup';
+    const isStrategy = node.data.type === 'strategy';
+    const isControl = node.data.type === 'control';
+    const isChild = Boolean(node.parentId);
+
+    return {
+      id: node.id,
+      type: isRepeat ? 'repeatGroup' : 'custom',
+      parentId: node.parentId,
+      extent: node.parentId ? 'parent' : undefined,
+      position: { x: node.x, y: node.y },
+      data: {
+        ...node.data,
+        childCount: isRepeat
+          ? spec.nodes.filter((n) => n.parentId === node.id).length
+          : undefined,
+      },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      zIndex: isChild ? 10 : isRepeat ? 1 : 0,
+      style: isRepeat
+        ? {
+            width: REPEAT_GROUP_DEFAULT_SIZE.width,
+            height: REPEAT_GROUP_DEFAULT_SIZE.height,
+            padding: 0,
+            background: 'transparent',
+            border: 'none',
+          }
+        : isStrategy
+          ? STRATEGY_NODE_STYLE
+          : isControl
+            ? CONTROL_NODE_STYLE
+            : DEFAULT_NODE_STYLE,
+    };
+  });
+
+  const edges: Edge[] = spec.edges.map((edge, idx) => ({
+    id: `xy-edge__${edge.source}-${edge.target}-${idx}`,
+    source: edge.source,
+    target: edge.target,
+    type: 'smoothstep',
+    style: EDGE_STYLE,
+  }));
+
+  let laidOut = layoutStrategyNodes(nodes, edges);
+  for (const edge of spec.edges) {
+    laidOut = applySwapToWithdrawLink(laidOut, {
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: null,
+      targetHandle: null,
+    });
+  }
+
+  return { nodes: laidOut, edges };
+}
+
+export function formatStrategyGraphForModal(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
+  return {
+    nodes: formatGraphForPreview(nodes),
+    edges,
+  };
+}
+
 /**
  * Create Limit Order strategy nodes and edges
  */
 export const createLimitOrderStrategy = (): { nodes: Node[]; edges: Edge[] } => {
-  const limitOrderNodes: Node[] = [
-    {
-      id: 'deposit-1',
-      type: 'custom',
-      position: { x: 100, y: 200 },
-      data: {
-        label: 'Deposit',
-        type: 'deposit',
-        coin: 'USDC',
-        amount: '1000',
-        chain: 'Ethereum'
-      },
-      style: {
-        background: 'rgba(255, 255, 255, 0.12)',
-        border: '1px solid rgba(255, 255, 255, 0.3)',
-        color: 'white',
-        borderRadius: '8px',
-        padding: '0.75rem',
-        minWidth: '200px',
-        textAlign: 'center',
-        fontFamily: 'var(--font-source-code), monospace',
-        fontSize: '12px',
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left
-    },
-    {
-      id: 'strategy-1',
-      type: 'custom',
-      position: { x: 400, y: 200 },
-      data: {
-        label: 'Limit Order',
-        type: 'strategy',
-        strategy: 'Limit Order',
-        priceGoal: '1.05',
-        intervals: '1h'
-      },
-      style: {
-        background: 'rgba(255, 193, 7, 0.2)',
-        border: '1px solid rgba(255, 193, 7, 0.5)',
-        color: 'white',
-        borderRadius: '8px',
-        padding: '0.75rem',
-        minWidth: '200px',
-        textAlign: 'center',
-        fontFamily: 'var(--font-source-code), monospace',
-        fontSize: '12px',
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left
-    },
-    {
-      id: 'swap-1',
-      type: 'custom',
-      position: { x: 700, y: 200 },
-      data: {
-        label: 'Swap',
-        type: 'swap',
-        coin: 'USDC',
-        toCoin: 'ETH',
-        amount: '1000',
-        dex: 'Uniswap'
-      },
-      style: {
-        background: 'rgba(255, 255, 255, 0.12)',
-        border: '1px solid rgba(255, 255, 255, 0.3)',
-        color: 'white',
-        borderRadius: '8px',
-        padding: '0.75rem',
-        minWidth: '200px',
-        textAlign: 'center',
-        fontFamily: 'var(--font-source-code), monospace',
-        fontSize: '12px',
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left
-    },
-    {
-      id: 'withdraw-1',
-      type: 'custom',
-      position: { x: 1000, y: 200 },
-      data: {
-        label: 'Withdraw',
-        type: 'withdraw',
-        coin: 'ETH',
-        amount: '0.5',
-        wallet: '0x...'
-      },
-      style: {
-        background: 'rgba(255, 255, 255, 0.12)',
-        border: '1px solid rgba(255, 255, 255, 0.3)',
-        color: 'white',
-        borderRadius: '8px',
-        padding: '0.75rem',
-        minWidth: '200px',
-        textAlign: 'center',
-        fontFamily: 'var(--font-source-code), monospace',
-        fontSize: '12px',
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left
-    }
-  ];
-  
-  const limitOrderEdges: Edge[] = [
-    {
-      id: 'e-deposit-strategy',
-      source: 'deposit-1',
-      target: 'strategy-1',
-      type: 'smoothstep',
-      animated: true
-    },
-    {
-      id: 'e-strategy-swap',
-      source: 'strategy-1',
-      target: 'swap-1',
-      type: 'smoothstep',
-      animated: true
-    },
-    {
-      id: 'e-swap-withdraw',
-      source: 'swap-1',
-      target: 'withdraw-1',
-      type: 'smoothstep',
-      animated: true
-    }
-  ];
-  
-  return { nodes: limitOrderNodes, edges: limitOrderEdges };
+  return composeStrategyGraph('Limit Order');
 };
 
 /**
  * Create other strategy nodes and edges
  */
 export const createOtherStrategies = (): Record<string, StrategyData> => {
-  const timestamp1 = Date.now();
-  const timestamp2 = Date.now() + 1000;
-  const timestamp3 = Date.now() + 2000;
-  const timestamp4 = Date.now() + 3000;
-  
   return {
-    'DCA Accumulator (Safe Test)': {
-      name: 'DCA Accumulator (Safe Test)',
-      nodes: [
-        {
-          id: `deposit-${timestamp1}`,
-          type: 'custom',
-          position: { x: 100, y: 200 },
-          data: {
-            label: 'Deposit',
-            type: 'deposit',
-            chain: 'Sepolia',
-            coin: 'USDC',
-            amount: '300'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 255, 255, 0.12)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white'
-          }
-        },
-        {
-          id: `strategy-${timestamp2}`,
-          type: 'custom',
-          position: { x: 400, y: 200 },
-          data: {
-            label: 'DCA',
-            type: 'strategy',
-            strategy: 'DCA',
-            intervals: '1 day'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 193, 7, 0.2)',
-            border: '1px solid rgba(255, 193, 7, 0.5)',
-            color: 'white'
-          }
-        },
-        {
-          id: `swap-${timestamp3}`,
-          type: 'custom',
-          position: { x: 700, y: 200 },
-          data: {
-            label: 'Swap',
-            type: 'swap',
-            dex: 'Uniswap',
-            coin: 'USDC',
-            toCoin: 'ETH',
-            amount: '300'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 255, 255, 0.12)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white'
-          }
-        },
-        {
-          id: `withdraw-${timestamp4}`,
-          type: 'custom',
-          position: { x: 1000, y: 200 },
-          data: {
-            label: 'Withdraw',
-            type: 'withdraw',
-            chain: 'Sepolia',
-            coin: 'ETH',
-            amount: '0.1',
-            wallet: '0x...'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 255, 255, 0.12)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white'
-          }
-        }
-      ],
-      edges: [
-        {
-          id: `xy-edge__deposit-${timestamp1}-strategy-${timestamp2}`,
-          source: `deposit-${timestamp1}`,
-          target: `strategy-${timestamp2}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        },
-        {
-          id: `xy-edge__strategy-${timestamp2}-swap-${timestamp3}`,
-          source: `strategy-${timestamp2}`,
-          target: `swap-${timestamp3}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        },
-        {
-          id: `xy-edge__swap-${timestamp3}-withdraw-${timestamp4}`,
-          source: `swap-${timestamp3}`,
-          target: `withdraw-${timestamp4}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        }
-      ]
-    },
-    'Grid Trading (Safe Test)': {
-      name: 'Grid Trading (Safe Test)',
-      nodes: [
-        {
-          id: `deposit-${timestamp1 + 10000}`,
-          type: 'custom',
-          position: { x: 100, y: 200 },
-          data: {
-            label: 'Deposit',
-            type: 'deposit',
-            chain: 'Sepolia',
-            coin: 'USDC',
-            amount: '1200'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 255, 255, 0.12)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white'
-          }
-        },
-        {
-          id: `strategy-${timestamp2 + 10000}`,
-          type: 'custom',
-          position: { x: 400, y: 200 },
-          data: {
-            label: 'Range',
-            type: 'strategy',
-            strategy: 'Range',
-            rangeLow: '2600',
-            rangeHigh: '3200',
-            gridLevels: '5'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 193, 7, 0.2)',
-            border: '1px solid rgba(255, 193, 7, 0.5)',
-            color: 'white'
-          }
-        },
-        {
-          id: `swap-${timestamp3 + 10000}`,
-          type: 'custom',
-          position: { x: 700, y: 200 },
-          data: {
-            label: 'Swap',
-            type: 'swap',
-            dex: 'Uniswap',
-            coin: 'USDC',
-            toCoin: 'ETH',
-            amount: '1200'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 255, 255, 0.12)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white'
-          }
-        },
-        {
-          id: `withdraw-${timestamp4 + 20000}`,
-          type: 'custom',
-          position: { x: 1000, y: 200 },
-          data: {
-            label: 'Withdraw',
-            type: 'withdraw',
-            chain: 'Sepolia',
-            coin: 'ETH',
-            amount: '0.2',
-            wallet: '0x...'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 255, 255, 0.12)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white'
-          }
-        }
-      ],
-      edges: [
-        {
-          id: `xy-edge__deposit-${timestamp1 + 10000}-strategy-${timestamp2 + 10000}`,
-          source: `deposit-${timestamp1 + 10000}`,
-          target: `strategy-${timestamp2 + 10000}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        },
-        {
-          id: `xy-edge__strategy-${timestamp2 + 10000}-swap-${timestamp3 + 10000}`,
-          source: `strategy-${timestamp2 + 10000}`,
-          target: `swap-${timestamp3 + 10000}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        },
-        {
-          id: `xy-edge__swap-${timestamp3 + 10000}-withdraw-${timestamp4 + 20000}`,
-          source: `swap-${timestamp3 + 10000}`,
-          target: `withdraw-${timestamp4 + 20000}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        }
-      ]
-    }
+    'DCA Accumulator': { name: 'DCA Accumulator', ...composeStrategyGraph('DCA Accumulator') },
+    'Grid Trading': { name: 'Grid Trading', ...composeStrategyGraph('Grid Trading') },
   };
 };
 
@@ -551,10 +424,25 @@ export const initializeDiscoverStrategies = (): void => {
   try {
     const current = JSON.parse(stored) as Record<string, StrategyData>;
     const merged: Record<string, StrategyData> = { ...current };
+
+    // Migrate previous template names to current display names.
+    if (!merged['DCA Accumulator'] && merged['DCA Accumulator (Safe Test)']) {
+      merged['DCA Accumulator'] = merged['DCA Accumulator (Safe Test)'];
+    }
+    if (!merged['Grid Trading'] && merged['Grid Trading (Safe Test)']) {
+      merged['Grid Trading'] = merged['Grid Trading (Safe Test)'];
+    }
+    delete merged['DCA Accumulator (Safe Test)'];
+    delete merged['Grid Trading (Safe Test)'];
+
     Object.entries(templates).forEach(([name, strategy]) => {
-      if (!merged[name]) {
-        merged[name] = strategy;
-      }
+      merged[name] = {
+        ...(merged[name] ?? {}),
+        ...strategy,
+        name,
+        nodes: strategy.nodes,
+        edges: strategy.edges,
+      };
     });
     localStorage.setItem(discoverStrategiesKey, JSON.stringify(merged));
   } catch {

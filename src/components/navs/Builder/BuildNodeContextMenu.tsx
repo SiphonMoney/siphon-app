@@ -7,8 +7,10 @@ export interface BuildNodeContextMenuProps {
   x: number;
   y: number;
   nodeLabel?: string;
+  isRepeatGroup?: boolean;
   onDelete: () => void;
   onDuplicate: () => void;
+  onAddInside?: (kind: "swap" | "strategy" | "withdraw", variant?: string) => void;
   onClose: () => void;
 }
 
@@ -16,8 +18,10 @@ export default function BuildNodeContextMenu({
   x,
   y,
   nodeLabel,
+  isRepeatGroup,
   onDelete,
   onDuplicate,
+  onAddInside,
   onClose,
 }: BuildNodeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -53,6 +57,66 @@ export default function BuildNodeContextMenu({
     >
       {nodeLabel && (
         <div className="build-node-context-menu-label">{nodeLabel}</div>
+      )}
+      {isRepeatGroup && onAddInside && (
+        <>
+          <div className="build-node-context-menu-section">Add inside loop</div>
+          <button
+            type="button"
+            className="build-node-context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onAddInside("swap");
+              onClose();
+            }}
+          >
+            Swap
+          </button>
+          <button
+            type="button"
+            className="build-node-context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onAddInside("withdraw", "Sepolia");
+              onClose();
+            }}
+          >
+            Withdraw
+          </button>
+          <button
+            type="button"
+            className="build-node-context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onAddInside("strategy", "Limit Order");
+              onClose();
+            }}
+          >
+            Limit Order
+          </button>
+          <button
+            type="button"
+            className="build-node-context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onAddInside("strategy", "Stop Loss");
+              onClose();
+            }}
+          >
+            Stop Loss
+          </button>
+          <button
+            type="button"
+            className="build-node-context-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onAddInside("strategy", "Take Profit");
+              onClose();
+            }}
+          >
+            Take Profit
+          </button>
+        </>
       )}
       <button
         type="button"

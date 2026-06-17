@@ -48,10 +48,6 @@ export function getMissingFields(parsed: ParsedPrompt): MissingField[] {
     missing.push("amount");
   }
 
-  if (parsed.strategy === "Limit Order" && !parsed.side) {
-    missing.push("side");
-  }
-
   if (needsPriceGoal(parsed.strategy) && !parsed.priceGoal) {
     missing.push("priceGoal");
   }

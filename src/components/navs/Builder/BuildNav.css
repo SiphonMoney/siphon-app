@@ -1,6 +1,6 @@
-/* Desktop only classes */
+/* Desktop only classes — do not set display here; it breaks flex toolbars */
 .desktop-only {
-  display: block;
+  /* visibility controlled by mobile media query only */
 }
 
 .mobile-only {
@@ -31,8 +31,10 @@
   padding: 1rem 1.5rem;
   backdrop-filter: blur(10px);
   display: flex;
-  justify-content: space-between;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: 0.75rem;
   pointer-events: auto;
 }
 
@@ -46,6 +48,73 @@
   pointer-events: auto !important;
   z-index: 1001;
   cursor: pointer;
+}
+
+.blueprint-top-bar .blueprint-save-btn,
+.blueprint-top-bar .blueprint-restart-btn,
+.blueprint-top-bar .blueprint-execute-btn,
+.blueprint-top-bar .blueprint-run-btn,
+.blueprint-top-bar .blueprint-action-btn {
+  border-radius: 8px;
+  border-width: 1px;
+  font-size: 10px;
+  padding: 0.42rem 0.72rem;
+}
+
+.blueprint-toolbar-file {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.blueprint-toolbar-spacer {
+  flex: 1;
+  min-width: 1.5rem;
+}
+
+.blueprint-toolbar-add {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+  margin-left: 1.25rem;
+}
+
+.blueprint-toolbar-add.desktop-only {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+}
+
+.blueprint-actions-label {
+  color: rgba(255, 255, 255, 0.45);
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  line-height: 1;
+  display: inline !important;
+  visibility: visible !important;
+  width: auto !important;
+}
+
+.blueprint-toolbar-end {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .blueprint-actions-left {
@@ -70,29 +139,49 @@
   justify-content: space-between;
 }
 
-.blueprint-actions-label {
-  color: rgba(255, 255, 255, 0.7);
-  font-family: var(--font-source-code), monospace;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 .blueprint-action-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  color: rgba(255, 255, 255, 0.9);
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 0.42rem 0.72rem;
+  color: rgba(255, 255, 255, 0.88);
   font-family: var(--font-source-code), monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.22s ease;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  min-width: 90px;
+  letter-spacing: 0.45px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.blueprint-action-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.92);
+  opacity: 0.95;
+}
+
+.blueprint-action-btn-label {
+  display: inline;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.blueprint-action-btn--wallet,
+.blueprint-action-btn--triggers,
+.blueprint-action-btn--control,
+.blueprint-action-btn--defi {
+  --action-accent: rgba(255, 255, 255, 0.35);
 }
 
 .blueprint-icon-btn {
@@ -175,7 +264,9 @@
 }
 
 .blueprint-save-btn {
-  display: inline-flex;
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
@@ -281,14 +372,21 @@
 }
 
 .blueprint-action-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: color-mix(in srgb, var(--action-accent, rgba(255, 255, 255, 0.4)) 55%, rgba(255, 255, 255, 0.2));
   color: white;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--action-accent, rgba(255, 255, 255, 0.2)) 25%, transparent);
+  transform: translateY(-1px);
+}
+
+.blueprint-action-btn:hover .blueprint-action-btn-icon {
+  opacity: 1;
 }
 
 .blueprint-actions-right {
-  display: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .blueprint-actions {
@@ -300,6 +398,8 @@
 
 .blueprint-actions-buttons {
   display: flex !important;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.5rem;
   visibility: visible !important;
@@ -325,11 +425,6 @@
   backdrop-filter: blur(10px);
   pointer-events: auto;
   top: 0;
-}
-
-.blueprint-actions-label {
-  display: block !important;
-  visibility: visible !important;
 }
 
 .blueprint-restart-btn {
@@ -365,21 +460,102 @@
   height: 14px;
 }
 
-.blueprint-execute-btn {
-  background: rgba(34, 197, 94, 0.2);
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  color: rgba(34, 197, 94, 0.9);
+.blueprint-run-btn {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  height: 32px;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.92);
   font-family: var(--font-source-code), monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.22s ease;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.45px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.blueprint-run-btn.desktop-only {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+}
+
+.blueprint-run-btn span {
+  display: inline;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.blueprint-run-btn svg {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.blueprint-run-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.38);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
+}
+
+.blueprint-run-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.blueprint-execute-btn {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.38);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  height: 32px;
+  min-width: 0;
+  color: rgba(34, 197, 94, 0.95);
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.blueprint-execute-btn.desktop-only {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+}
+
+.blueprint-execute-btn span {
+  display: inline;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.blueprint-execute-btn svg {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .blueprint-execute-btn:hover:not(:disabled) {
@@ -410,6 +586,9 @@
 }
 
 .blueprint-submenu-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   color: rgba(255, 255, 255, 0.7);
   font-family: var(--font-source-code), monospace;
   font-size: 10px;
@@ -419,6 +598,21 @@
   padding: 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 0.25rem;
+}
+
+.blueprint-submenu-back {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: rgba(147, 197, 253, 0.85);
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.blueprint-submenu-back:hover {
+  color: white;
 }
 
 .blueprint-submenu-item {
@@ -868,6 +1062,19 @@
   transition: opacity 0.3s ease;
 }
 
+.blueprint-mobile-modal-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.92);
+}
+
 .blueprint-mobile-modal-btn:hover svg {
   opacity: 1;
 }
@@ -998,12 +1205,23 @@
     min-width: 0;
   }
 
+  .blueprint-toolbar-file {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .blueprint-toolbar-end {
+    margin-left: 0;
+  }
+
   .blueprint-actions-label.desktop-only,
-  .blueprint-actions-buttons.desktop-only {
+  .blueprint-toolbar-add.desktop-only,
+  .blueprint-toolbar-spacer.desktop-only {
     display: none !important;
   }
 
-  .blueprint-execute-btn.desktop-only {
+  .blueprint-execute-btn.desktop-only,
+  .blueprint-run-btn.desktop-only {
     display: none !important;
   }
 
@@ -1033,6 +1251,7 @@
   .blueprint-save-btn,
   .blueprint-restart-btn,
   .blueprint-execute-btn,
+  .blueprint-run-btn,
   .blueprint-add-plus-btn {
     pointer-events: auto;
     touch-action: manipulation;

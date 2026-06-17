@@ -24,7 +24,7 @@ const walletOptions: WalletOption[] = [
 ];
 
 interface WalletSelectorProps {
-  onWalletSelect: (walletId: string) => void;
+  onWalletSelect: (walletId: string) => void | Promise<void>;
   className?: string;
   shouldOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -77,7 +77,7 @@ export default function WalletSelector({ onWalletSelect, className, shouldOpen, 
 
   const handleWalletClick = async (walletId: string) => {
     setOpen(false);
-    onWalletSelect(walletId);
+    await onWalletSelect(walletId);
   };
 
   useEffect(() => {
@@ -133,8 +133,7 @@ export default function WalletSelector({ onWalletSelect, className, shouldOpen, 
                 key={wallet.id}
                 type="button"
                 className={`wallet-option ${wallet.active ? 'active' : 'inactive'}`}
-                onMouseDown={(e) => {
-                  e.preventDefault();
+                onClick={(e) => {
                   e.stopPropagation();
                   if (wallet.active) {
                     void handleWalletClick(wallet.id);

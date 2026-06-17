@@ -124,6 +124,9 @@ export default function Nexus({
             setCurrentFileName={setCurrentFileName}
             savedScenes={savedScenes}
             setSavedScenes={setSavedScenes}
+            setViewMode={setViewMode}
+            runningStrategies={runningStrategies}
+            setRunningStrategies={setRunningStrategies}
           />
         )}
       </div>

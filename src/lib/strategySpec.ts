@@ -27,6 +27,7 @@ export interface StrategyNodeFields {
   intervalSeconds?: string | null;
   intervals?: string | null;
   maxSlippageBps?: string | null;
+  positionPct?: string | null;
 }
 
 export function parseHumanIntervalToSeconds(raw: string | null | undefined): number | null {
@@ -50,6 +51,107 @@ export function parseHumanIntervalToSeconds(raw: string | null | undefined): num
   return null;
 }
 
+export type ScheduleUnit = "seconds" | "minutes" | "hours" | "blocks";
+
+const SCHEDULE_BLOCK_SEC = 12;
+
+export function scheduleUnitToSeconds(
+  value: string,
+  unit: ScheduleUnit
+): number | undefined {
+  const n = Number(String(value).trim());
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  switch (unit) {
+    case "seconds":
+      return Math.floor(n);
+    case "minutes":
+      return Math.floor(n * 60);
+    case "hours":
+      return Math.floor(n * 3600);
+    case "blocks":
+      return Math.floor(n * SCHEDULE_BLOCK_SEC);
+  }
+}
+
+export function displayScheduleFromSeconds(intervalSeconds: string | null | undefined): {
+  value: string;
+  unit: ScheduleUnit;
+} {
+  const sec = Number(String(intervalSeconds ?? "").trim());
+  if (!Number.isFinite(sec) || sec <= 0) return { value: "", unit: "seconds" };
+  if (sec % 3600 === 0 && sec >= 3600) return { value: String(sec / 3600), unit: "hours" };
+  if (sec % 60 === 0 && sec >= 60) return { value: String(sec / 60), unit: "minutes" };
+  return { value: String(sec), unit: "seconds" };
+}
+
+export function resolveScheduleIntervalSeconds(fields: {
+  scheduleValue?: string | null;
+  scheduleUnit?: string | null;
+  intervalSeconds?: string | null;
+}): number | undefined {
+  const value = String(fields.scheduleValue ?? "").trim();
+  const unit = (fields.scheduleUnit || "seconds") as ScheduleUnit;
+  if (value) {
+    return scheduleUnitToSeconds(value, unit);
+  }
+  const legacy = Number(String(fields.intervalSeconds ?? "").trim());
+  if (Number.isFinite(legacy) && legacy > 0) return Math.floor(legacy);
+  return undefined;
+}
+
+export type ScheduleTrigger = "after" | "at";
+
+export function secondsUntilTime(atTime: string): number | undefined {
+  const raw = String(atTime).trim();
+  if (!raw) return undefined;
+  const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return undefined;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (hours > 23 || minutes > 59) return undefined;
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(hours, minutes, 0, 0);
+  if (target.getTime() <= now.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+  return Math.floor((target.getTime() - now.getTime()) / 1000);
+}
+
+/** When the schedule fires: delay after X, or at clock time — not recurring cadence. */
+export function resolveScheduleStartDelaySeconds(fields: {
+  scheduleTrigger?: string | null;
+  scheduleValue?: string | null;
+  scheduleUnit?: string | null;
+  scheduleAt?: string | null;
+  intervalSeconds?: string | null;
+}): number | undefined {
+  const trigger = (fields.scheduleTrigger || "after") as ScheduleTrigger;
+  if (trigger === "at") {
+    return secondsUntilTime(String(fields.scheduleAt ?? ""));
+  }
+  const value = String(fields.scheduleValue ?? "").trim();
+  if (!value) return 0;
+  const unit = (fields.scheduleUnit || "blocks") as ScheduleUnit;
+  return scheduleUnitToSeconds(value, unit);
+}
+
+/** Cadence between loop iterations (each X). */
+export function resolveLoopIntervalSeconds(fields: {
+  loopIntervalValue?: string | null;
+  loopIntervalUnit?: string | null;
+  intervalSeconds?: string | null;
+}): number | undefined {
+  const value = String(fields.loopIntervalValue ?? "").trim();
+  if (value) {
+    const unit = (fields.loopIntervalUnit || "hours") as ScheduleUnit;
+    return scheduleUnitToSeconds(value, unit);
+  }
+  const legacy = Number(String(fields.intervalSeconds ?? "").trim());
+  if (Number.isFinite(legacy) && legacy > 0) return Math.floor(legacy);
+  return undefined;
+}
+
 export interface StrategyPayload {
   strategy_type: string;
   side?: StrategySide;
@@ -58,6 +160,7 @@ export interface StrategyPayload {
   grid_levels?: number;
   slices?: number;
   interval_sec?: number;
+  start_delay_sec?: number;
   max_slippage_bps?: number;
 }
 
@@ -138,6 +241,20 @@ export function getRuntimeTier(kind: StrategyKind): StrategyRuntimeTier {
 
 export function isBuildStrategyActive(kind: string): boolean {
   return (ACTIVE_BUILD_STRATEGIES as readonly string[]).includes(kind);
+}
+
+const STABLE_COINS = new Set(["USDC", "USDT"]);
+
+/** Infer buy/sell from swap direction: stable → asset = buy, asset → stable = sell. */
+export function inferSideFromSwap(
+  fromCoin?: string | null,
+  toCoin?: string | null
+): StrategySide {
+  const from = (fromCoin || "").toUpperCase();
+  const to = (toCoin || "").toUpperCase();
+  if (STABLE_COINS.has(from) && !STABLE_COINS.has(to)) return "buy";
+  if (!STABLE_COINS.has(from) && STABLE_COINS.has(to)) return "sell";
+  return "buy";
 }
 
 export function defaultSideForKind(kind: StrategyKind): StrategySide {
@@ -244,7 +361,25 @@ export function validateStrategyFields(
     return { valid: false, error: `Strategy needs a valid ${label}.` };
   }
 
+  if (kind === "Stop Loss" || kind === "Take Profit") {
+    const pctRaw = (fields.positionPct ?? "").trim();
+    if (pctRaw) {
+      const pct = parseFloat(pctRaw);
+      if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
+        return { valid: false, error: `${kind} position % must be between 1 and 100.` };
+      }
+    }
+  }
+
   return { valid: true, requiresScheduler: false };
+}
+
+export function resolvePositionPct(fields: StrategyNodeFields): number {
+  const raw = (fields.positionPct ?? "").trim();
+  if (!raw) return 100;
+  const pct = parseFloat(raw);
+  if (!Number.isFinite(pct) || pct <= 0) return 100;
+  return Math.min(100, pct);
 }
 
 export function buildStrategyPayload(
