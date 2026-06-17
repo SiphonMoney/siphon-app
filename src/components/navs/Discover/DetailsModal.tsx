@@ -414,14 +414,11 @@ export default function DetailsModal({
         addLog('Strategy registered! Waiting for price trigger...');
         showToast('Strategy registered!', 'success');
 
+        // Save the new change commitment — funds are not spent until on-chain tx confirms
         if (newDeposit && newDepositKey) {
             localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
         }
-        if (spentDepositKey) {
-            const oldData = JSON.parse(localStorage.getItem(spentDepositKey) || '{}');
-            oldData.spent = true;
-            localStorage.setItem(spentDepositKey, JSON.stringify(oldData));
-        }
+        // Do NOT mark old deposit as spent here — scheduler marks it spent after on-chain confirmation
 
         addLog('Execution completed successfully!');
         setTimeout(() => {

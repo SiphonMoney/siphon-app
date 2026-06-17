@@ -205,6 +205,21 @@ export async function deposit(_token: string, _amount: string) {
       commitment
     }));
 
+    // Save note to server (keep localStorage as fallback)
+    try {
+      const { postNote } = await import('./noteStore');
+      await postNote(
+        signer,
+        { nullifier: commitmentData.nullifier, secret: commitmentData.secret, amount: _amount },
+        commitment,
+        commitmentData.nullifierHash ?? '',
+        _token,
+        VAULT_CHAIN_ID
+      );
+    } catch (e) {
+      console.warn('Server note save failed, localStorage fallback active', e);
+    }
+
     console.log("✅ Deposit successful!");
     console.log("Precommitment:", commitmentData.precommitment);
     console.log("Commitment (from event):", commitment);

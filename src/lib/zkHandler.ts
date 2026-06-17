@@ -2,7 +2,7 @@ import { ethers, Contract } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
 import { prepareWithdrawalTransaction } from "./generateProof";
-import { getProvider } from './nexus';
+import { getProvider, getSigner } from './nexus';
 import { getEntrypointContract } from './handler';
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
@@ -25,6 +25,7 @@ export interface CommitmentData {
   precommitment: string;
   commitment?: string;
   amount: string;
+  nullifierHash?: string;
 }
 
 export interface WithdrawalTxData {
@@ -37,6 +38,7 @@ export interface WithdrawalTxData {
   pB: [[string, string], [string, string]];
   pC: [string, string];
   publicSignals?: string[];
+  proof?: Record<string, unknown>;
 }
 
 export interface ZKData {
@@ -84,7 +86,11 @@ export async function generateCommitmentData(
   const precommitmentHash = BigInt(F.toObject(poseidon([nullifierMod, secretMod])));
   const precommitment = precommitmentHash;
 
+  // Calculate nullifier hash: H(nullifier)
+  const nullifierHash = BigInt(F.toObject(poseidon([nullifierMod])));
+
   console.log("Precommitment:", precommitment.toString());
+  console.log("NullifierHash:", nullifierHash.toString());
 
   // Note: commitment will be added after deposit transaction
   // Commitment = H(amount, precommitment)
@@ -92,7 +98,8 @@ export async function generateCommitmentData(
     secret: secretMod.toString(),
     nullifier: nullifierMod.toString(),
     precommitment: precommitment.toString(),
-    amount: _amount
+    amount: _amount,
+    nullifierHash: nullifierHash.toString()
   };
 
   return commitmentData;
@@ -163,6 +170,30 @@ export async function generateZKData(
       return { error: "Failed to connect to blockchain to verify deposits." };
   }
 
+  // Sync server notes into localStorage
+  const signer = getSigner();
+  if (signer) {
+    try {
+      const { fetchNotes } = await import('./noteStore');
+      const serverNotes = await fetchNotes(signer);
+      for (const note of serverNotes) {
+        if (note.spent === 'false') {
+          const key = `${note.chain_id}-${note.asset}-${note.commitment}`;
+          if (!localStorage.getItem(key)) {
+            localStorage.setItem(key, JSON.stringify({
+              nullifier: note.decrypted.nullifier,
+              secret: note.decrypted.secret,
+              amount: note.decrypted.amount,
+              commitment: note.commitment,
+            }));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Server note fetch failed, using localStorage only', e);
+    }
+  }
+
   // 2. FIND A VALID SPENDABLE DEPOSIT
   let storedDeposit: CommitmentData | null = null;
   let spentDepositKey: string | null = null;
@@ -179,7 +210,7 @@ export async function generateZKData(
     const data = JSON.parse(localStorage.getItem(key) || '{}');
     
     // Check if data is locally valid and unspent
-    if (data && data.commitment && data.amount && !data.spent) {
+    if (data && data.commitment && data.amount && (data.spent === 'false' || data.spent === false || data.spent === undefined)) {
       try {
         const storedAmountBN = BigInt(
           ethers.parseUnits(data.amount.toString(), _token.decimals).toString()
@@ -297,30 +328,63 @@ export async function generateZKData(
   console.log("newPrecommitment:", newPrecommitment.toString());
   console.log("newCommitment:", newCommitment.toString());
 
-  // 7) Call prepareWithdrawalTransaction to generate proof
-  console.log("Calling prepareWithdrawalTransaction() to produce proof...");
-  const rawWithdrawalTxData = await prepareWithdrawalTransaction({
-    existingValue: existingValue.toString(),
-    existingNullifier: existingNullifier.toString(),
-    existingSecret: existingSecret.toString(),
-    withdrawnValue: withdrawnValue.toString(),
-    newNullifier: newNullifier.toString(),
-    newSecret: newSecret.toString(),
-    pathElements: pathElements,
-    pathIndices: pathIndices,
-    recipient: _recipient,
-    stateRoot: onChainRoot.toString(),
-  });
-
-  const withdrawalTxData = rawWithdrawalTxData as unknown as WithdrawalTxData;
+  // 7) Call prepareWithdrawalTransaction to generate proof (try remote relayer first, fallback to local)
+  let withdrawalTxData: WithdrawalTxData;
+  
+  if (signer) {
+    try {
+      console.log("Calling remote proving relayer...");
+      const { prepareWithdrawalTransactionRemote } = await import('./proofRelayer');
+      withdrawalTxData = await prepareWithdrawalTransactionRemote({
+        existingValue:     existingValue.toString(),
+        existingNullifier: existingNullifier.toString(),
+        existingSecret:    existingSecret.toString(),
+        withdrawnValue:    withdrawnValue.toString(),
+        newNullifier:      newNullifier.toString(),
+        newSecret:         newSecret.toString(),
+        pathElements:      pathElements.map((el: bigint) => el.toString()),
+        pathIndices:       pathIndices,
+        recipient:         _recipient,
+        stateRoot:         onChainRoot.toString(),
+      }, signer);
+    } catch (e) {
+      console.warn('[Proof] Relayer failed, falling back to local snarkjs', e);
+      const rawWithdrawalTxData = await prepareWithdrawalTransaction({
+        existingValue: existingValue.toString(),
+        existingNullifier: existingNullifier.toString(),
+        existingSecret: existingSecret.toString(),
+        withdrawnValue: withdrawnValue.toString(),
+        newNullifier: newNullifier.toString(),
+        newSecret: newSecret.toString(),
+        pathElements: pathElements,
+        pathIndices: pathIndices,
+        recipient: _recipient,
+        stateRoot: onChainRoot.toString(),
+      });
+      withdrawalTxData = rawWithdrawalTxData as unknown as WithdrawalTxData;
+    }
+  } else {
+    console.log("No signer connected, using local proving...");
+    const rawWithdrawalTxData = await prepareWithdrawalTransaction({
+      existingValue: existingValue.toString(),
+      existingNullifier: existingNullifier.toString(),
+      existingSecret: existingSecret.toString(),
+      withdrawnValue: withdrawnValue.toString(),
+      newNullifier: newNullifier.toString(),
+      newSecret: newSecret.toString(),
+      pathElements: pathElements,
+      pathIndices: pathIndices,
+      recipient: _recipient,
+      stateRoot: onChainRoot.toString(),
+    });
+    withdrawalTxData = rawWithdrawalTxData as unknown as WithdrawalTxData;
+  }
 
   console.log("prepareWithdrawalTransaction returned summary:", {
     amount: withdrawalTxData.amount?.toString?.() ?? withdrawalTxData.amount,
     nullifierHash: withdrawalTxData.nullifierHash?.toString?.() ?? withdrawalTxData.nullifierHash,
     newCommitment: withdrawalTxData.newCommitment?.toString?.() ?? withdrawalTxData.newCommitment,
-    proofLength: Array.isArray(withdrawalTxData.proof) 
-      ? withdrawalTxData.proof.length 
-      : typeof withdrawalTxData.proof,
+    proofLength: withdrawalTxData.proof ? Object.keys(withdrawalTxData.proof).length : 0,
     publicSignals: withdrawalTxData.publicSignals ?? "none"
   });
 
