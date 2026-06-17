@@ -55,6 +55,9 @@ import {
 } from "../../../lib/graphLinks";
 import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
+import { exportNotes, importNotes } from "../../../lib/noteStore";
+import { getSigner } from "../../../lib/nexus";
+import { validateRecipientAddress } from "./BuildNodes";
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -604,6 +607,163 @@ export default function Build({
     event.preventDefault();
   }, []);
   
+  const onExecuteStrategy = useCallback(async () => {
+    console.log('Executing strategy with nodes:', nodes);
+
+    const depositNode  = nodes.find(n => n.data.type === 'deposit');
+    const strategyNode = nodes.find(n => n.data.type === 'strategy');
+    const swapNode     = nodes.find(n => n.data.type === 'swap');
+    const withdrawNode = nodes.find(n => n.data.type === 'withdraw');
+
+    if (!depositNode)  { alert('Add a Deposit node with a coin and amount first.'); return; }
+    if (!strategyNode) { alert('Add a Strategy node first.'); return; }
+
+    const strategyKind = normalizeStrategyKind(strategyNode.data.strategy as string);
+    const strategyFields = {
+      strategy: strategyKind,
+      side: (strategyNode.data.side as string) || defaultSideForKind(strategyKind),
+      priceGoal: strategyNode.data.priceGoal as string,
+      rangeLow: strategyNode.data.rangeLow as string,
+      rangeHigh: strategyNode.data.rangeHigh as string,
+      gridLevels: strategyNode.data.gridLevels as string,
+      sliceCount: strategyNode.data.sliceCount as string,
+      intervalSeconds: strategyNode.data.intervalSeconds as string,
+      intervals: strategyNode.data.intervals as string,
+      maxSlippageBps: strategyNode.data.maxSlippageBps as string,
+    };
+
+    const assetIn   = (depositNode.data.coin  as string || 'ETH').toUpperCase();
+    const amountStr = (depositNode.data.amount as string || '0');
+    const amount    = parseFloat(amountStr);
+    const assetOut  = (swapNode?.data.toCoin as string || withdrawNode?.data.coin as string || assetIn).toUpperCase();
+
+    // Parse strategy mode and custom condition tree
+    const useTree = strategyNode.data.useTree === 'true';
+    let conditionTree = null;
+    let priceGoal = 0;
+
+    if (useTree) {
+      const rawTree = strategyNode.data.conditionTree as string;
+      if (!rawTree) { alert('Please build your custom strategy conditions.'); return; }
+      try {
+        conditionTree = JSON.parse(rawTree);
+      } catch {
+        alert('Invalid custom strategy condition tree JSON.'); return;
+      }
+    } else {
+      const validation = validateStrategyFields(strategyKind, strategyFields);
+      if (!validation.valid) { alert(validation.error ?? 'Strategy parameters are incomplete.'); return; }
+      priceGoal = parseFloat(strategyNode.data.priceGoal as string || '0');
+    }
+
+    const recipient = (withdrawNode?.data.wallet as string || '').trim();
+    const toChain = (withdrawNode?.data.toChain as string || '11155111');
+    const payloadBounds = buildStrategyPayload(strategyKind, strategyFields);
+
+    if (!amount || amount <= 0) { alert('Deposit node needs a valid amount.'); return; }
+    if (!recipient) { alert('Withdraw node needs a recipient wallet address.'); return; }
+
+    // Validate recipient address against destination chain format
+    const validationError = validateRecipientAddress(recipient, toChain);
+    if (validationError) {
+      alert(`❌ Recipient Address Validation Failed: ${validationError}`);
+      return;
+    }
+
+    // Token config for ZK proof generation (Sepolia)
+    const CHAIN_ID = 11155111;
+    const TOKEN_CONFIG: Record<string, TokenInfo> = {
+      ETH:  { symbol: 'ETH',  decimals: 18, address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' },
+      USDC: { symbol: 'USDC', decimals: 6,  address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
+      WBTC: { symbol: 'WBTC', decimals: 8,  address: '0x92f3B59a79bFf5dc60c0d59eA13a44D082B2bdFC' },
+      USDT: { symbol: 'USDT', decimals: 6,  address: '0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0' },
+    };
+    const token = TOKEN_CONFIG[assetIn];
+    if (!token) { alert(`Unsupported asset: ${assetIn}`); return; }
+
+    // Generate ZK withdrawal proof now (frontend is the only place with the secret)
+    alert(`Generating ZK proof for ${amountStr} ${assetIn}... this may take a moment.`);
+    console.log('[Strategy] Generating ZK proof...');
+
+    const zkResult = await generateZKData(CHAIN_ID, token, amountStr, recipient);
+    if ('error' in zkResult) {
+      alert(`❌ ZK proof failed: ${zkResult.error}`);
+      return;
+    }
+
+    const txData = zkResult.withdrawalTxData;
+    const zkProof = {
+      stateRoot:     txData.stateRoot,
+      nullifierHash: txData.nullifierHash,
+      newCommitment: txData.newCommitment,
+      pA: txData.pA,
+      pB: txData.pB,
+      pC: txData.pC,
+    };
+
+    console.log('[Strategy] ZK proof generated:', { stateRoot: txData.stateRoot, nullifierHash: txData.nullifierHash });
+
+    const strategyData = {
+      user_id:           recipient,
+      strategy_type:     useTree ? 'CUSTOM_STRATEGY' : payloadBounds.strategy_type,
+      side:              payloadBounds.side,
+      asset_in:          assetIn,
+      asset_out:         assetOut,
+      amount,
+      upper_bound:       useTree ? 0 : payloadBounds.upper_bound,
+      lower_bound:       useTree ? 0 : payloadBounds.lower_bound,
+      grid_levels:       payloadBounds.grid_levels,
+      slices:            payloadBounds.slices,
+      interval_sec:      payloadBounds.interval_sec,
+      max_slippage_bps:  payloadBounds.max_slippage_bps,
+      recipient_address: recipient,
+      zk_proof:          zkProof,
+      condition_tree:    useTree ? conditionTree : null,
+      to_chain:          toChain,
+      from_chain:        '11155111',
+    };
+
+    console.log('[Strategy] Submitting to payload generator:', strategyData);
+
+    const result = await createStrategy(strategyData);
+    if (result.success) {
+      // Save the new change commitment — funds are not spent until on-chain tx confirms
+      if (zkResult.newDepositKey && zkResult.newDeposit) {
+        localStorage.setItem(zkResult.newDepositKey, JSON.stringify({ ...zkResult.newDeposit, spent: false }));
+      }
+      // Do NOT mark old deposit as spent here — scheduler marks it spent after on-chain confirmation
+      if (useTree) {
+        alert(`✅ Composable Strategy registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when your custom multi-asset conditions are met.`);
+      } else {
+        const triggerLabel =
+          strategyKind === 'Range'
+            ? `$${payloadBounds.lower_bound} – $${payloadBounds.upper_bound} (${payloadBounds.grid_levels} grid levels)`
+            : payloadBounds.upper_bound > 0
+              ? `$${payloadBounds.upper_bound}`
+              : `$${payloadBounds.lower_bound}`;
+        const rangeDetail =
+          strategyKind === 'Range' && payloadBounds.grid_levels
+            ? `\n\nGrid legs (buy/sell alternating):\n${computeRangeGridLegs(
+                payloadBounds.lower_bound,
+                payloadBounds.upper_bound,
+                payloadBounds.grid_levels
+              )
+                .map((leg) => `  • ${leg.legType === 'LIMIT_BUY' ? 'Buy' : 'Sell'} @ $${leg.price.toFixed(2)}`)
+                .join('\n')}`
+            : '';
+        const scheduleDetail =
+          strategyKind === 'TWAP'
+            ? `\n\nTWAP schedule: ${payloadBounds.slices} slices, every ${payloadBounds.interval_sec}s.`
+            : strategyKind === 'DCA'
+              ? `\n\nDCA schedule: recurring every ${payloadBounds.interval_sec}s.`
+              : '';
+        alert(`✅ ${strategyKind} registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when price hits ${triggerLabel}.${rangeDetail}${scheduleDetail}`);
+      }
+    } else {
+      alert(`❌ Strategy failed: ${result.error}`);
+    }
+  }, [nodes]);
+  
   const onRestart = useCallback(() => {
     setNodes([]);
     setEdges([]);
@@ -612,6 +772,37 @@ export default function Build({
     setBuilderBotMessage(null);
     setBuilderPrompt("");
   }, [setNodes, setEdges, setCurrentFileName]);
+
+  const handleExport = async () => {
+    const signer = getSigner();
+    if (!signer) {
+      alert("Connect wallet first!");
+      return;
+    }
+    try {
+      await exportNotes(signer);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to export notes");
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const signer = getSigner();
+    if (!signer) {
+      alert("Connect wallet first!");
+      return;
+    }
+    try {
+      await importNotes(signer, file);
+      alert('Notes imported successfully');
+    } catch (e) {
+      console.error(e);
+      alert("Failed to import notes");
+    }
+  };
   
   const saveScene = useCallback((sceneName: string) => {
     const scene = {
@@ -733,16 +924,75 @@ export default function Build({
           />
 
           <div className="blueprint-canvas" onContextMenu={onCanvasContextMenu}>
-            {simToast && (
-              <BuildSimToast
-                message={simToast.message}
-                type={simToast.type}
-                exiting={simExiting}
-                onDismiss={dismissToast}
+            {/* Floating note export/import controls */}
+            <div className="note-sync-controls" style={{
+              position: 'absolute',
+              bottom: '24px',
+              left: '24px',
+              zIndex: 1000,
+              display: 'flex',
+              gap: '8px',
+              background: 'rgba(0, 0, 0, 0.85)',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              alignItems: 'center',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
+            }}>
+              <button
+                onClick={handleExport}
+                style={{
+                  background: '#ffffff',
+                  color: '#000000',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+                onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+              >
+                EXPORT NOTES
+              </button>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImport}
+                style={{ display: 'none' }}
+                id="import-notes"
               />
-            )}
-            <BlueprintFlow
-              setNodes={setNodes}
+              <label
+                htmlFor="import-notes"
+                style={{
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  color: '#ffffff',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  padding: '5px 11px',
+                  borderRadius: '4px',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  transition: 'border-color 0.2s, background 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.borderColor = '#ffffff';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                IMPORT NOTES
+              </label>
+            </div>
+            <ReactFlow
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
@@ -755,29 +1005,78 @@ export default function Build({
               onNodesDelete={(nodesToDelete) => {
                 nodesToDelete.forEach((node) => onDeleteNode(node.id));
               }}
-              updateNodeData={updateNodeData}
-              tokens={tokens}
-              isTokenActive={isTokenActive}
-              simHighlight={simHighlight}
-              simShakingId={simShakingId}
-              simExiting={simExiting}
-            />
+              fitView
+              minZoom={0.1}
+              maxZoom={2}
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+              deleteKeyCode={['Backspace', 'Delete']}
+              nodesDraggable={true}
+              nodesConnectable={true}
+              elementsSelectable={true}
+              panOnDrag={true}
+              panOnScroll={false}
+              zoomOnScroll={true}
+              zoomOnPinch={true}
+              zoomOnDoubleClick={false}
+              selectNodesOnDrag={false}
+              preventScrolling={true}
+              nodeTypes={{
+                custom: ({ data, id }) => (
+                  <CustomNode
+                    data={data}
+                    id={id}
+                    updateNodeData={updateNodeData}
+                    tokens={tokens}
+                    isTokenActive={isTokenActive}
+                  />
+                )
+              }}
+              defaultEdgeOptions={{
+                style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 },
+                type: 'smoothstep'
+              }}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background />
+              <BlueprintFlowViewport nodes={nodes} />
+              <Controls position="bottom-left" />
+              <MiniMap
+                position="bottom-right"
+                style={{ width: 168, height: 112 }}
+                pannable
+                zoomable
+                bgColor="rgba(0, 0, 0, 0.85)"
+                maskColor="rgba(0, 0, 0, 0.55)"
+                maskStrokeColor="rgba(255, 255, 255, 0.35)"
+                nodeStrokeWidth={2}
+                nodeColor={(node) => {
+                  switch (node.data?.type) {
+                    case "strategy":
+                      return "rgba(255, 193, 7, 0.75)";
+                    case "deposit":
+                      return "rgba(96, 165, 250, 0.75)";
+                    case "swap":
+                      return "rgba(167, 139, 250, 0.75)";
+                    case "withdraw":
+                      return "rgba(74, 222, 128, 0.75)";
+                    default:
+                      return "rgba(255, 255, 255, 0.4)";
+                  }
+                }}
+                nodeStrokeColor="rgba(255, 255, 255, 0.55)"
+              />
+            </ReactFlow>
 
-        {nodeContextMenu && (
-          <BuildNodeContextMenu
-            x={nodeContextMenu.x}
-            y={nodeContextMenu.y}
-            nodeLabel={nodes.find((node) => node.id === nodeContextMenu.nodeId)?.data.label as string | undefined}
-            isRepeatGroup={(() => {
-              const node = nodes.find((n) => n.id === nodeContextMenu.nodeId);
-              return node ? isRepeatGroupNode(node) : false;
-            })()}
-            onAddInside={(kind, variant) => onAddNodeInsideRepeat(nodeContextMenu.nodeId, kind, variant)}
-            onDelete={() => onDeleteNode(nodeContextMenu.nodeId)}
-            onDuplicate={() => onDuplicateNode(nodeContextMenu.nodeId)}
-            onClose={() => setNodeContextMenu(null)}
-          />
-        )}
+            {nodeContextMenu && (
+              <BuildNodeContextMenu
+                x={nodeContextMenu.x}
+                y={nodeContextMenu.y}
+                nodeLabel={nodes.find((node) => node.id === nodeContextMenu.nodeId)?.data.label as string | undefined}
+                onDelete={() => onDeleteNode(nodeContextMenu.nodeId)}
+                onDuplicate={() => onDuplicateNode(nodeContextMenu.nodeId)}
+                onClose={() => setNodeContextMenu(null)}
+              />
+            )}
           </div>
 
           <BuildAiPrompt
