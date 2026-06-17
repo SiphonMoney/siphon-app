@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
-import { getSiphonVaultTotalBalance, TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit } from '../../../lib/nexus';
+import { getSiphonVaultTotalBalance, TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
+import { exportNotes, importNotes } from '../../../lib/noteStore';
 
 interface UnifiedBalance {
   symbol: string;
@@ -22,6 +23,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [siphonVaultBalances, setSiphonVaultBalances] = useState<{ [token: string]: number } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDepositMode, setIsDepositMode] = useState(true);
+  const [isNotesBusy, setIsNotesBusy] = useState(false);
   const VAULT_CHAIN_ID = 11155111; // Sepolia id
   
   const [transactionInput, setTransactionInput] = useState({
@@ -207,6 +209,44 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     }
 
     setIsProcessing(false);
+  };
+
+  const handleExportNotes = async () => {
+    const signer = getSigner();
+    if (!signer) {
+      alert('Please connect wallet first');
+      return;
+    }
+    setIsNotesBusy(true);
+    try {
+      await exportNotes(signer);
+    } catch (error) {
+      console.error('Failed to export notes:', error);
+      alert('Failed to export notes');
+    } finally {
+      setIsNotesBusy(false);
+    }
+  };
+
+  const handleImportNotes = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const signer = getSigner();
+    if (!signer) {
+      alert('Please connect wallet first');
+      return;
+    }
+    setIsNotesBusy(true);
+    try {
+      await importNotes(signer, file);
+      alert('Notes imported successfully');
+    } catch (error) {
+      console.error('Failed to import notes:', error);
+      alert('Failed to import notes');
+    } finally {
+      setIsNotesBusy(false);
+      e.target.value = '';
+    }
   };
 
   if (!wallet) {
@@ -395,6 +435,39 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                 'Confirm'
               )}
             </button>
+          </div>
+        </div>
+
+        <div className="userdash-notes-card">
+          <div className="userdash-balance-header">
+            <h2 className="userdash-balance-title">Private Notes Backup</h2>
+          </div>
+          <p className="userdash-notes-description">
+            Export or import encrypted ZK deposit receipts tied to your wallet. Use this to back up notes or restore them on another device.
+          </p>
+          <div className="userdash-notes-actions">
+            <button
+              type="button"
+              className="userdash-notes-button userdash-notes-button--primary"
+              onClick={handleExportNotes}
+              disabled={isNotesBusy}
+            >
+              {isNotesBusy ? 'Working...' : 'Export Notes'}
+            </button>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImportNotes}
+              className="userdash-notes-file-input"
+              id="userdash-import-notes"
+              disabled={isNotesBusy}
+            />
+            <label
+              htmlFor="userdash-import-notes"
+              className={`userdash-notes-button userdash-notes-button--secondary${isNotesBusy ? ' userdash-notes-button--disabled' : ''}`}
+            >
+              Import Notes
+            </label>
           </div>
         </div>
       </div>

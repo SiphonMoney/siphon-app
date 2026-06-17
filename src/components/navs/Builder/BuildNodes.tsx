@@ -22,6 +22,24 @@ export const PYTH_PRICE_FEED_IDS: Record<string, string> = {
   USDC: "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
 };
 
+export const CHAIN_LABEL_TO_ID: Record<string, string> = {
+  Sepolia: "11155111",
+  Ethereum: "1",
+  Arbitrum: "42161",
+  Optimism: "10",
+  Base: "8453",
+  Polygon: "137",
+  Solana: "solana",
+};
+
+export function chainLabelToId(chain?: string | null): string {
+  if (!chain) return "11155111";
+  const normalized = chain.trim();
+  if (CHAIN_LABEL_TO_ID[normalized]) return CHAIN_LABEL_TO_ID[normalized];
+  if (normalized === "solana" || /^\d+$/.test(normalized)) return normalized;
+  return "11155111";
+}
+
 export function validateRecipientAddress(address: string, toChain: string): string | null {
   if (!address) return "Recipient address required";
   const EVM_CHAIN_IDS = ["1", "11155111", "42161", "10", "8453", "137"];
@@ -54,8 +72,23 @@ interface NodeData {
   intervals?: string;
   useTree?: string;
   conditionTree?: string;
-  toChain?: string;
+  controlKind?: string;
+  scheduleValue?: string;
+  scheduleUnit?: string;
+  scheduleTrigger?: string;
+  scheduleAt?: string;
+  repeatCount?: string;
   [key: string]: unknown;
+}
+
+function getScheduleFields(data: NodeData): { value: string; unit: ScheduleUnit } {
+  if (data.scheduleValue != null && String(data.scheduleValue).trim() !== "") {
+    return {
+      value: String(data.scheduleValue),
+      unit: (data.scheduleUnit as ScheduleUnit) || "seconds",
+    };
+  }
+  return displayScheduleFromSeconds(data.intervalSeconds as string);
 }
 
 const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
@@ -316,7 +349,7 @@ function TreeBuilderNode({
   );
 }
 
-export function CustomNode({ data, id, updateNodeData, tokens: propTokens = tokens, isTokenActive }: CustomNodeProps) {
+export function CustomNode({ data, id, updateNodeData, tokens: propTokens = tokens, isTokenActive, simStatus, simShaking, simExiting }: CustomNodeProps) {
   const handleChange = (field: string, value: string) => {
     if ((field === 'coin' || field === 'toCoin') && value && isTokenActive && !isTokenActive(value)) {
       return;
@@ -438,31 +471,45 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
             <div className="node-input-row node-input-row--withdraw">
               <select
                 className="node-select"
-                value={data.toChain || '11155111'}
-                onChange={(e) => handleChange('toChain', e.target.value)}
+                value={data.coin || ''}
+                onChange={(e) => handleChange('coin', e.target.value)}
                 onMouseDown={(e) => e.stopPropagation()}
-                style={{ width: '100%' }}
+                onFocus={(e) => e.stopPropagation()}
               >
-                <option value="11155111">Sepolia (EVM)</option>
-                <option value="1">Ethereum (EVM)</option>
-                <option value="42161">Arbitrum (EVM)</option>
-                <option value="10">Optimism (EVM)</option>
-                <option value="8453">Base (EVM)</option>
-                <option value="137">Polygon (EVM)</option>
-                <option value="solana">Solana</option>
+                <option value="">Coin</option>
+                {propTokens.map(token => {
+                  const active = isTokenActive ? isTokenActive(token) : true;
+                  return (
+                    <option key={token} value={token} disabled={!active} className={!active ? 'inactive-token' : ''}>
+                      {token}
+                    </option>
+                  );
+                })}
               </select>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={`node-input${usesAllOutput ? ' node-input--output' : ' node-input--amount'}`}
+                placeholder={isLinked ? 'Output (all)' : 'Amount'}
+                value={amount}
+                onChange={(e) => handleChange('amount', e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                onFocus={(e) => e.stopPropagation()}
+              />
             </div>
-
-            <input
-              type="text"
-              className="node-input"
-              placeholder="Wallet address"
-              value={data.wallet || ''}
-              onChange={(e) => handleChange('wallet', e.target.value)}
-              onMouseDown={(e) => e.stopPropagation()}
-            />
+            <div className="node-input-row node-input-row--withdraw">
+              <input
+                type="text"
+                className="node-input node-input--wallet"
+                placeholder="Wallet address"
+                value={data.wallet || ''}
+                onChange={(e) => handleChange('wallet', e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                onFocus={(e) => e.stopPropagation()}
+              />
+            </div>
             {data.wallet && (() => {
-              const err = validateRecipientAddress(data.wallet, data.toChain || '11155111');
+              const err = validateRecipientAddress(data.wallet, chainLabelToId(data.chain as string));
               return err ? (
                 <div style={{ color: '#ff6b6b', fontSize: '10px', marginTop: '4px', textAlign: 'left', textTransform: 'none', fontFamily: 'monospace' }}>
                   ⚠️ {err}
@@ -520,17 +567,31 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                 )}
 
                 {SINGLE_PRICE_STRATEGIES.includes(normalizeStrategyKind((data.strategy as string) || undefined)) && (
-                  <input
-                    type="text"
-                    className="node-input"
-                    placeholder={
-                      normalizeStrategyKind((data.strategy as string) || undefined) === 'Stop Loss' ? 'Stop price' :
-                      normalizeStrategyKind((data.strategy as string) || undefined) === 'Take Profit' ? 'Target price' : 'Limit price'
-                    }
-                    value={data.priceGoal || ''}
-                    onChange={(e) => handleChange('priceGoal', e.target.value)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  />
+                  <>
+                    <input
+                      type="text"
+                      className="node-input"
+                      placeholder={
+                        normalizeStrategyKind((data.strategy as string) || undefined) === 'Stop Loss' ? 'Stop price' :
+                        normalizeStrategyKind((data.strategy as string) || undefined) === 'Take Profit' ? 'Target price' : 'Goal price'
+                      }
+                      value={data.priceGoal || ''}
+                      onChange={(e) => handleChange('priceGoal', e.target.value)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onFocus={(e) => e.stopPropagation()}
+                    />
+                    {(data.strategy === 'Stop Loss' || data.strategy === 'Take Profit') && (
+                      <input
+                        type="text"
+                        className="node-input"
+                        placeholder="% of position (default 100)"
+                        value={(data.positionPct as string) || ''}
+                        onChange={(e) => handleChange('positionPct', e.target.value)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onFocus={(e) => e.stopPropagation()}
+                      />
+                    )}
+                  </>
                 )}
 
                 {data.strategy === 'Range' && (
@@ -570,6 +631,64 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
                 })()}
               </div>
             )}
+          </div>
+        )}
+
+        {data.type === 'control' && (
+          <div className="node-inputs">
+            {((data.controlKind as string) || '').toLowerCase() === 'schedule' && (() => {
+              const trigger = ((data.scheduleTrigger as string) || 'after') as ScheduleTrigger;
+              const afterFields = getScheduleFields(data);
+              return (
+                <div className="node-input-row node-input-row--schedule">
+                  <select
+                    className="node-select node-select--trigger"
+                    value={trigger}
+                    onChange={(e) => handleChange('scheduleTrigger', e.target.value)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
+                  >
+                    <option value="after">After</option>
+                    <option value="at">At</option>
+                  </select>
+                  {trigger === 'after' ? (
+                    <>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="node-input node-input--schedule-value"
+                        placeholder="0"
+                        value={afterFields.value}
+                        onChange={(e) => handleChange('scheduleValue', e.target.value)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onFocus={(e) => e.stopPropagation()}
+                      />
+                      <select
+                        className="node-select node-select--unit"
+                        value={afterFields.unit}
+                        onChange={(e) => handleChange('scheduleUnit', e.target.value)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onFocus={(e) => e.stopPropagation()}
+                      >
+                        <option value="blocks">Blocks</option>
+                        <option value="seconds">Seconds</option>
+                        <option value="minutes">Minutes</option>
+                        <option value="hours">Hours</option>
+                      </select>
+                    </>
+                  ) : (
+                    <input
+                      type="time"
+                      className="node-input node-input--time"
+                      value={(data.scheduleAt as string) || ''}
+                      onChange={(e) => handleChange('scheduleAt', e.target.value)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onFocus={(e) => e.stopPropagation()}
+                    />
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

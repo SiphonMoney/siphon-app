@@ -43,6 +43,9 @@ import {
   resolveLoopIntervalSeconds,
   resolveScheduleStartDelaySeconds,
   normalizeStrategyKind,
+  buildStrategyPayload,
+  computeRangeGridLegs,
+  validateStrategyFields,
 } from "../../../lib/strategySpec";
 import { layoutStrategyNodes, getModalStepNodes } from "../../../lib/builderLayout";
 import { formatGraphForPreview } from "../../../lib/repeatGraph";
@@ -55,9 +58,9 @@ import {
 } from "../../../lib/graphLinks";
 import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
-import { exportNotes, importNotes } from "../../../lib/noteStore";
-import { getSigner } from "../../../lib/nexus";
-import { validateRecipientAddress } from "./BuildNodes";
+import { createStrategy } from "../../../lib/strategy";
+import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
+import { validateRecipientAddress, chainLabelToId } from "./BuildNodes";
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -657,7 +660,7 @@ export default function Build({
     }
 
     const recipient = (withdrawNode?.data.wallet as string || '').trim();
-    const toChain = (withdrawNode?.data.toChain as string || '11155111');
+    const toChain = chainLabelToId(withdrawNode?.data.chain as string);
     const payloadBounds = buildStrategyPayload(strategyKind, strategyFields);
 
     if (!amount || amount <= 0) { alert('Deposit node needs a valid amount.'); return; }
@@ -772,37 +775,6 @@ export default function Build({
     setBuilderBotMessage(null);
     setBuilderPrompt("");
   }, [setNodes, setEdges, setCurrentFileName]);
-
-  const handleExport = async () => {
-    const signer = getSigner();
-    if (!signer) {
-      alert("Connect wallet first!");
-      return;
-    }
-    try {
-      await exportNotes(signer);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to export notes");
-    }
-  };
-
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const signer = getSigner();
-    if (!signer) {
-      alert("Connect wallet first!");
-      return;
-    }
-    try {
-      await importNotes(signer, file);
-      alert('Notes imported successfully');
-    } catch (e) {
-      console.error(e);
-      alert("Failed to import notes");
-    }
-  };
   
   const saveScene = useCallback((sceneName: string) => {
     const scene = {
@@ -924,75 +896,16 @@ export default function Build({
           />
 
           <div className="blueprint-canvas" onContextMenu={onCanvasContextMenu}>
-            {/* Floating note export/import controls */}
-            <div className="note-sync-controls" style={{
-              position: 'absolute',
-              bottom: '24px',
-              left: '24px',
-              zIndex: 1000,
-              display: 'flex',
-              gap: '8px',
-              background: 'rgba(0, 0, 0, 0.85)',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              alignItems: 'center',
-              backdropFilter: 'blur(8px)',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
-            }}>
-              <button
-                onClick={handleExport}
-                style={{
-                  background: '#ffffff',
-                  color: '#000000',
-                  border: 'none',
-                  padding: '6px 12px',
-                  borderRadius: '4px',
-                  fontFamily: 'monospace',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'opacity 0.2s'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
-                onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
-              >
-                EXPORT NOTES
-              </button>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                style={{ display: 'none' }}
-                id="import-notes"
+            {simToast && (
+              <BuildSimToast
+                message={simToast.message}
+                type={simToast.type}
+                exiting={simExiting}
+                onDismiss={dismissToast}
               />
-              <label
-                htmlFor="import-notes"
-                style={{
-                  cursor: 'pointer',
-                  background: 'transparent',
-                  color: '#ffffff',
-                  border: '1px solid rgba(255, 255, 255, 0.3)',
-                  padding: '5px 11px',
-                  borderRadius: '4px',
-                  fontFamily: 'monospace',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  transition: 'border-color 0.2s, background 0.2s'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.borderColor = '#ffffff';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-                  e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                IMPORT NOTES
-              </label>
-            </div>
-            <ReactFlow
+            )}
+            <BlueprintFlow
+              setNodes={setNodes}
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
@@ -1005,67 +918,13 @@ export default function Build({
               onNodesDelete={(nodesToDelete) => {
                 nodesToDelete.forEach((node) => onDeleteNode(node.id));
               }}
-              fitView
-              minZoom={0.1}
-              maxZoom={2}
-              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-              deleteKeyCode={['Backspace', 'Delete']}
-              nodesDraggable={true}
-              nodesConnectable={true}
-              elementsSelectable={true}
-              panOnDrag={true}
-              panOnScroll={false}
-              zoomOnScroll={true}
-              zoomOnPinch={true}
-              zoomOnDoubleClick={false}
-              selectNodesOnDrag={false}
-              preventScrolling={true}
-              nodeTypes={{
-                custom: ({ data, id }) => (
-                  <CustomNode
-                    data={data}
-                    id={id}
-                    updateNodeData={updateNodeData}
-                    tokens={tokens}
-                    isTokenActive={isTokenActive}
-                  />
-                )
-              }}
-              defaultEdgeOptions={{
-                style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 },
-                type: 'smoothstep'
-              }}
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background />
-              <BlueprintFlowViewport nodes={nodes} />
-              <Controls position="bottom-left" />
-              <MiniMap
-                position="bottom-right"
-                style={{ width: 168, height: 112 }}
-                pannable
-                zoomable
-                bgColor="rgba(0, 0, 0, 0.85)"
-                maskColor="rgba(0, 0, 0, 0.55)"
-                maskStrokeColor="rgba(255, 255, 255, 0.35)"
-                nodeStrokeWidth={2}
-                nodeColor={(node) => {
-                  switch (node.data?.type) {
-                    case "strategy":
-                      return "rgba(255, 193, 7, 0.75)";
-                    case "deposit":
-                      return "rgba(96, 165, 250, 0.75)";
-                    case "swap":
-                      return "rgba(167, 139, 250, 0.75)";
-                    case "withdraw":
-                      return "rgba(74, 222, 128, 0.75)";
-                    default:
-                      return "rgba(255, 255, 255, 0.4)";
-                  }
-                }}
-                nodeStrokeColor="rgba(255, 255, 255, 0.55)"
-              />
-            </ReactFlow>
+              updateNodeData={updateNodeData}
+              tokens={tokens}
+              isTokenActive={isTokenActive}
+              simHighlight={simHighlight}
+              simShakingId={simShakingId}
+              simExiting={simExiting}
+            />
 
             {nodeContextMenu && (
               <BuildNodeContextMenu
