@@ -13,8 +13,20 @@ function collectWarnings(parsed: ReturnType<typeof parsePrompt>): string[] {
         return `${parsed.coin} is not active yet — switch to ETH or USDC before running.`;
       case "amount":
         return "No amount detected — set an amount on the Deposit block.";
+      case "side":
+        return "Limit order side not set — choose buy or sell on the Strategy block.";
       case "priceGoal":
-        return "No price goal detected — set a target on the Strategy block.";
+        return "No trigger price detected — set it on the Strategy block.";
+      case "rangeLow":
+        return "Range low price not set — add it on the Strategy block.";
+      case "rangeHigh":
+        return "Range high price not set — add it on the Strategy block.";
+      case "gridLevels":
+        return "Grid level count not set — add it on the Strategy block.";
+      case "sliceCount":
+        return "TWAP slice count not set — add it on the Strategy block.";
+      case "intervalSeconds":
+        return "TWAP interval not set — add seconds between slices on the Strategy block.";
       case "intervals":
         return "DCA interval not detected — set intervals on the Strategy block.";
       case "toCoin":

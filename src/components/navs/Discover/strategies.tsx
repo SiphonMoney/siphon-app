@@ -56,34 +56,36 @@ export const strategyList: StrategyMetadata[] = [
     profit: '+5.2%', 
     description: 'Set your desired price and wait for the market to reach it. Execute trades at your specified price level for better control.', 
     category: 'trading', 
-    chains: ['base', 'ethereum', 'solana', 'btc'], 
-    networks: ['Base', 'Ethereum', 'Solana', 'Bitcoin'],
+    chains: ['ethereum', 'base'], 
+    networks: ['Ethereum', 'Base'],
     activeNetworks: ['Sepolia'], // Only Sepolia (Ethereum) is active
     isActive: true 
   },
   { 
-    name: 'Buy High - Sell Low', 
-    author: '0x1234...5678', 
-    nodes: 2, 
-    usage: 12, 
-    profit: '-99.9%', 
-    description: 'The ultimate contrarian strategy. Buy at peaks, sell at valleys. Maximum loss, maximum style.', 
+    name: 'DCA Accumulator', 
+    author: 'Siphon Team', 
+    nodes: 4, 
+    usage: 18, 
+    profit: '+2.1%', 
+    description: 'Conservative DCA template for testing scheduled recurring buys with small sizes and explicit withdrawal routing.', 
     category: 'trading', 
-    chains: ['arbitrage', 'ethereum'], 
-    networks: ['Ethereum', 'Base'], 
-    isActive: false 
+    chains: ['ethereum', 'base'], 
+    networks: ['Ethereum', 'Base'],
+    activeNetworks: ['Sepolia'],
+    isActive: true
   },
   { 
-    name: 'DCA to Oblivion', 
-    author: '0xabcd...efgh', 
+    name: 'Grid Trading', 
+    author: 'Siphon Team', 
     nodes: 4, 
-    usage: 8, 
-    profit: '+0.0%', 
-    description: 'Dollar-cost average forever. Never stop buying. Never check the price. Just keep going.', 
+    usage: 14, 
+    profit: '+3.4%', 
+    description: 'Range-based grid strategy template with bounded low/high levels and moderate grid count for safer test execution.', 
     category: 'trading', 
-    chains: ['yields', 'base'], 
-    networks: ['Solana', 'Ethereum'], 
-    isActive: false 
+    chains: ['ethereum', 'base'], 
+    networks: ['Ethereum', 'Base'],
+    activeNetworks: ['Sepolia'],
+    isActive: true
   },
 ];
 
@@ -283,19 +285,19 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
   const timestamp4 = Date.now() + 3000;
   
   return {
-    'Buy High - Sell Low': {
-      name: 'Buy High - Sell Low',
+    'DCA Accumulator (Safe Test)': {
+      name: 'DCA Accumulator (Safe Test)',
       nodes: [
         {
           id: `deposit-${timestamp1}`,
           type: 'custom',
           position: { x: 100, y: 200 },
           data: {
-            label: 'Deposit from Ethereum',
+            label: 'Deposit',
             type: 'deposit',
-            chain: 'Ethereum',
-            dex: null,
-            strategy: null
+            chain: 'Sepolia',
+            coin: 'USDC',
+            amount: '300'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -310,11 +312,10 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           type: 'custom',
           position: { x: 400, y: 200 },
           data: {
-            label: 'Buy High',
+            label: 'DCA',
             type: 'strategy',
-            chain: 'Ethereum',
-            dex: null,
-            strategy: 'buy-high'
+            strategy: 'DCA',
+            intervals: '1 day'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -329,11 +330,12 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           type: 'custom',
           position: { x: 700, y: 200 },
           data: {
-            label: 'Sell Low',
+            label: 'Swap',
             type: 'swap',
-            chain: 'Ethereum',
-            dex: null,
-            strategy: null
+            dex: 'Uniswap',
+            coin: 'USDC',
+            toCoin: 'ETH',
+            amount: '300'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -348,11 +350,12 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           type: 'custom',
           position: { x: 1000, y: 200 },
           data: {
-            label: 'Withdraw to Ethereum',
+            label: 'Withdraw',
             type: 'withdraw',
-            chain: 'Ethereum',
-            dex: null,
-            strategy: null
+            chain: 'Sepolia',
+            coin: 'ETH',
+            amount: '0.1',
+            wallet: '0x...'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -387,19 +390,19 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
         }
       ]
     },
-    'DCA to Oblivion': {
-      name: 'DCA to Oblivion',
+    'Grid Trading (Safe Test)': {
+      name: 'Grid Trading (Safe Test)',
       nodes: [
         {
           id: `deposit-${timestamp1 + 10000}`,
           type: 'custom',
-          position: { x: 100, y: 150 },
+          position: { x: 100, y: 200 },
           data: {
-            label: 'Deposit from Solana',
+            label: 'Deposit',
             type: 'deposit',
-            chain: 'Solana',
-            dex: null,
-            strategy: null
+            chain: 'Sepolia',
+            coin: 'USDC',
+            amount: '1200'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -412,13 +415,14 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
         {
           id: `strategy-${timestamp2 + 10000}`,
           type: 'custom',
-          position: { x: 400, y: 150 },
+          position: { x: 400, y: 200 },
           data: {
-            label: 'DCA Start',
+            label: 'Range',
             type: 'strategy',
-            chain: 'Solana',
-            dex: null,
-            strategy: 'dca'
+            strategy: 'Range',
+            rangeLow: '2600',
+            rangeHigh: '3200',
+            gridLevels: '5'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -431,13 +435,14 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
         {
           id: `swap-${timestamp3 + 10000}`,
           type: 'custom',
-          position: { x: 700, y: 150 },
+          position: { x: 700, y: 200 },
           data: {
-            label: 'Buy BTC',
+            label: 'Swap',
             type: 'swap',
-            chain: 'Solana',
-            dex: null,
-            strategy: null
+            dex: 'Uniswap',
+            coin: 'USDC',
+            toCoin: 'ETH',
+            amount: '1200'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -448,34 +453,16 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           }
         },
         {
-          id: `strategy-${timestamp4 + 10000}`,
-          type: 'custom',
-          position: { x: 400, y: 300 },
-          data: {
-            label: 'Loop Forever',
-            type: 'strategy',
-            chain: 'Solana',
-            dex: null,
-            strategy: 'loop'
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          style: {
-            background: 'rgba(255, 193, 7, 0.2)',
-            border: '1px solid rgba(255, 193, 7, 0.5)',
-            color: 'white'
-          }
-        },
-        {
           id: `withdraw-${timestamp4 + 20000}`,
           type: 'custom',
-          position: { x: 1000, y: 150 },
+          position: { x: 1000, y: 200 },
           data: {
-            label: 'Withdraw to Solana',
+            label: 'Withdraw',
             type: 'withdraw',
-            chain: 'Solana',
-            dex: null,
-            strategy: null
+            chain: 'Sepolia',
+            coin: 'ETH',
+            amount: '0.2',
+            wallet: '0x...'
           },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
@@ -498,20 +485,6 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
           id: `xy-edge__strategy-${timestamp2 + 10000}-swap-${timestamp3 + 10000}`,
           source: `strategy-${timestamp2 + 10000}`,
           target: `swap-${timestamp3 + 10000}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        },
-        {
-          id: `xy-edge__swap-${timestamp3 + 10000}-strategy-${timestamp4 + 10000}`,
-          source: `swap-${timestamp3 + 10000}`,
-          target: `strategy-${timestamp4 + 10000}`,
-          type: 'smoothstep',
-          style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
-        },
-        {
-          id: `xy-edge__strategy-${timestamp4 + 10000}-strategy-${timestamp2 + 10000}`,
-          source: `strategy-${timestamp4 + 10000}`,
-          target: `strategy-${timestamp2 + 10000}`,
           type: 'smoothstep',
           style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 }
         },
@@ -568,12 +541,24 @@ export const initializeLimitOrderStrategy = (): void => {
 export const initializeDiscoverStrategies = (): void => {
   const discoverStrategiesKey = 'siphon-discover-strategies';
   const stored = localStorage.getItem(discoverStrategiesKey);
-  
+
+  const templates = createOtherStrategies();
   if (!stored) {
-    // Create mock strategy data with nodes and edges matching the actual structure
-    const otherStrategies = createOtherStrategies();
-    
-    localStorage.setItem(discoverStrategiesKey, JSON.stringify(otherStrategies));
+    localStorage.setItem(discoverStrategiesKey, JSON.stringify(templates));
+    return;
+  }
+
+  try {
+    const current = JSON.parse(stored) as Record<string, StrategyData>;
+    const merged: Record<string, StrategyData> = { ...current };
+    Object.entries(templates).forEach(([name, strategy]) => {
+      if (!merged[name]) {
+        merged[name] = strategy;
+      }
+    });
+    localStorage.setItem(discoverStrategiesKey, JSON.stringify(merged));
+  } catch {
+    localStorage.setItem(discoverStrategiesKey, JSON.stringify(templates));
   }
 };
 

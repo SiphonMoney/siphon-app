@@ -5,14 +5,21 @@ import {
   isActiveToken,
   normalizeToken,
 } from "./blocks";
-import type { ParsedPrompt, StrategyKind } from "./types";
+import { defaultSideForKind } from "../lib/strategySpec";
+import type { ParsedPrompt, StrategyKind, StrategySide } from "./types";
 
 const TOKEN_PATTERN = /\b(eth|usdc|usdt|wbtc|sol|xmr)\b/gi;
 const WALLET_PATTERN = /0x[a-fA-F0-9]{40}/;
 const AMOUNT_PATTERN = /\b(\d+(?:\.\d+)?)\s*(eth|usdc|usdt|wbtc|sol|xmr)?\b/i;
 const PRICE_PATTERN =
-  /(?:at|@|price(?:\s+goal)?|hits?|reach(?:es)?|above|below|target)\s*\$?(\d+(?:\.\d+)?)/i;
+  /(?:at|@|price(?:\s+goal)?|hits?|reach(?:es)?|above|below|target|stop)\s*\$?(\d+(?:\.\d+)?)/i;
+const RANGE_PATTERN =
+  /(?:between|from)\s*\$?(\d+(?:\.\d+)?)\s*(?:and|to|-)\s*\$?(\d+(?:\.\d+)?)/i;
+const GRID_PATTERN = /(\d+)\s*(?:grid|levels?|steps?)/i;
+const SLICE_PATTERN = /(\d+)\s*slices?/i;
+const INTERVAL_SEC_PATTERN = /every\s+(\d+)\s*(?:s|sec|secs|second|seconds|min|mins|minute|minutes)/i;
 const INTERVAL_PATTERN = /every\s+(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|w|week|weeks))/i;
+const SLIPPAGE_PATTERN = /(\d+(?:\.\d+)?)\s*(?:%|bps)\s*slippage/i;
 
 function detectStrategy(prompt: string): StrategyKind {
   for (const entry of STRATEGY_KEYWORDS) {
@@ -21,6 +28,13 @@ function detectStrategy(prompt: string): StrategyKind {
     }
   }
   return "Limit Order";
+}
+
+function detectSide(prompt: string, strategy: StrategyKind): StrategySide | null {
+  if (/\b(buy|long)\b/i.test(prompt)) return "buy";
+  if (/\b(sell|short)\b/i.test(prompt)) return "sell";
+  if (strategy === "Limit Order") return null;
+  return defaultSideForKind(strategy);
 }
 
 function extractTokens(prompt: string): string[] {
@@ -36,9 +50,19 @@ function pickTradableToken(tokens: string[]): string | null {
   return active ?? tokens[0] ?? null;
 }
 
+function parseIntervalSeconds(prompt: string): string | null {
+  const match = prompt.match(INTERVAL_SEC_PATTERN);
+  if (!match) return null;
+  const value = parseInt(match[1], 10);
+  const unit = match[0].toLowerCase();
+  if (unit.includes("min")) return String(value * 60);
+  return String(value);
+}
+
 export function parsePrompt(prompt: string): ParsedPrompt {
   const trimmed = prompt.trim();
   const lower = trimmed.toLowerCase();
+  const strategy = detectStrategy(trimmed);
   const tokens = extractTokens(trimmed);
   const coin = pickTradableToken(tokens);
   const toCoin =
@@ -53,7 +77,12 @@ export function parsePrompt(prompt: string): ParsedPrompt {
     null;
 
   const priceMatch = trimmed.match(PRICE_PATTERN);
+  const rangeMatch = trimmed.match(RANGE_PATTERN);
+  const gridMatch = trimmed.match(GRID_PATTERN);
+  const sliceMatch = trimmed.match(SLICE_PATTERN);
+  const intervalSecMatch = parseIntervalSeconds(trimmed);
   const intervalMatch = trimmed.match(INTERVAL_PATTERN);
+  const slippageMatch = trimmed.match(SLIPPAGE_PATTERN);
   const walletMatch = trimmed.match(WALLET_PATTERN);
 
   const includeSwap =
@@ -70,7 +99,8 @@ export function parsePrompt(prompt: string): ParsedPrompt {
 
   return {
     raw: trimmed,
-    strategy: detectStrategy(trimmed),
+    strategy,
+    side: detectSide(trimmed, strategy),
     depositChain: DEFAULT_CHAIN,
     withdrawChain: DEFAULT_CHAIN,
     dex: DEFAULT_DEX,
@@ -78,6 +108,12 @@ export function parsePrompt(prompt: string): ParsedPrompt {
     toCoin: includeSwap ? toCoin : null,
     amount,
     priceGoal: priceMatch?.[1] ?? null,
+    rangeLow: rangeMatch?.[1] ?? null,
+    rangeHigh: rangeMatch?.[2] ?? null,
+    gridLevels: gridMatch?.[1] ?? null,
+    sliceCount: sliceMatch?.[1] ?? null,
+    intervalSeconds: intervalSecMatch,
+    maxSlippageBps: slippageMatch?.[1] ?? null,
     intervals: intervalMatch?.[1] ?? (lower.includes("dca") ? "1 day" : null),
     wallet: walletMatch?.[0] ?? null,
     includeSwap,

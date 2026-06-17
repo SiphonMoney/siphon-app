@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 interface WalletOption {
   id: string;
@@ -31,35 +32,64 @@ interface WalletSelectorProps {
 
 export default function WalletSelector({ onWalletSelect, className, shouldOpen, onOpenChange }: WalletSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; width: number } | null>(null);
   const walletSelectorRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (shouldOpen !== undefined && shouldOpen) {
-      setIsOpen(true);
-      // Reset the shouldOpen flag after opening
-      if (onOpenChange) {
-        // Use a small delay to ensure the state update happens
-        setTimeout(() => {
-          onOpenChange(false);
-        }, 50);
-      }
+    setMounted(true);
+  }, []);
+
+  const updateDropdownPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const width = rect.width;
+    const left = Math.min(
+      Math.max(8, rect.right - width),
+      window.innerWidth - width - 8
+    );
+
+    setDropdownStyle({
+      top: rect.bottom + 8,
+      left,
+      width,
+    });
+  }, []);
+
+  const setOpen = useCallback((open: boolean) => {
+    setIsOpen(open);
+    onOpenChange?.(open);
+    if (open) {
+      requestAnimationFrame(updateDropdownPosition);
     }
-  }, [shouldOpen, onOpenChange]);
+  }, [onOpenChange, updateDropdownPosition]);
+
+  useEffect(() => {
+    if (shouldOpen) {
+      setOpen(true);
+      const timer = window.setTimeout(() => onOpenChange?.(false), 50);
+      return () => window.clearTimeout(timer);
+    }
+  }, [shouldOpen, setOpen, onOpenChange]);
 
   const handleWalletClick = async (walletId: string) => {
-    setIsOpen(false);
-    if (onOpenChange) {
-      onOpenChange(false);
-    }
+    setOpen(false);
     onWalletSelect(walletId);
   };
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (walletSelectorRef.current && !walletSelectorRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      const target = event.target as Node;
+      if (
+        walletSelectorRef.current?.contains(target) ||
+        (target instanceof Element && target.closest('.wallet-dropdown-portal'))
+      ) {
+        return;
       }
+      setOpen(false);
     };
 
     if (isOpen) {
@@ -69,46 +99,76 @@ export default function WalletSelector({ onWalletSelect, className, shouldOpen, 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, setOpen]);
 
-  return (
-    <div ref={walletSelectorRef} className={`wallet-selector ${className}`}>
-      <button 
-        className="wallet-selector-trigger"
-        onClick={() => {
-          const newState = !isOpen;
-          setIsOpen(newState);
-          if (onOpenChange) {
-            onOpenChange(newState);
-          }
-        }}
-      >
-        <span className="wallet-icon"></span>
-        <span className="wallet-text">Connect Wallet</span>
-        <span className="dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
-      </button>
+  useEffect(() => {
+    if (!isOpen) return;
 
-      {isOpen && (
-        <div className="wallet-dropdown">
+    updateDropdownPosition();
+
+    const handleReposition = () => updateDropdownPosition();
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+
+    return () => {
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+    };
+  }, [isOpen, updateDropdownPosition]);
+
+  const dropdown = isOpen && dropdownStyle && mounted
+    ? createPortal(
+        <div
+          className="wallet-dropdown wallet-dropdown-portal"
+          style={{
+            position: 'fixed',
+            top: dropdownStyle.top,
+            left: dropdownStyle.left,
+            width: dropdownStyle.width,
+          }}
+        >
           <div className="wallet-options">
             {walletOptions.map((wallet) => (
               <button
                 key={wallet.id}
+                type="button"
                 className={`wallet-option ${wallet.active ? 'active' : 'inactive'}`}
-                onClick={() => wallet.active && handleWalletClick(wallet.id)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (wallet.active) {
+                    void handleWalletClick(wallet.id);
+                  }
+                }}
                 disabled={!wallet.active}
               >
                 <span className="wallet-option-icon">{wallet.icon}</span>
                 <div className="wallet-option-info">
                   <span className="wallet-option-name">{wallet.name}</span>
-                  <span className="wallet-option-chain">{wallet.chain}</span>
                 </div>
               </button>
             ))}
           </div>
-        </div>
-      )}
-    </div>
+        </div>,
+        document.body
+      )
+    : null;
+
+  return (
+    <>
+      <div ref={walletSelectorRef} className={`wallet-selector ${className ?? ''}`}>
+        <button
+          ref={triggerRef}
+          type="button"
+          className="wallet-selector-trigger"
+          onClick={() => setOpen(!isOpen)}
+        >
+          <span className="wallet-icon"></span>
+          <span className="wallet-text">Connect Wallet</span>
+          <span className="dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
+        </button>
+      </div>
+      {dropdown}
+    </>
   );
 }
-

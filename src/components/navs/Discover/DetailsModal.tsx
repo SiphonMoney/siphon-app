@@ -22,6 +22,12 @@ interface NodeData {
   [key: string]: string | undefined;
 }
 
+interface StepTag {
+  label: string;
+  field: string;
+  options?: string[];
+}
+
 interface StrategyMetadata {
   name: string;
   author: string;
@@ -97,6 +103,51 @@ export default function DetailsModal({
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'loading' } | null>(null);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
+
+  const getStepTags = (nodeData: NodeData, isRunModeView: boolean): StepTag[] => {
+    const tags: StepTag[] = [];
+    if (nodeData?.type === 'deposit') {
+      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Sepolia'] : undefined });
+      tags.push({ label: 'Token A', field: 'tokenA', options: isRunModeView ? ['USDC', 'ETH'] : undefined });
+      tags.push({ label: 'Amount', field: 'amount' });
+      return tags;
+    }
+
+    if (nodeData?.type === 'strategy') {
+      const strategyKind = nodeData.strategy || '';
+      if (strategyKind === 'Limit Order') {
+        tags.push({ label: 'Type', field: 'type', options: isRunModeView ? ['Buy', 'Sell'] : undefined });
+        tags.push({ label: 'PriceGoal', field: 'priceGoal' });
+      } else if (strategyKind === 'Range') {
+        tags.push({ label: 'Range Low', field: 'rangeLow' });
+        tags.push({ label: 'Range High', field: 'rangeHigh' });
+        tags.push({ label: 'Grid Levels', field: 'gridLevels' });
+      } else if (strategyKind === 'TWAP') {
+        tags.push({ label: 'Slices', field: 'sliceCount' });
+        tags.push({ label: 'Interval Sec', field: 'intervalSeconds' });
+        tags.push({ label: 'Slippage Bps', field: 'maxSlippageBps' });
+      } else if (strategyKind === 'DCA') {
+        tags.push({ label: 'Interval', field: 'intervals' });
+      } else if (strategyKind === 'Stop Loss' || strategyKind === 'Take Profit') {
+        tags.push({ label: 'PriceGoal', field: 'priceGoal' });
+      }
+      return tags;
+    }
+
+    if (nodeData?.type === 'swap') {
+      tags.push({ label: 'Dex Type', field: 'dexType', options: isRunModeView ? ['Uniswap'] : undefined });
+      tags.push({ label: 'Token B', field: 'coinB', options: isRunModeView ? ['ETH', 'USDC'] : undefined });
+      return tags;
+    }
+
+    if (nodeData?.type === 'withdraw') {
+      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Sepolia'] : undefined });
+      tags.push({ label: 'Address', field: 'address' });
+      return tags;
+    }
+
+    return tags;
+  };
 
   // Fetch prices once when modal opens
   useEffect(() => {
@@ -572,22 +623,7 @@ export default function DetailsModal({
                       {modalStrategyNodes.map((node, index) => {
                         const nodeData = node.data as NodeData;
                         
-                        const tags: Array<{ label: string; field: string; options?: string[] }> = [];
-                        
-                        if (nodeData?.type === 'deposit') {
-                          tags.push({ label: 'Chain', field: 'chain', options: ['Sepolia'] });
-                          tags.push({ label: 'Token A', field: 'tokenA', options: ['USDC', 'ETH'] });
-                          tags.push({ label: 'Amount', field: 'amount' });
-                        } else if (nodeData?.type === 'strategy' && nodeData.strategy === 'Limit Order') {
-                          tags.push({ label: 'Type', field: 'type', options: ['Buy', 'Sell'] });
-                          tags.push({ label: 'PriceGoal', field: 'priceGoal' });
-                        } else if (nodeData?.type === 'swap') {
-                          tags.push({ label: 'Dex Type', field: 'dexType', options: ['Uniswap'] });
-                          tags.push({ label: 'Token B', field: 'coinB', options: ['ETH', 'USDC'] });
-                        } else if (nodeData?.type === 'withdraw') {
-                          tags.push({ label: 'Chain', field: 'chain', options: ['Sepolia'] });
-                          tags.push({ label: 'Address', field: 'address' });
-                        }
+                        const tags = getStepTags(nodeData, true);
                         
                         const stepId = node.id;
                         const stepValues = runModeValues[stepId] || {};
@@ -887,22 +923,7 @@ export default function DetailsModal({
                       {modalStrategyNodes.map((node, index) => {
                         const nodeData = node.data as NodeData;
                         
-                        const tags: Array<{ label: string; field: string }> = [];
-                        
-                        if (nodeData?.type === 'deposit') {
-                          tags.push({ label: 'Chain', field: 'chain' });
-                          tags.push({ label: 'Token A', field: 'tokenA' });
-                          tags.push({ label: 'Amount', field: 'amount' });
-                        } else if (nodeData?.type === 'strategy' && nodeData.strategy === 'Limit Order') {
-                          tags.push({ label: 'Type', field: 'type' });
-                          tags.push({ label: 'PriceGoal', field: 'priceGoal' });
-                        } else if (nodeData?.type === 'swap') {
-                          tags.push({ label: 'Dex Type', field: 'dexType' });
-                          tags.push({ label: 'Token B', field: 'coinB' });
-                        } else if (nodeData?.type === 'withdraw') {
-                          tags.push({ label: 'Chain', field: 'chain' });
-                          tags.push({ label: 'Address', field: 'address' });
-                        }
+                        const tags = getStepTags(nodeData, false);
                         
                         return (
                           <div key={node.id} className="strategy-step-item">

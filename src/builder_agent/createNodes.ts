@@ -1,4 +1,5 @@
 import { Position, type Edge, type Node } from "@xyflow/react";
+import { defaultSideForKind } from "../lib/strategySpec";
 import type { BlockNodeData, BlockType, ParsedPrompt } from "./types";
 
 const TOKEN_PRICES: Record<string, number> = {
@@ -55,7 +56,14 @@ export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNode
       toCoin: null,
       toAmount: null,
       wallet: null,
+      side: null,
       priceGoal: null,
+      rangeLow: null,
+      rangeHigh: null,
+      gridLevels: null,
+      sliceCount: null,
+      intervalSeconds: null,
+      maxSlippageBps: null,
       intervals: null,
     };
   }
@@ -67,12 +75,19 @@ export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNode
       chain: null,
       dex: null,
       strategy: parsed.strategy,
+      side: parsed.side ?? defaultSideForKind(parsed.strategy),
       coin: null,
       amount: null,
       toCoin: null,
       toAmount: null,
       wallet: null,
       priceGoal: parsed.priceGoal,
+      rangeLow: parsed.rangeLow,
+      rangeHigh: parsed.rangeHigh,
+      gridLevels: parsed.gridLevels,
+      sliceCount: parsed.sliceCount,
+      intervalSeconds: parsed.intervalSeconds,
+      maxSlippageBps: parsed.maxSlippageBps,
       intervals: parsed.intervals,
     };
   }
@@ -95,7 +110,14 @@ export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNode
       toCoin,
       toAmount,
       wallet: null,
+      side: null,
       priceGoal: null,
+      rangeLow: null,
+      rangeHigh: null,
+      gridLevels: null,
+      sliceCount: null,
+      intervalSeconds: null,
+      maxSlippageBps: null,
       intervals: null,
     };
   }
@@ -111,7 +133,14 @@ export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNode
     toCoin: null,
     toAmount: null,
     wallet: parsed.wallet,
+    side: null,
     priceGoal: null,
+    rangeLow: null,
+    rangeHigh: null,
+    gridLevels: null,
+    sliceCount: null,
+    intervalSeconds: null,
+    maxSlippageBps: null,
     intervals: null,
   };
 }

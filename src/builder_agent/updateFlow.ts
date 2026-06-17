@@ -1,4 +1,5 @@
 import type { Node } from "@xyflow/react";
+import { defaultSideForKind } from "../lib/strategySpec";
 import type { BlockNodeData, BlockType, ParsedPrompt } from "./types";
 
 const TOKEN_PRICES: Record<string, number> = {
@@ -32,7 +33,14 @@ export function updateFlowNodes(nodes: Node[], parsed: ParsedPrompt): Node[] {
     if (type === "strategy") {
       data.label = parsed.strategy;
       data.strategy = parsed.strategy;
+      data.side = parsed.side ?? data.side ?? defaultSideForKind(parsed.strategy);
       data.priceGoal = parsed.priceGoal ?? data.priceGoal;
+      data.rangeLow = parsed.rangeLow ?? data.rangeLow;
+      data.rangeHigh = parsed.rangeHigh ?? data.rangeHigh;
+      data.gridLevels = parsed.gridLevels ?? data.gridLevels;
+      data.sliceCount = parsed.sliceCount ?? data.sliceCount;
+      data.intervalSeconds = parsed.intervalSeconds ?? data.intervalSeconds;
+      data.maxSlippageBps = parsed.maxSlippageBps ?? data.maxSlippageBps;
       data.intervals = parsed.intervals ?? data.intervals;
     }
 

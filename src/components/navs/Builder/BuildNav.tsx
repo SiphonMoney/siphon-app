@@ -42,27 +42,29 @@ export default function BuildNav({
   
   const chains = ['Sepolia', 'Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
   const dexes = ['Uniswap', 'Raydium', 'Jupiter', 'Orca', 'Serum', 'Meteora'];
-  const strategies = ['Limit Order', 'Buy Dip', 'Sell Rally', 'DCA'];
+  const strategies = ['Limit Order', 'Stop Loss', 'Take Profit', 'Range', 'TWAP', 'DCA'];
   
-  // Active options
-  const activeChain = 'Sepolia';
-  const activeDex = 'Uniswap';
-  const activeStrategy = 'Limit Order';
+  const activeStrategies = strategies;
   
   const isChainActive = (chain: string) => chain === activeChain;
   const isDexActive = (dex: string) => dex === activeDex;
-  const isStrategyActive = (strategy: string) => strategy === activeStrategy;
+  const activeChain = 'Sepolia';
+  const activeDex = 'Uniswap';
+  
+  const isStrategyActive = (strategy: string) => activeStrategies.includes(strategy);
   
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (submenuRef.current && event.target instanceof Element && !submenuRef.current.contains(event.target)) {
-        setShowSubmenu(null);
-      }
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target) return;
+      if (target.closest('.blueprint-submenu-wrapper')) return;
+      if (target.closest('.blueprint-action-btn')) return;
+      setShowSubmenu(null);
     };
-    
+
     if (showSubmenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('pointerdown', handleOutsidePointerDown, true);
+      return () => document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
     }
   }, [showSubmenu]);
   
@@ -221,6 +223,25 @@ export default function BuildNav({
               </>
             )}
           </button>
+          <button 
+            className="blueprint-restart-btn"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (nodes.length > 0) {
+                onRestart();
+              }
+            }}
+            disabled={nodes.length === 0}
+            title="Clear canvas"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M3 21v-5h5" />
+            </svg>
+          </button>
           <span className="blueprint-actions-label desktop-only" style={{ marginLeft: '0.5rem' }}>Add:</span>
           <div className="blueprint-actions-buttons desktop-only" style={{ position: 'relative' }}>
             <button 
@@ -327,25 +348,6 @@ export default function BuildNav({
           </button>
         </div>
         <div className="blueprint-actions-right">
-          <button 
-            className="blueprint-restart-btn"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (nodes.length > 0) {
-                onRestart();
-              }
-            }}
-            disabled={nodes.length === 0}
-            title="Clear canvas"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
-          </button>
           <button 
             className="blueprint-execute-btn desktop-only"
             onClick={(e) => {

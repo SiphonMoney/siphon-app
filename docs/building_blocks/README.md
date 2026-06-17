@@ -25,9 +25,12 @@ The Builder should let a user describe intent in plain language, then have the L
 ### 2) Strategy Block
 - Purpose: hold strategy condition and behavior.
 - Typical fields:
-  - `strategy` (e.g. Limit Order, Buy Dip, Sell Rally, DCA)
-  - `priceGoal`
-  - `intervals` (for periodic strategies)
+  - `strategy` (Limit Order, Stop Loss, Take Profit, Range, TWAP — see [L2 strategies](./strategies_l2.md))
+  - `side` (buy/sell for limit orders)
+  - `priceGoal` (single-price triggers)
+  - `rangeLow`, `rangeHigh`, `gridLevels` (range grid)
+  - `sliceCount`, `intervalSeconds`, `maxSlippageBps` (TWAP)
+  - `intervals` (DCA / legacy periodic)
 - Output contract: a trigger or rule decision used by execution blocks.
 
 ### 3) Swap Block
@@ -91,22 +94,42 @@ When user enters a strategy prompt:
    - Verify required fields.
    - Surface unresolved fields as user TODOs.
 
-## Strategy Profiles (Current)
+## Strategy Profiles
+
+Primary L2 strategies are documented in **[strategies_l2.md](./strategies_l2.md)**.
 
 ### Limit Order
-- Trigger once price reaches target.
+- Trigger once price reaches target (buy or sell side).
 - Typical graph: `Deposit -> Strategy(limit) -> Swap -> Withdraw`.
 
-### Buy Dip
+### Stop Loss
+- Exit when price falls to stop level.
+- Typical graph: `Deposit -> Strategy(stop) -> Swap -> Withdraw`.
+
+### Take Profit
+- Exit when price rises to target.
+- Typical graph: `Deposit -> Strategy(tp) -> Swap -> Withdraw`.
+
+### Range
+- Grid between low/high bounds (scheduled runtime; alternating buy/sell legs).
+- Typical graph: `Deposit -> Strategy(range) -> Swap`.
+
+### TWAP
+- Time-sliced execution over N intervals (scheduled runtime; equal slices).
+- Typical graph: `Deposit -> Strategy(twap) -> Swap -> Withdraw`.
+
+### Legacy profiles
+
+#### Buy Dip
 - Trigger when price falls below threshold.
 - Typical graph: `Deposit -> Strategy(buyDip) -> Swap -> Withdraw`.
 
-### Sell Rally
+#### Sell Rally
 - Trigger when price rises to target.
 - Typical graph: `Deposit -> Strategy(sellRally) -> Swap -> Withdraw`.
 
-### DCA
-- Execute periodic buys/sells by interval.
+#### DCA
+- Execute recurring periodic buys by interval.
 - Typical graph: `Deposit -> Strategy(dca) -> Swap`.
 
 ## UX Notes for Builder Input

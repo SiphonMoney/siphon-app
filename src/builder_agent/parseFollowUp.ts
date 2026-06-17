@@ -1,5 +1,5 @@
 import { isActiveToken, normalizeToken } from "./blocks";
-import type { MissingField, ParsedPrompt } from "./types";
+import type { MissingField, ParsedPrompt, StrategySide } from "./types";
 
 const TOKEN_PATTERN = /\b(eth|usdc|usdt|wbtc|sol|xmr)\b/i;
 const WALLET_PATTERN = /0x[a-fA-F0-9]{40}/;
@@ -8,6 +8,13 @@ const NUMBER_PATTERN = /\d+(?:\.\d+)?/;
 function extractToken(answer: string): string | null {
   const match = answer.match(TOKEN_PATTERN);
   return match ? normalizeToken(match[1]) : normalizeToken(answer.trim());
+}
+
+function parseSide(answer: string): StrategySide | null {
+  const lower = answer.toLowerCase();
+  if (/\b(buy|long)\b/.test(lower)) return "buy";
+  if (/\b(sell|short)\b/.test(lower)) return "sell";
+  return null;
 }
 
 export function applyFollowUpAnswer(
@@ -32,9 +39,19 @@ export function applyFollowUpAnswer(
       if (match) next.amount = match[0];
       break;
     }
-    case "priceGoal": {
+    case "side": {
+      const side = parseSide(trimmed);
+      if (side) next.side = side;
+      break;
+    }
+    case "priceGoal":
+    case "rangeLow":
+    case "rangeHigh":
+    case "gridLevels":
+    case "sliceCount":
+    case "intervalSeconds": {
       const match = trimmed.match(NUMBER_PATTERN);
-      if (match) next.priceGoal = match[0];
+      if (match) next[field] = match[0];
       break;
     }
     case "intervals": {
@@ -65,9 +82,11 @@ export function applyIntentFromMessage(
   parsed: ParsedPrompt
 ): ParsedPrompt {
   const walletMatch = message.match(WALLET_PATTERN);
+  const side = parseSide(message);
 
   return {
     ...parsed,
+    side: parsed.side ?? side,
     includeSwap:
       parsed.includeSwap ||
       /\b(swap|convert|exchange)\b/i.test(message),

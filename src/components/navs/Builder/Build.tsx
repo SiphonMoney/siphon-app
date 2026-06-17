@@ -25,6 +25,13 @@ import BuildAiPrompt from "./BuildAiPrompt";
 import BuildNodeContextMenu from "./BuildNodeContextMenu";
 import { CustomNode } from "./BuildNodes";
 import { createStrategy } from "../../../lib/strategy";
+import {
+  buildStrategyPayload,
+  computeRangeGridLegs,
+  defaultSideForKind,
+  normalizeStrategyKind,
+  validateStrategyFields,
+} from "../../../lib/strategySpec";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
@@ -148,7 +155,14 @@ export default function Build({
         toCoin: null,
         toAmount: null,
         wallet: null,
+        side: type === 'strategy' ? defaultSideForKind(normalizeStrategyKind(chainOrDexOrStrategy)) : null,
         priceGoal: null,
+        rangeLow: null,
+        rangeHigh: null,
+        gridLevels: null,
+        sliceCount: null,
+        intervalSeconds: null,
+        maxSlippageBps: null,
         intervals: null
       },
       style: {
@@ -265,17 +279,37 @@ export default function Build({
     const withdrawNode = nodes.find(n => n.data.type === 'withdraw');
 
     if (!depositNode)  { alert('Add a Deposit node with a coin and amount first.'); return; }
-    if (!strategyNode) { alert('Add a Strategy node with a price goal first.'); return; }
+    if (!strategyNode) { alert('Add a Strategy node first.'); return; }
+
+    const strategyKind = normalizeStrategyKind(strategyNode.data.strategy as string);
+    const strategyFields = {
+      strategy: strategyKind,
+      side: (strategyNode.data.side as string) || defaultSideForKind(strategyKind),
+      priceGoal: strategyNode.data.priceGoal as string,
+      rangeLow: strategyNode.data.rangeLow as string,
+      rangeHigh: strategyNode.data.rangeHigh as string,
+      gridLevels: strategyNode.data.gridLevels as string,
+      sliceCount: strategyNode.data.sliceCount as string,
+      intervalSeconds: strategyNode.data.intervalSeconds as string,
+      intervals: strategyNode.data.intervals as string,
+      maxSlippageBps: strategyNode.data.maxSlippageBps as string,
+    };
+
+    const validation = validateStrategyFields(strategyKind, strategyFields);
+    if (!validation.valid) {
+      alert(validation.error ?? 'Strategy parameters are incomplete.');
+      return;
+    }
+
 
     const assetIn   = (depositNode.data.coin  as string || 'ETH').toUpperCase();
     const amountStr = (depositNode.data.amount as string || '0');
     const amount    = parseFloat(amountStr);
     const assetOut  = (swapNode?.data.toCoin as string || withdrawNode?.data.coin as string || assetIn).toUpperCase();
-    const priceGoal = parseFloat(strategyNode.data.priceGoal as string || '0');
     const recipient = (withdrawNode?.data.wallet as string || '').trim();
+    const payloadBounds = buildStrategyPayload(strategyKind, strategyFields);
 
     if (!amount || amount <= 0) { alert('Deposit node needs a valid amount.'); return; }
-    if (!priceGoal || priceGoal <= 0) { alert('Strategy node needs a valid price goal.'); return; }
     if (!recipient) { alert('Withdraw node needs a recipient wallet address.'); return; }
 
     // Token config for ZK proof generation (Sepolia)
@@ -313,17 +347,22 @@ export default function Build({
 
     const strategyData = {
       user_id:           recipient,
-      strategy_type:     'LIMIT_SELL_RALLY',
+      strategy_type:     payloadBounds.strategy_type,
+      side:              payloadBounds.side,
       asset_in:          assetIn,
       asset_out:         assetOut,
       amount,
-      upper_bound:       priceGoal,
-      lower_bound:       0,
+      upper_bound:       payloadBounds.upper_bound,
+      lower_bound:       payloadBounds.lower_bound,
+      grid_levels:       payloadBounds.grid_levels,
+      slices:            payloadBounds.slices,
+      interval_sec:      payloadBounds.interval_sec,
+      max_slippage_bps:  payloadBounds.max_slippage_bps,
       recipient_address: recipient,
       zk_proof:          zkProof,
     };
 
-    console.log('[Strategy] Submitting to payload generator:', { asset_in: assetIn, asset_out: assetOut, amount, upper_bound: priceGoal });
+    console.log('[Strategy] Submitting to payload generator:', strategyData);
 
     const result = await createStrategy(strategyData);
     if (result.success) {
@@ -335,7 +374,29 @@ export default function Build({
       if (zkResult.newDepositKey && zkResult.newDeposit) {
         localStorage.setItem(zkResult.newDepositKey, JSON.stringify({ ...zkResult.newDeposit, spent: false }));
       }
-      alert(`✅ Strategy registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when price hits $${priceGoal}.`);
+      const triggerLabel =
+        strategyKind === 'Range'
+          ? `$${payloadBounds.lower_bound} – $${payloadBounds.upper_bound} (${payloadBounds.grid_levels} grid levels)`
+          : payloadBounds.upper_bound > 0
+            ? `$${payloadBounds.upper_bound}`
+            : `$${payloadBounds.lower_bound}`;
+      const rangeDetail =
+        strategyKind === 'Range' && payloadBounds.grid_levels
+          ? `\n\nGrid legs (buy/sell alternating):\n${computeRangeGridLegs(
+              payloadBounds.lower_bound,
+              payloadBounds.upper_bound,
+              payloadBounds.grid_levels
+            )
+              .map((leg) => `  • ${leg.legType === 'LIMIT_BUY' ? 'Buy' : 'Sell'} @ $${leg.price.toFixed(2)}`)
+              .join('\n')}`
+          : '';
+      const scheduleDetail =
+        strategyKind === 'TWAP'
+          ? `\n\nTWAP schedule: ${payloadBounds.slices} slices, every ${payloadBounds.interval_sec}s.`
+          : strategyKind === 'DCA'
+            ? `\n\nDCA schedule: recurring every ${payloadBounds.interval_sec}s.`
+            : '';
+      alert(`✅ ${strategyKind} registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when price hits ${triggerLabel}.${rangeDetail}${scheduleDetail}`);
     } else {
       alert(`❌ Strategy failed: ${result.error}`);
     }

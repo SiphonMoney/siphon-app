@@ -115,13 +115,11 @@ export default function ConnectButton({ className, onConnected }: { className?: 
         console.log(`Successfully connected ${walletId} wallet:`, result.wallet);
         setConnectedWallet(result.wallet);
         onConnected?.(result.wallet);
-        window.dispatchEvent(new Event('walletConnected'));
-        if (!window.ethereum) {
-        throw new Error('No Ethereum provider found');
+        if (window.ethereum) {
+          await initializeWithProvider(window.ethereum);
         }
-        await initializeWithProvider(window.ethereum);
-        // Persist wallet connection
         localStorage.setItem('siphon-connected-wallet', JSON.stringify(result.wallet));
+        window.dispatchEvent(new Event('walletConnected'));
       } else {
         console.error(`Failed to connect ${walletId} wallet:`, result.error);
         alert(`MetaMask connection failed: ${result.error}`);

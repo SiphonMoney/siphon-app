@@ -9,4 +9,5 @@ export type {
   MissingField,
   ParsedPrompt,
   StrategyKind,
+  StrategySide,
 } from "./types";

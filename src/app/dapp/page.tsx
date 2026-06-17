@@ -95,8 +95,9 @@ export default function DappPage() {
             pointerEvents: 'auto',
             position: 'sticky',
             top: 0,
-            zIndex: 10,
-            flexShrink: 0
+            zIndex: 10050,
+            flexShrink: 0,
+            overflow: 'visible',
           }}>
             <Nav onWalletConnected={handleWalletConnected} />
           </div>

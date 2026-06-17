@@ -1,12 +1,14 @@
 import type { Edge, Node } from "@xyflow/react";
+import type { StrategyKind, StrategySide } from "../lib/strategySpec";
+
+export type { StrategyKind, StrategySide };
 
 export type BlockType = "deposit" | "strategy" | "swap" | "withdraw";
-
-export type StrategyKind = "Limit Order" | "Buy Dip" | "Sell Rally" | "DCA";
 
 export interface ParsedPrompt {
   raw: string;
   strategy: StrategyKind;
+  side: StrategySide | null;
   depositChain: string;
   withdrawChain: string;
   dex: string;
@@ -14,6 +16,12 @@ export interface ParsedPrompt {
   toCoin: string | null;
   amount: string | null;
   priceGoal: string | null;
+  rangeLow: string | null;
+  rangeHigh: string | null;
+  gridLevels: string | null;
+  sliceCount: string | null;
+  intervalSeconds: string | null;
+  maxSlippageBps: string | null;
   intervals: string | null;
   wallet: string | null;
   includeSwap: boolean;
@@ -31,7 +39,13 @@ export type MissingField =
   | "coin"
   | "inactiveToken"
   | "amount"
+  | "side"
   | "priceGoal"
+  | "rangeLow"
+  | "rangeHigh"
+  | "gridLevels"
+  | "sliceCount"
+  | "intervalSeconds"
   | "intervals"
   | "toCoin"
   | "wallet";
@@ -55,12 +69,19 @@ export interface BlockNodeData {
   chain: string | null;
   dex: string | null;
   strategy: string | null;
+  side: string | null;
   coin: string | null;
   amount: string | null;
   toCoin: string | null;
   toAmount: string | null;
   wallet: string | null;
   priceGoal: string | null;
+  rangeLow: string | null;
+  rangeHigh: string | null;
+  gridLevels: string | null;
+  sliceCount: string | null;
+  intervalSeconds: string | null;
+  maxSlippageBps: string | null;
   intervals: string | null;
   [key: string]: unknown;
 }
