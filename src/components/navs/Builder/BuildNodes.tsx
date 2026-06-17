@@ -314,17 +314,6 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
               </>
             )}
 
-            {data.strategy === 'DCA' && (
-              <input
-                type="text"
-                className="node-input"
-                placeholder="Intervals"
-                value={(data.intervals as string) || ''}
-                onChange={(e) => handleChange('intervals', e.target.value)}
-                onMouseDown={(e) => e.stopPropagation()}
-                onFocus={(e) => e.stopPropagation()}
-              />
-            )}
           </div>
         )}
 

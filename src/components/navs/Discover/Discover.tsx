@@ -17,6 +17,9 @@ import {
   formatStrategyGraphForModal,
 } from "./strategies";
 
+const DISCOVER_CATEGORIES = ['all', 'arbitrage', 'yield', 'trading', 'liquidity'] as const;
+const DISCOVER_NETWORKS = ['Ethereum', 'Base', 'Bitcoin', 'Solana', 'Polygon'] as const;
+
 interface DiscoverProps {
   isLoaded?: boolean;
   setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void;
@@ -220,7 +223,7 @@ export default function Discover({
               </div>
               <div className="discover-filters-section">
                 <div className="discover-categories">
-                  {['all', 'arbitrage', 'yield', 'trading', 'liquidity', 'defi'].map((category) => {
+                  {DISCOVER_CATEGORIES.map((category) => {
                     const isSelected = selectedCategory === category || (typeof selectedCategory === 'object' && selectedCategory instanceof Set && selectedCategory.has(category));
                     return (
                       <button
@@ -256,7 +259,7 @@ export default function Discover({
                   })}
                 </div>
                 <div className="discover-networks">
-                  {['Solana', 'Ethereum', 'Base', 'Bitcoin', 'Polygon', 'Arbitrum'].map((network) => (
+                  {DISCOVER_NETWORKS.map((network) => (
                     <button
                       key={network}
                       className={`discover-network-btn ${selectedNetworks.has(network) ? 'active' : ''}`}
@@ -398,7 +401,7 @@ export default function Discover({
             <div className="discover-protocol-filters">
               <div className="discover-categories-marquee discover-marquee-rtl">
                 <div className="discover-marquee-content">
-                  {['all', 'arbitrage', 'yield', 'trading', 'liquidity', 'defi'].map((category) => {
+                  {DISCOVER_CATEGORIES.map((category) => {
                     const isSelected = selectedCategory === category || (typeof selectedCategory === 'object' && selectedCategory.has && selectedCategory.has(category));
                     return (
                       <button
@@ -433,7 +436,7 @@ export default function Discover({
                     );
                   })}
                   {/* Duplicate for seamless loop */}
-                  {['all', 'arbitrage', 'yield', 'trading', 'liquidity', 'defi'].map((category) => {
+                  {DISCOVER_CATEGORIES.map((category) => {
                     const isSelected = selectedCategory === category || (typeof selectedCategory === 'object' && selectedCategory.has && selectedCategory.has(category));
                     return (
                       <button
@@ -475,7 +478,7 @@ export default function Discover({
             <div className="discover-chains-filters">
               <div className="discover-networks-marquee discover-marquee-ltr">
                 <div className="discover-marquee-content">
-                  {['Solana', 'Ethereum', 'Base', 'Bitcoin', 'Polygon', 'Arbitrum'].map((network) => (
+                  {DISCOVER_NETWORKS.map((network) => (
                     <button
                       key={network}
                       className={`discover-network-btn ${selectedNetworks.has(network) ? 'active' : ''}`}
@@ -493,7 +496,7 @@ export default function Discover({
                     </button>
                   ))}
                   {/* Duplicate for seamless loop */}
-                  {['Solana', 'Ethereum', 'Base', 'Bitcoin', 'Polygon', 'Arbitrum'].map((network) => (
+                  {DISCOVER_NETWORKS.map((network) => (
                     <button
                       key={`${network}-dup`}
                       className={`discover-network-btn ${selectedNetworks.has(network) ? 'active' : ''}`}
@@ -600,7 +603,8 @@ export default function Discover({
       <div className={`discover-grid ${discoverViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
         {/* Strategy cards from strategies.tsx */}
         {strategyList
-        .filter(strategy => strategy.isActive !== false)
+        .slice()
+        .sort((a, b) => Number(a.isActive === false) - Number(b.isActive === false))
         .filter(strategy => {
           if (selectedCategory === 'all') return true;
           if (typeof selectedCategory === 'object' && selectedCategory instanceof Set) {
@@ -626,6 +630,10 @@ export default function Discover({
               key={index} 
               className={`discover-strategy-card ${!strategy.isActive ? 'inactive' : ''}`}
             >
+              {!strategy.isActive && (
+                <span className="discover-card-coming-soon">Coming soon</span>
+              )}
+              <div className="discover-card-inner">
               <div className="discover-card-header">
                 <h3 className="discover-card-title">{strategy.name}</h3>
                 <div className="discover-card-stats">
@@ -725,6 +733,7 @@ export default function Discover({
                 >
                   More Details
                 </button>
+              </div>
               </div>
             </div>
           );

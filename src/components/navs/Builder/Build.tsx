@@ -46,6 +46,7 @@ import {
 } from "../../../lib/strategySpec";
 import { layoutStrategyNodes, getModalStepNodes } from "../../../lib/builderLayout";
 import { formatGraphForPreview } from "../../../lib/repeatGraph";
+import { buildRunModeValuesFromNodes } from "../../../lib/runModeValues";
 import {
   applySwapToWithdrawLink,
   clearOutputLinksForRemovedEdges,
@@ -708,7 +709,7 @@ export default function Build({
     setRunModalEdges(edges);
     setRunFlowKey((k) => k + 1);
     setIsRunMode(true);
-    setRunModeValues({});
+    setRunModeValues(buildRunModeValuesFromNodes(synced));
     setShowRunModal(true);
   }, [nodes, edges, normalizeNode]);
   
@@ -819,6 +820,7 @@ export default function Build({
           savedScenes={savedScenes}
           setSavedScenes={setSavedScenes}
           setShowSuccessNotification={setShowSuccessNotification}
+          fromBuilder
         />
       )}
     </div>

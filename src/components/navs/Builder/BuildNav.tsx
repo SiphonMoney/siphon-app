@@ -498,7 +498,7 @@ export default function BuildNav({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <polygon points="5 3 19 12 5 21 5 3" />
             </svg>
-            <span>{isSimulating ? "Simulating…" : "Simulate"}</span>
+            <span>{isSimulating ? "Smoking…" : "Smoke"}</span>
           </button>
         </div>
       </div>

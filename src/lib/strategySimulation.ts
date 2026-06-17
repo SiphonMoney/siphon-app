@@ -774,8 +774,8 @@ export function runStrategySimulation(nodes: Node[], edges: Edge[]): SimulationR
     return {
       success: false,
       steps: [],
-      issues: [{ level: "error", message: "Canvas is empty — add blocks to simulate." }],
-      summary: "Nothing to simulate.",
+      issues: [{ level: "error", message: "Canvas is empty — add blocks to smoke test." }],
+      summary: "Nothing to smoke test.",
     };
   }
 

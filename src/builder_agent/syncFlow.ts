@@ -2,6 +2,7 @@ import type { Edge, Node } from "@xyflow/react";
 import {
   connectFlowNodes,
   createBlockNodeForType,
+  createRecurringFlowFromParsed,
   getDesiredBlockTypes,
 } from "./createNodes";
 import type { BlockType, ParsedPrompt } from "./types";
@@ -16,6 +17,10 @@ export function syncFlowStructure(
   _edges: Edge[],
   parsed: ParsedPrompt
 ): { nodes: Node[]; edges: Edge[] } {
+  if (parsed.useLoop) {
+    return createRecurringFlowFromParsed(parsed);
+  }
+
   const desired = getDesiredBlockTypes(parsed);
   const baseY = nodes[0]?.position.y ?? 220;
   const runId = Date.now();

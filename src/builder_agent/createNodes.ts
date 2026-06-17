@@ -1,4 +1,11 @@
 import { Position, type Edge, type Node } from "@xyflow/react";
+import { layoutStrategyNodes } from "../lib/builderLayout";
+import { applySwapToWithdrawLink } from "../lib/graphLinks";
+import {
+  REPEAT_BODY_OFFSET_X,
+  REPEAT_BODY_OFFSET_Y,
+  REPEAT_GROUP_DEFAULT_SIZE,
+} from "../lib/repeatGraph";
 import { defaultSideForKind } from "../lib/strategySpec";
 import type { BlockNodeData, BlockType, ParsedPrompt } from "./types";
 
@@ -179,6 +186,10 @@ export function connectFlowNodes(nodes: Node[]): Edge[] {
 }
 
 export function createFlowFromParsed(parsed: ParsedPrompt): { nodes: Node[]; edges: Edge[] } {
+  if (parsed.useLoop) {
+    return createRecurringFlowFromParsed(parsed);
+  }
+
   const runId = Date.now();
   const blockTypes = getDesiredBlockTypes(parsed);
 
@@ -192,4 +203,157 @@ export function createFlowFromParsed(parsed: ParsedPrompt): { nodes: Node[]; edg
   );
 
   return { nodes, edges: connectFlowNodes(nodes) };
+}
+
+export function createRecurringFlowFromParsed(
+  parsed: ParsedPrompt
+): { nodes: Node[]; edges: Edge[] } {
+  const runId = Date.now();
+  const deposit = createBlockNodeForType(
+    "deposit",
+    parsed,
+    { x: 120, y: 220 },
+    `${runId}-deposit`
+  );
+
+  const nodes: Node[] = [deposit];
+  const edges: Edge[] = [];
+  let cursorX = 400;
+
+  if (parsed.includeSchedule) {
+    const scheduleId = `schedule-${runId}`;
+    nodes.push({
+      id: scheduleId,
+      type: "custom",
+      position: { x: cursorX, y: 220 },
+      data: {
+        label: "Schedule",
+        type: "control",
+        controlKind: "schedule",
+        scheduleTrigger: "after",
+        scheduleValue: parsed.scheduleValue ?? "1",
+        scheduleUnit: parsed.scheduleUnit ?? "minutes",
+        chain: null,
+        dex: null,
+        strategy: null,
+        coin: null,
+        amount: null,
+        toCoin: null,
+        toAmount: null,
+        wallet: null,
+        side: null,
+        priceGoal: null,
+        rangeLow: null,
+        rangeHigh: null,
+        gridLevels: null,
+        sliceCount: null,
+        intervalSeconds: null,
+        maxSlippageBps: null,
+        intervals: null,
+      },
+      style: blockStyle("strategy"),
+      draggable: true,
+      selectable: true,
+      connectable: true,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+    });
+    edges.push({
+      id: `edge-${deposit.id}-${scheduleId}`,
+      source: deposit.id,
+      target: scheduleId,
+      type: "smoothstep",
+      style: { stroke: "rgba(255, 255, 255, 0.3)", strokeWidth: 2 },
+    });
+    cursorX += 280;
+  }
+
+  const repeatId = `repeat-${runId}`;
+  const swapId = `swap-${runId}`;
+  const withdrawId = `withdraw-${runId}`;
+
+  nodes.push({
+    id: repeatId,
+    type: "repeatGroup",
+    position: { x: cursorX, y: 190 },
+    data: {
+      label: "Loop",
+      type: "repeatGroup",
+      repeatMode: "until_funds",
+      repeatCount: "",
+      loopIntervalValue: parsed.loopIntervalValue ?? "24",
+      loopIntervalUnit: parsed.loopIntervalUnit ?? "hours",
+      childCount: parsed.includeWithdraw ? 2 : 1,
+    },
+    style: {
+      width: REPEAT_GROUP_DEFAULT_SIZE.width,
+      height: REPEAT_GROUP_DEFAULT_SIZE.height,
+      padding: 0,
+      background: "transparent",
+      border: "none",
+    },
+    draggable: true,
+    selectable: true,
+    connectable: true,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+  });
+
+  const prevTop = parsed.includeSchedule ? nodes[nodes.length - 2] : deposit;
+  edges.push({
+    id: `edge-${prevTop.id}-${repeatId}`,
+    source: prevTop.id,
+    target: repeatId,
+    type: "smoothstep",
+    style: { stroke: "rgba(147, 197, 253, 0.45)", strokeWidth: 2 },
+  });
+
+  const swapNode = createBlockNodeForType(
+    "swap",
+    parsed,
+    { x: REPEAT_BODY_OFFSET_X, y: REPEAT_BODY_OFFSET_Y + 8 },
+    `${runId}-swap`
+  );
+  swapNode.parentId = repeatId;
+  swapNode.extent = "parent";
+  swapNode.id = swapId;
+  nodes.push(swapNode);
+
+  if (parsed.includeWithdraw) {
+    const withdrawNode = createBlockNodeForType(
+      "withdraw",
+      parsed,
+      { x: REPEAT_BODY_OFFSET_X + 210, y: REPEAT_BODY_OFFSET_Y + 8 },
+      `${runId}-withdraw`
+    );
+    withdrawNode.parentId = repeatId;
+    withdrawNode.extent = "parent";
+    withdrawNode.id = withdrawId;
+    withdrawNode.data = {
+      ...withdrawNode.data,
+      amountSource: "output",
+      linkedFromNodeId: swapId,
+      amount: "",
+    };
+    nodes.push(withdrawNode);
+    edges.push({
+      id: `edge-${swapId}-${withdrawId}`,
+      source: swapId,
+      target: withdrawId,
+      type: "smoothstep",
+      style: { stroke: "rgba(147, 197, 253, 0.45)", strokeWidth: 2 },
+    });
+  }
+
+  let laidOut = layoutStrategyNodes(nodes, edges);
+  for (const edge of edges) {
+    laidOut = applySwapToWithdrawLink(laidOut, {
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: null,
+      targetHandle: null,
+    });
+  }
+
+  return { nodes: laidOut, edges };
 }

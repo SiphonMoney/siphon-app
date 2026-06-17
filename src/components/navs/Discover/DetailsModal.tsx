@@ -6,6 +6,7 @@ import "./Discover.css";
 import StrategyPreviewFlow from "../Builder/StrategyPreviewFlow";
 import { getModalStepNodes } from "../../../lib/builderLayout";
 import { getRunStepFieldValue } from "../../../lib/runModeValues";
+import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { createStrategy } from "../../../lib/strategy";
 import { generateZKData } from "../../../lib/zkHandler";
 import { walletManager } from "../../../lib/walletManager";
@@ -132,8 +133,6 @@ export default function DetailsModal({
         tags.push({ label: 'Slices', field: 'sliceCount' });
         tags.push({ label: 'Interval Sec', field: 'intervalSeconds' });
         tags.push({ label: 'Slippage Bps', field: 'maxSlippageBps' });
-      } else if (strategyKind === 'DCA') {
-        tags.push({ label: 'Interval', field: 'intervals' });
       } else if (strategyKind === 'Stop Loss' || strategyKind === 'Take Profit') {
         tags.push({ label: 'PriceGoal', field: 'priceGoal' });
         tags.push({ label: 'Position %', field: 'positionPct' });
@@ -368,9 +367,18 @@ export default function DetailsModal({
     addLog('Starting strategy execution...');
 
     const depositNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'deposit');
-    const strategyNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'strategy');
     const swapNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'swap');
     const withdrawNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'withdraw');
+
+    const runPlan = buildGraphRunPlan(modalStrategyNodes, modalStrategyEdges, runModeValues);
+    if (!runPlan.ok) {
+      showToast(runPlan.error, 'error');
+      setIsExecuting(false);
+      return;
+    }
+
+    const { plan } = runPlan;
+    const { assetIn, assetOut, amount, recipient, payload: bounds } = plan;
 
     const getValue = (nodeId: string | undefined, field: string, defaultVal: string = '') => {
       if (!nodeId) return defaultVal;
@@ -381,26 +389,7 @@ export default function DetailsModal({
       return (node?.data as NodeData)?.[field] || defaultVal;
     };
 
-    const amountStr = getValue(depositNode?.id, 'amount', '0');
-    const assetIn = getValue(depositNode?.id, 'tokenA', (depositNode?.data as NodeData)?.coin);
-    const assetOut = getValue(swapNode?.id, 'coinB', (swapNode?.data as NodeData)?.toCoin) || 'ETH';
-    const priceGoalStr = getValue(strategyNode?.id, 'priceGoal', '0');
-    
-    const recipient = getValue(withdrawNode?.id, 'address');
-
-    const amount = parseFloat(amountStr);
-    const targetPrice = parseFloat(priceGoalStr);
-
-    if (amount <= 0) {
-      showToast("Please enter a valid amount.", 'error');
-      setIsExecuting(false);
-      return;
-    }
-    if (targetPrice <= 0) {
-      showToast("Please enter a valid Price Goal.", 'error');
-      setIsExecuting(false);
-      return;
-    }
+    const amountStr = getValue(depositNode?.id, 'amount', String(amount));
 
     setIsFading(true);
 
@@ -437,13 +426,20 @@ export default function DetailsModal({
       addLog('Building strategy payload...');
       const strategyPayload = {
         user_id: recipient,
-        strategy_type: "LIMIT_SELL_RALLY",
+        strategy_type: bounds.strategy_type,
         asset_in: assetIn || "USDC",
         asset_out: assetOut,
-        amount: parseFloat(amountStr),
-        upper_bound: targetPrice,
-        lower_bound: 0.0,
+        amount,
+        upper_bound: bounds.upper_bound,
+        lower_bound: bounds.lower_bound,
         recipient_address: recipient,
+        ...(bounds.grid_levels != null ? { grid_levels: bounds.grid_levels } : {}),
+        ...(bounds.slices != null ? { slices: bounds.slices } : {}),
+        ...(bounds.interval_sec != null ? { interval_sec: bounds.interval_sec } : {}),
+        ...(bounds.start_delay_sec != null && bounds.start_delay_sec > 0
+          ? { start_delay_sec: bounds.start_delay_sec }
+          : {}),
+        ...(bounds.max_slippage_bps != null ? { max_slippage_bps: bounds.max_slippage_bps } : {}),
         zk_proof: {
           pA: withdrawalTxData.pA,
           pB: withdrawalTxData.pB,
@@ -458,7 +454,11 @@ export default function DetailsModal({
       const result = await createStrategy(strategyPayload);
 
       if (result.success) {
-        addLog('Strategy registered! Waiting for price trigger...');
+        addLog(
+          plan.isScheduled
+            ? 'Strategy registered! Scheduler will run on cadence...'
+            : 'Strategy registered! Waiting for price trigger...'
+        );
         showToast('Strategy registered!', 'success');
 
         if (newDeposit && newDepositKey) {
@@ -477,7 +477,7 @@ export default function DetailsModal({
             newRunning.set(selectedStrategy.name, { 
               startTime: Date.now(), 
               isRunning: true, 
-              loop: false 
+              loop: plan.isScheduled 
             });
             setRunningStrategies(newRunning);
           }
@@ -671,7 +671,6 @@ export default function DetailsModal({
                         const tags = getStepTags(nodeData, true);
                         
                         const stepId = node.id;
-                        const stepValues = runModeValues[stepId] || {};
                         
                         const handleMyWallet = () => {
                           // Check both walletManager and localStorage for wallet connection
@@ -777,19 +776,7 @@ export default function DetailsModal({
                 </div>
               </div>
 
-              <div className="strategy-modal-aside">
-              <div className="strategy-modal-preview">
-                <h3 className="strategy-preview-title">Strategy Preview</h3>
-                <div className="strategy-preview-flow">
-                  <StrategyPreviewFlow
-                    nodes={modalStrategyNodes}
-                    edges={modalStrategyEdges}
-                    flowKey={flowKey}
-                    isLoading={isFlowLoading}
-                    minHeight={200}
-                  />
-                </div>
-              </div>
+              <div className={`strategy-modal-aside${isRunMode ? ' strategy-modal-aside--run-only' : ''}`}>
               {/* Run Configuration Panel */}
               <div className={`strategy-modal-run-config ${isFading ? 'fade-out' : 'fade-in'} ${isExecuting ? 'darkened' : ''}`}>
                 <h3 className="strategy-run-config-title">Run Configuration</h3>
@@ -837,11 +824,9 @@ export default function DetailsModal({
                       {(() => {
                         const depositNodes = modalStrategyNodes.filter(node => (node.data as NodeData)?.type === 'deposit');
                         const depositStepId = depositNodes.length > 0 ? depositNodes[0].id : null;
-                        const depositStepValues = depositStepId ? runModeValues[depositStepId] || {} : {};
-                        const inputAmount = depositStepValues['amount'] || '0';
-                        const inputCoinLocal = depositStepValues['tokenA'] || (depositNodes.length > 0 && (depositNodes[0].data as NodeData)?.coin 
-                          ? (depositNodes[0].data as NodeData).coin 
-                          : 'USDC');
+                        const depositData = depositNodes.length > 0 ? (depositNodes[0].data as NodeData) : undefined;
+                        const inputAmount = getRunStepFieldValue(runModeValues, depositStepId || '', 'amount', depositData || {}) || '0';
+                        const inputCoinLocal = getRunStepFieldValue(runModeValues, depositStepId || '', 'tokenA', depositData || {}) || 'USDC';
                         const inputAmountNum = parseFloat(inputAmount) || 0;
                         const formattedInputAmount = formatAmount(inputAmountNum, inputCoinLocal);
                         return `${formattedInputAmount} ${inputCoinLocal}`;
@@ -1013,6 +998,17 @@ export default function DetailsModal({
             )}
             {isExecuting ? 'Processing...' : (!isWalletConnected ? 'Connect Wallet' : (isRunMode ? 'Pay & Run' : 'Run'))}
           </button>
+          {fromBuilder ? (
+            <button
+              className="strategy-modal-btn strategy-modal-btn-cancel"
+              onClick={handleClose}
+              type="button"
+              disabled={isExecuting}
+            >
+              Cancel
+            </button>
+          ) : (
+            <>
           <button 
             className="strategy-modal-btn strategy-modal-btn-edit"
             onClick={handleEdit}
@@ -1034,6 +1030,8 @@ export default function DetailsModal({
             </svg>
             Save
           </button>
+            </>
+          )}
         </div>
       </div>
     </div>

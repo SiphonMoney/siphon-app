@@ -214,7 +214,6 @@ export const ALL_STRATEGY_KINDS: StrategyKind[] = [
 /** Strategy kinds shown in the Build page dropdown (excludes legacy aliases). */
 export const BUILD_UI_STRATEGY_KINDS: StrategyKind[] = [
   ...L2_STRATEGY_KINDS,
-  "DCA",
 ];
 
 export const SINGLE_PRICE_STRATEGIES: StrategyKind[] = [

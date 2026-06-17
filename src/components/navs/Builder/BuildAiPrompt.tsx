@@ -22,12 +22,12 @@ export default function BuildAiPrompt({
   defaultValue = "",
   onChange,
   onSubmit,
-  placeholder = "Describe your strategy and AI will build + connect modules...",
+  placeholder = "Describe your flow (limit, loop, schedule…) and AI will build + connect blocks…",
   submitLabel = "Send",
   isLoading = false,
   disabled = false,
   className = "",
-  disclaimer = "AI can make mistakes. Review your flow before committing any funds.",
+  disclaimer = "AI can make mistakes. Use Smoke to validate, then review before committing funds.",
   botMessage = null,
 }: BuildAiPromptProps) {
   const [internalValue, setInternalValue] = useState(defaultValue);

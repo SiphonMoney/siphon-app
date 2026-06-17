@@ -3,6 +3,7 @@ import {
   DEFAULT_DEX,
   STRATEGY_KEYWORDS,
   isActiveToken,
+  isRecurringFlowPrompt,
   normalizeToken,
 } from "./blocks";
 import { defaultSideForKind } from "../lib/strategySpec";
@@ -21,7 +22,27 @@ const INTERVAL_SEC_PATTERN = /every\s+(\d+)\s*(?:s|sec|secs|second|seconds|min|m
 const INTERVAL_PATTERN = /every\s+(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|w|week|weeks))/i;
 const SLIPPAGE_PATTERN = /(\d+(?:\.\d+)?)\s*(?:%|bps)\s*slippage/i;
 
-function detectStrategy(prompt: string): StrategyKind {
+function parseLoopInterval(prompt: string): { value: string; unit: string } {
+  const sec = parseIntervalSeconds(prompt);
+  if (sec) {
+    const n = parseInt(sec, 10);
+    if (n >= 3600 && n % 3600 === 0) return { value: String(n / 3600), unit: "hours" };
+    if (n >= 60 && n % 60 === 0) return { value: String(n / 60), unit: "minutes" };
+    return { value: sec, unit: "seconds" };
+  }
+  const match = prompt.match(INTERVAL_PATTERN);
+  if (match) {
+    const raw = match[1].toLowerCase();
+    const num = raw.match(/\d+/)?.[0] ?? "24";
+    if (/h|hour/.test(raw)) return { value: num, unit: "hours" };
+    if (/d|day/.test(raw)) return { value: String(parseInt(num, 10) * 24), unit: "hours" };
+    if (/w|week/.test(raw)) return { value: String(parseInt(num, 10) * 24 * 7), unit: "hours" };
+  }
+  return { value: "24", unit: "hours" };
+}
+
+function detectStrategy(prompt: string, useLoop: boolean): StrategyKind {
+  if (useLoop) return "Limit Order";
   for (const entry of STRATEGY_KEYWORDS) {
     if (entry.patterns.some((pattern) => pattern.test(prompt))) {
       return entry.kind;
@@ -62,7 +83,14 @@ function parseIntervalSeconds(prompt: string): string | null {
 export function parsePrompt(prompt: string): ParsedPrompt {
   const trimmed = prompt.trim();
   const lower = trimmed.toLowerCase();
-  const strategy = detectStrategy(trimmed);
+  const useLoop = isRecurringFlowPrompt(trimmed);
+  const strategy = detectStrategy(trimmed, useLoop);
+  const loopInterval = useLoop ? parseLoopInterval(trimmed) : { value: null, unit: null };
+  const includeSchedule =
+    /\bschedule\b/i.test(trimmed) ||
+    /\bstart\s+(?:in|after)\b/i.test(trimmed) ||
+    /\bat\s+\d{1,2}:\d{2}\b/i.test(trimmed);
+  const scheduleAfterMatch = trimmed.match(/(?:after|in)\s+(\d+)\s*(blocks?|seconds?|minutes?|hours?)/i);
   const tokens = extractTokens(trimmed);
   const coin = pickTradableToken(tokens);
   const toCoin =
@@ -86,12 +114,14 @@ export function parsePrompt(prompt: string): ParsedPrompt {
   const walletMatch = trimmed.match(WALLET_PATTERN);
 
   const includeSwap =
+    useLoop ||
     /\bswap\b/i.test(trimmed) ||
     /\bconvert\b/i.test(trimmed) ||
     /\bexchange\b/i.test(trimmed) ||
     Boolean(toCoin && coin && toCoin !== coin);
 
   const includeWithdraw =
+    useLoop ||
     /\bwithdraw\b/i.test(trimmed) ||
     /\bsend\s+to\b/i.test(trimmed) ||
     /\bwallet\b/i.test(trimmed) ||
@@ -114,9 +144,15 @@ export function parsePrompt(prompt: string): ParsedPrompt {
     sliceCount: sliceMatch?.[1] ?? null,
     intervalSeconds: intervalSecMatch,
     maxSlippageBps: slippageMatch?.[1] ?? null,
-    intervals: intervalMatch?.[1] ?? (lower.includes("dca") ? "1 day" : null),
+    intervals: null,
     wallet: walletMatch?.[0] ?? null,
     includeSwap,
     includeWithdraw: includeWithdraw || Boolean(walletMatch),
+    useLoop,
+    loopIntervalValue: loopInterval.value,
+    loopIntervalUnit: loopInterval.unit,
+    includeSchedule,
+    scheduleValue: scheduleAfterMatch?.[1] ?? null,
+    scheduleUnit: scheduleAfterMatch?.[2]?.toLowerCase().replace(/s$/, "") ?? "minutes",
   };
 }

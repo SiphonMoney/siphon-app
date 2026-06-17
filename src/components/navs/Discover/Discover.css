@@ -557,7 +557,7 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1.25rem;
-  padding: 0 0 1rem 0;
+  padding: 10px 0 1rem 0;
   margin-left: -0.5rem;
   flex: 1;
   overflow-y: auto;
@@ -598,6 +598,13 @@
   align-items: center;
   padding: 1rem 1.5rem;
   gap: 1.5rem;
+}
+
+.discover-grid.list-view .discover-card-inner {
+  flex-direction: row;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
 }
 
 .discover-grid.list-view .discover-card-header {
@@ -812,6 +819,15 @@
   min-height: fit-content;
   height: auto;
   max-height: 300px;
+  transform: translateY(6px);
+}
+
+.discover-card-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  flex: 1;
+  min-height: 0;
 }
 
 .discover-strategy-card::before {
@@ -829,7 +845,7 @@
 .discover-strategy-card:hover {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.12);
-  transform: translateY(-2px);
+  transform: translateY(4px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
@@ -839,16 +855,39 @@
 
 /* Inactive Strategy Card Styles */
 .discover-strategy-card.inactive {
-  opacity: 0.5;
-  cursor: default;
-  filter: blur(1.5px);
-  transition: filter 0.3s ease, opacity 0.3s ease;
+  opacity: 1;
+  cursor: not-allowed;
+  pointer-events: none;
+  user-select: none;
+  transform: translateY(6px);
+}
+
+.discover-strategy-card.inactive .discover-card-inner {
+  filter: blur(2px) grayscale(0.35);
+  opacity: 0.55;
+}
+
+.discover-card-coming-soon {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  z-index: 2;
+  pointer-events: none;
 }
 
 .discover-strategy-card.inactive:hover {
   background: rgba(255, 255, 255, 0.02);
   border-color: rgba(255, 255, 255, 0.06);
-  transform: none;
+  transform: translateY(6px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -2068,6 +2107,22 @@
   height: auto;
   min-height: 220px;
   flex-shrink: 0;
+}
+
+.strategy-modal-aside--run-only .strategy-modal-run-config {
+  flex: 1;
+  min-height: 280px;
+}
+
+.strategy-modal-btn-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.strategy-modal-btn-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .strategy-modal-run-config {

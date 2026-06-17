@@ -26,6 +26,12 @@ export interface ParsedPrompt {
   wallet: string | null;
   includeSwap: boolean;
   includeWithdraw: boolean;
+  useLoop: boolean;
+  loopIntervalValue: string | null;
+  loopIntervalUnit: string | null;
+  includeSchedule: boolean;
+  scheduleValue: string | null;
+  scheduleUnit: string | null;
 }
 
 export interface BuilderAgentResult {
@@ -46,7 +52,7 @@ export type MissingField =
   | "gridLevels"
   | "sliceCount"
   | "intervalSeconds"
-  | "intervals"
+  | "loopInterval"
   | "toCoin"
   | "wallet";
 

@@ -42,11 +42,23 @@ export const STRATEGY_KEYWORDS: Array<{ kind: StrategyKind; patterns: RegExp[] }
       /\bbuy\s+(?:the\s+)?dip\b/i,
     ],
   },
-  {
-    kind: "DCA",
-    patterns: [/\bdca\b/i, /\bdollar[\s-]?cost\b/i, /\bperiodic\b/i, /\bevery\s+\d+/i],
-  },
 ];
+
+/** Prompts that should build Deposit → Loop (swap/withdraw), not a DCA Strategy block. */
+export const RECURRING_FLOW_PATTERNS: RegExp[] = [
+  /\bdca\b/i,
+  /\bdollar[\s-]?cost\b/i,
+  /\brecurring\b/i,
+  /\bon\s+a\s+cadence\b/i,
+  /\buntil\s+funds\b/i,
+  /\bevery\s+\d+/i,
+];
+
+export function isRecurringFlowPrompt(prompt: string): boolean {
+  const lower = prompt.toLowerCase();
+  if (/\btwap\b/i.test(lower) || /\bslices?\b/i.test(lower)) return false;
+  return RECURRING_FLOW_PATTERNS.some((pattern) => pattern.test(prompt));
+}
 
 export function isActiveToken(symbol: string): boolean {
   return (ACTIVE_TOKENS as readonly string[]).includes(symbol.toUpperCase());

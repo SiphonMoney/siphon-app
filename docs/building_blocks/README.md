@@ -1,10 +1,10 @@
 # Siphon Builder: Strategies & Building Blocks
 
-This document defines how strategy prompts should map into visual blocks in the Build page, and how blocks collaborate to produce an executable flow.
+This document defines how strategy prompts map into visual blocks on the Build page, and how blocks collaborate to produce an executable flow.
 
 ## Goal
 
-The Builder should let a user describe intent in plain language, then have the LLM:
+The Builder lets a user describe intent in plain language, then have the assistant:
 
 1. infer the strategy structure,
 2. create the right blocks,
@@ -12,137 +12,106 @@ The Builder should let a user describe intent in plain language, then have the L
 4. prefill fields with sensible defaults,
 5. keep the graph logically executable.
 
+Use **Smoke** (toolbar) to run a sequential validation pass over the canvas without live execution.
+
 ## Core Building Blocks
 
-### 1) Deposit Block
-- Purpose: source funds into the strategy.
-- Typical fields:
-  - `chain`
-  - `coin`
-  - `amount`
-- Output contract: provides input asset + amount to downstream blocks.
+### 1) Deposit
+- **Purpose:** Fund the strategy wallet.
+- **Fields:** `chain`, `coin`, `amount`
+- **Output:** Provides input asset + amount to downstream blocks.
 
-### 2) Strategy Block
-- Purpose: hold strategy condition and behavior.
-- Typical fields:
-  - `strategy` (Limit Order, Stop Loss, Take Profit, Range, TWAP — see [L2 strategies](./strategies_l2.md))
-  - `side` (buy/sell for limit orders)
-  - `priceGoal` (single-price triggers)
-  - `rangeLow`, `rangeHigh`, `gridLevels` (range grid)
-  - `sliceCount`, `intervalSeconds`, `maxSlippageBps` (TWAP)
-  - `intervals` (DCA / legacy periodic)
-- Output contract: a trigger or rule decision used by execution blocks.
+### 2) Strategy (trigger)
+- **Purpose:** Price or schedule-based execution trigger (single-shot or scheduled kinds).
+- **Kinds in Build UI:** Limit Order, Stop Loss, Take Profit, Range, TWAP
+- **Fields (per kind):**
+  - Limit / Stop / Take Profit: `priceGoal`, optional `positionPct` (stop/tp)
+  - Range: `rangeLow`, `rangeHigh`, `gridLevels`
+  - TWAP: `sliceCount`, `intervalSeconds`, `maxSlippageBps`
+- **Note:** There is **no DCA Strategy block**. Recurring buys use **Loop** instead (see below).
 
-### 3) Swap Block
-- Purpose: convert one asset into another on a venue.
-- Typical fields:
-  - `dex`
-  - `coin` (from)
-  - `amount`
-  - `toCoin`
-  - `toAmount` (derived/estimated)
-- Output contract: transformed asset for optional withdrawal.
+### 3) Schedule (control)
+- **Purpose:** Delay the start of downstream execution.
+- **Fields:** `scheduleTrigger` (`after` | `at`), `scheduleValue`, `scheduleUnit`, or `scheduleAt`
+- **Typical use:** `Deposit → Schedule → Loop` or `Deposit → Schedule → Strategy`
 
-### 4) Withdraw Block
-- Purpose: deliver resulting asset to destination wallet.
-- Typical fields:
-  - `chain`
-  - `coin`
-  - `amount`
-  - `wallet`
-- Output contract: terminal state of strategy.
+### 4) Loop (repeat group)
+- **Purpose:** Repeat inner blocks on a cadence until funds end or N times.
+- **Fields:** `repeatMode` (`until_funds` | `count`), `repeatCount`, `loopIntervalValue`, `loopIntervalUnit`
+- **Children:** Swap, Strategy, Withdraw (added inside the loop container)
+- **Typical use:** DCA-style flows — `Deposit → Loop(Swap → Withdraw)` every 24 hours
 
-## Collaboration Rules (Block-to-Block Logic)
+### 5) Swap
+- **Purpose:** Convert one asset into another.
+- **Fields:** `dex`, `coin`, `amount`, `toCoin`, `toAmount` (estimated)
+- **Output:** Transformed asset for withdrawal or next leg.
 
-Expected canonical flow:
+### 6) Withdraw
+- **Purpose:** Send assets to an external wallet.
+- **Fields:** `chain`, `coin`, `amount` (empty = all swap output when linked), `wallet`
+- **Linking:** When connected after Swap, `amountSource` follows swap output automatically.
 
-`Deposit -> Strategy -> Swap -> Withdraw`
+## Collaboration Rules
 
-Allowed variants:
-- `Deposit -> Strategy -> Withdraw` (no swap)
-- `Deposit -> Swap -> Withdraw` (manual flow without explicit strategy)
+**Single-shot price trigger:**
+`Deposit → Strategy → Swap → Withdraw`
 
-Validation rules:
-- At least one `Deposit` is required.
-- A terminal action (`Swap` or `Withdraw`) is required.
-- `Withdraw.wallet` is required for executable flow.
-- Asset continuity should be preserved where possible:
-  - `Deposit.coin` should feed `Swap.coin` or `Withdraw.coin`.
-  - `Swap.toCoin` should feed `Withdraw.coin`.
+**Recurring / DCA-style (no DCA block):**
+`Deposit → [Schedule] → Loop → (Swap → Withdraw inside loop)`
 
-## Prompt-to-Graph Mapping Spec
+**Schedule + limit:**
+`Deposit → Schedule → Strategy → Swap → Withdraw`
 
-When user enters a strategy prompt:
+Validation:
+- At least one **Deposit** is required.
+- A terminal action (**Swap** or **Withdraw**) is required.
+- **Withdraw.wallet** required for executable flows.
+- Asset continuity: `Deposit.coin` feeds `Swap.coin`; `Swap.toCoin` feeds `Withdraw.coin` when linked.
 
-1. **Intent parse**
-   - Identify action verbs: deposit, buy, sell, swap, withdraw, rebalance, DCA.
-   - Extract entities: token symbols, target prices, amounts, wallets, chain/dex preferences.
+## Prompt-to-Graph Mapping
 
-2. **Block planning**
-   - Build minimal valid block set.
-   - Prefer fewer blocks unless prompt explicitly requests advanced flow.
-
-3. **Field prefill**
-   - Fill directly extracted values first.
-   - Fill missing values with safe defaults and mark them as editable.
-
-4. **Edge synthesis**
-   - Connect blocks in the nearest valid canonical sequence.
-   - Prevent disconnected terminal blocks.
-
-5. **Sanity checks**
-   - Verify required fields.
-   - Surface unresolved fields as user TODOs.
+1. **Intent parse** — deposit, swap, withdraw, limit/stop/tp, range, twap, **loop/dca/recurring**, schedule.
+2. **Block planning** — recurring prompts build **Loop**, not Strategy(DCA).
+3. **Field prefill** — extracted values first; safe defaults for the rest.
+4. **Edge synthesis** — canonical order; swap→withdraw links set output amount.
+5. **Smoke test** — inline canvas validation with balance ledger.
 
 ## Strategy Profiles
 
-Primary L2 strategies are documented in **[strategies_l2.md](./strategies_l2.md)**.
+See **[strategies_l2.md](./strategies_l2.md)** for payload mapping and runtime tiers.
 
-### Limit Order
-- Trigger once price reaches target (buy or sell side).
-- Typical graph: `Deposit -> Strategy(limit) -> Swap -> Withdraw`.
+| Profile | Graph pattern |
+|---------|----------------|
+| Limit Order | Deposit → Strategy → Swap → Withdraw |
+| Stop Loss / Take Profit | Deposit → Strategy → Swap → Withdraw |
+| Range (grid) | Deposit → Strategy(range) → Swap |
+| TWAP | Deposit → Strategy(twap) → Swap → Withdraw |
+| Recurring / DCA | Deposit → Loop(swap → withdraw) — optional Schedule |
 
-### Stop Loss
-- Exit when price falls to stop level.
-- Typical graph: `Deposit -> Strategy(stop) -> Swap -> Withdraw`.
+## Builder Assistant
 
-### Take Profit
-- Exit when price rises to target.
-- Typical graph: `Deposit -> Strategy(tp) -> Swap -> Withdraw`.
+The chat assistant (`src/builder_agent/`) understands all block types above.
 
-### Range
-- Grid between low/high bounds (scheduled runtime; alternating buy/sell legs).
-- Typical graph: `Deposit -> Strategy(range) -> Swap`.
+- **DCA / dollar-cost / every N hours** → builds **Loop** flow, asks for loop cadence if missing.
+- **Limit / stop / take profit** → Strategy block + price fields.
+- **Range / grid** → Strategy(range) + bounds + levels.
+- **TWAP** → Strategy(twap) + slices + interval.
+- **Withdraw** → wallet address; empty amount on linked withdraw = full swap output.
 
-### TWAP
-- Time-sliced execution over N intervals (scheduled runtime; equal slices).
-- Typical graph: `Deposit -> Strategy(twap) -> Swap -> Withdraw`.
+Keyword detection: `src/builder_agent/blocks.ts` (`STRATEGY_KEYWORDS`, `RECURRING_FLOW_PATTERNS`).
 
-### Legacy profiles
+## UX Notes
 
-#### Buy Dip
-- Trigger when price falls below threshold.
-- Typical graph: `Deposit -> Strategy(buyDip) -> Swap -> Withdraw`.
+- AI prompt bar: bottom-center; Enter submits.
+- **Smoke** button: sequential step highlight + toast (no on-chain execution).
+- **Run** button: opens Pay & Run with values ported from canvas blocks.
 
-#### Sell Rally
-- Trigger when price rises to target.
-- Typical graph: `Deposit -> Strategy(sellRally) -> Swap -> Withdraw`.
+## File Map
 
-#### DCA
-- Execute recurring periodic buys by interval.
-- Typical graph: `Deposit -> Strategy(dca) -> Swap`.
-
-## UX Notes for Builder Input
-
-- Input should sit bottom-center with breathing room from screen edge.
-- Enter key should submit prompt.
-- While AI execution is pending:
-  - lock submit button,
-  - show "Building flow..." state,
-  - apply graph changes atomically to avoid partial inconsistent states.
-
-## Future Extensions
-
-- Multi-branch strategy graphs (IF/ELSE conditions).
-- Risk and guardrail blocks (max slippage, stop loss, budget cap).
-- Reusable templates generated from successful user strategies.
+| Area | Path |
+|------|------|
+| Canvas nodes | `src/components/navs/Builder/BuildNodes.tsx` |
+| Loop container | `src/components/navs/Builder/RepeatGroupNode.tsx` |
+| Strategy spec | `src/lib/strategySpec.ts` |
+| Smoke engine | `src/lib/strategySimulation.ts` |
+| Builder agent | `src/builder_agent/` |

@@ -27,8 +27,8 @@ function collectWarnings(parsed: ReturnType<typeof parsePrompt>): string[] {
         return "TWAP slice count not set — add it on the Strategy block.";
       case "intervalSeconds":
         return "TWAP interval not set — add seconds between slices on the Strategy block.";
-      case "intervals":
-        return "DCA interval not detected — set intervals on the Strategy block.";
+      case "loopInterval":
+        return "Loop cadence not set — set interval on the Loop block.";
       case "toCoin":
         return "Swap requested but output token is unclear — set a To coin on the Swap block.";
       case "wallet":
@@ -40,6 +40,18 @@ function collectWarnings(parsed: ReturnType<typeof parsePrompt>): string[] {
 }
 
 function buildSummary(parsed: ReturnType<typeof parsePrompt>, blockCount: number): string {
+  if (parsed.useLoop) {
+    const parts = [
+      `${parsed.amount ?? "?"} ${parsed.coin ?? "token"}`,
+      `loop every ${parsed.loopIntervalValue ?? "?"} ${parsed.loopIntervalUnit ?? "hours"}`,
+    ];
+    if (parsed.includeSwap && parsed.toCoin) parts.push(`swap to ${parsed.toCoin}`);
+    if (parsed.includeWithdraw) {
+      parts.push(parsed.wallet ? "withdraw to wallet" : "withdraw (wallet needed)");
+    }
+    return `Built recurring flow (${blockCount} blocks): ${parts.join(" → ")}.`;
+  }
+
   const parts = [
     parsed.strategy,
     parsed.coin ? `${parsed.amount ?? "?"} ${parsed.coin}` : "unsized deposit",

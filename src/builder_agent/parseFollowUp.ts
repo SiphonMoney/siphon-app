@@ -54,11 +54,21 @@ export function applyFollowUpAnswer(
       if (match) next[field] = match[0];
       break;
     }
-    case "intervals": {
-      const intervalMatch = trimmed.match(
-        /every\s+(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|w|week|weeks))/i
+    case "loopInterval": {
+      const everyMatch = trimmed.match(
+        /every\s+(\d+)\s*(blocks?|seconds?|minutes?|hours?|h|d|days?)/i
       );
-      next.intervals = intervalMatch?.[1] ?? trimmed;
+      if (everyMatch) {
+        next.loopIntervalValue = everyMatch[1];
+        const unit = everyMatch[2].toLowerCase();
+        if (unit.startsWith("h")) next.loopIntervalUnit = "hours";
+        else if (unit.startsWith("m") || unit.startsWith("min")) next.loopIntervalUnit = "minutes";
+        else if (unit.startsWith("b")) next.loopIntervalUnit = "blocks";
+        else next.loopIntervalUnit = "seconds";
+      } else {
+        const match = trimmed.match(NUMBER_PATTERN);
+        if (match) next.loopIntervalValue = match[0];
+      }
       break;
     }
     case "toCoin": {

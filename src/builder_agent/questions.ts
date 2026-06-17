@@ -25,7 +25,8 @@ const QUESTION_BUILDERS: Record<MissingField, (parsed: ParsedPrompt) => string> 
   sliceCount: () => "How many TWAP slices? (e.g. 10)",
   intervalSeconds: () =>
     "How many seconds between slices? (e.g. 300 for 5 minutes)",
-  intervals: () => "How often should DCA run? (e.g. every 1 day)",
+  loopInterval: () =>
+    "How often should the loop run? (e.g. every 24 hours, every 30 minutes)",
   toCoin: (parsed) =>
     `Which token should we swap ${parsed.coin ?? "your deposit"} into?`,
   wallet: () => "What wallet address should receive the withdrawal?",
@@ -48,6 +49,13 @@ export function getMissingFields(parsed: ParsedPrompt): MissingField[] {
     missing.push("amount");
   }
 
+  if (parsed.useLoop) {
+    if (!parsed.loopIntervalValue) missing.push("loopInterval");
+    if (parsed.includeSwap && !parsed.toCoin) missing.push("toCoin");
+    if (parsed.includeWithdraw && !parsed.wallet) missing.push("wallet");
+    return missing;
+  }
+
   if (needsPriceGoal(parsed.strategy) && !parsed.priceGoal) {
     missing.push("priceGoal");
   }
@@ -61,10 +69,6 @@ export function getMissingFields(parsed: ParsedPrompt): MissingField[] {
   if (parsed.strategy === "TWAP") {
     if (!parsed.sliceCount) missing.push("sliceCount");
     if (!parsed.intervalSeconds) missing.push("intervalSeconds");
-  }
-
-  if (parsed.strategy === "DCA" && !parsed.intervals) {
-    missing.push("intervals");
   }
 
   if (parsed.includeSwap && !parsed.toCoin) {
