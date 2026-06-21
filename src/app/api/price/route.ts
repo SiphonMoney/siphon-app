@@ -16,16 +16,20 @@ export async function GET(request: Request) {
     };
     
     const coinId = coinMap[coin.toUpperCase()] || coinMap['all'];
-    
+
+    const apiKey = process.env.COINGECKO_API_KEY;
+    const cgHeaders: Record<string, string> = {
+      'Accept': 'application/json',
+      ...(apiKey ? { 'x-cg-demo-api-key': apiKey } : {}),
+    };
+
     if (coin === 'all' || !coin) {
       // Fetch simple price for all coins
       const apiUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`;
       console.log('[API] Fetching prices from CoinGecko:', apiUrl);
       
       const response = await fetch(apiUrl, {
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: cgHeaders,
       });
       
       if (!response.ok) {
@@ -71,9 +75,7 @@ export async function GET(request: Request) {
       const response = await fetch(
         `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`,
         {
-          headers: {
-            'Accept': 'application/json',
-          },
+          headers: cgHeaders,
         }
       );
       

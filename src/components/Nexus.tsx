@@ -6,6 +6,7 @@ import Discover from "./navs/Discover/Discover";
 import Build from "./navs/Builder/Build";
 import Run from "./navs/Run/Run";
 import UserDash from "./navs/UserDash/UserDash";
+import Markets from "./navs/Markets/Markets";
 
 interface NexusProps {
   isLoaded?: boolean;
@@ -14,7 +15,7 @@ interface NexusProps {
 export default function Nexus({
   isLoaded = true
 }: NexusProps) {
-  const [viewMode, setViewMode] = useState<'blueprint' | 'run' | 'discover' | 'userdash'>('discover');
+  const [viewMode, setViewMode] = useState<'blueprint' | 'run' | 'discover' | 'userdash' | 'markets'>('discover');
   const [runningStrategies, setRunningStrategies] = useState<Map<string, { startTime: number; isRunning: boolean; loop: boolean }>>(new Map());
   const [savedScenes, setSavedScenes] = useState<Array<{ name: string; nodes: Node[]; edges: Edge[] }>>([]);
   const [currentFileName, setCurrentFileName] = useState<string>('untitled.io');
@@ -43,7 +44,7 @@ export default function Nexus({
   // Listen for view mode changes from Nav component or balance click
   useEffect(() => {
     const handleViewModeChange = (event: CustomEvent) => {
-      const mode = event.detail as 'blueprint' | 'run' | 'discover' | 'userdash';
+      const mode = event.detail as 'blueprint' | 'run' | 'discover' | 'userdash' | 'markets';
       setViewMode(mode);
     };
 
@@ -112,6 +113,11 @@ export default function Nexus({
           <UserDash
             isLoaded={isLoaded}
             walletConnected={walletConnected}
+          />
+        ) : viewMode === 'markets' ? (
+          <Markets
+            isLoaded={isLoaded}
+            setViewMode={setViewMode}
           />
         ) : (
           <Build

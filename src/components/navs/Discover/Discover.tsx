@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Node, Edge } from '@xyflow/react';
 import DetailsModal from "./DetailsModal";
+import Sparkline from "../../charts/Sparkline";
+import "../../charts/charts.css";
 import "./Discover.css";
 // Price utilities are now handled in DetailsModal
 import {
@@ -65,6 +67,8 @@ export default function Discover({
   const [runDuration, setRunDuration] = useState<string>('1h');
   const [isFading, setIsFading] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
+  // Shared 7d ETH trend, fetched once, shown as a sparkline on every card.
+  const [marketSpark, setMarketSpark] = useState<number[]>([]);
 
   const getTemplateStrategyData = (strategyName: string): StrategyData | null => {
     if (strategyName === 'Limit Order') {
@@ -111,6 +115,22 @@ export default function Discover({
   // Initialize Limit Order strategy in localStorage
   useEffect(() => {
     initializeLimitOrderStrategy();
+  }, []);
+
+  // Load a single 7d ETH trend for card sparklines (cached server-side).
+  useEffect(() => {
+    let active = true;
+    fetch('/api/ohlc?coin=ETH&days=7')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (active && d?.candles) {
+          setMarketSpark((d.candles as Array<{ close: number }>).map((c) => c.close));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
   
   // Load strategy nodes when modal opens
@@ -699,6 +719,11 @@ export default function Discover({
               </div>
               <div className="discover-card-category-label">
                 <span className="discover-category-text">{strategy.category.charAt(0).toUpperCase() + strategy.category.slice(1)}</span>
+                {marketSpark.length > 1 && (
+                  <span className="discover-card-spark" title="ETH 7d trend">
+                    <Sparkline data={marketSpark} width={80} height={22} />
+                  </span>
+                )}
               </div>
               <div className="discover-card-meta">
                 <div className="discover-meta-item">
