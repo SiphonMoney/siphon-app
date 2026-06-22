@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { getStrategies, getSolanaExplorerUrl, StrategyStatus } from '../../../lib/strategy';
+import { getStrategies, getSolanaExplorerUrl, processArmedStrategies, StrategyStatus } from '../../../lib/strategy';
 
 interface StrategiesListProps {
     isLoaded?: boolean;
@@ -20,9 +20,14 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
         setError(null);
 
         try {
-            const result = await getStrategies(publicKey.toBase58());
+            const userId = publicKey.toBase58();
+            const result = await getStrategies(userId);
             if (result.success && result.strategies) {
                 setStrategies(result.strategies);
+                // Browser-in-the-loop: decrypt ARMED results locally and authorize any triggered.
+                processArmedStrategies(userId)
+                    .then((executed) => { if (executed.length) fetchStrategies(); })
+                    .catch((e) => console.error('[StrategiesList] auto-execute error:', e));
             } else {
                 setError(result.error || 'Failed to fetch strategies');
             }

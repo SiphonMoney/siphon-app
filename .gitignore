@@ -53,3 +53,10 @@ Thumbs.db
 
 # Misc
 *.local
+
+# Rust / WASM (fhe-wasm)
+fhe-wasm/target/
+fhe-wasm/pkg-node/
+fhe-wasm/Cargo.lock
+# Note: the built bundler pkg (fhe-wasm/pkg) is intentionally committed so the app builds
+# without a Rust/wasm toolchain.
