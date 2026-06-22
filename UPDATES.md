@@ -95,6 +95,23 @@ Key decisions (do not revert):
 
 ---
 
+## Deployment
+
+Backend — one server (EC2 c5.2xlarge or similar), all via Docker:
+
+| Service | What it does | Port |
+|---|---|---|
+| Trade Executor | Flask — strategy DB, scheduler, ZK withdraw, swaps | 5005 |
+| FHE Engine | Rust — evaluates encrypted strategy conditions | 5001 |
+| Payload Generator | Rust — encrypts strategy payload before storing | 5009 |
+| Proving Relayer | Python — rapidsnark ZK proof generation | 5010 |
+| Postgres | Strategy + note storage | 5432 |
+| Caddy | Reverse proxy + automatic HTTPS | 80/443 |
+
+All six spin up with `docker compose up --build` from `siphon-fhe/`.
+
+---
+
 ## Known Open Issues
 
 | ID | Area | Issue |
