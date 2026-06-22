@@ -100,8 +100,8 @@ export default function ConnectButton({ className, onConnected }: { className?: 
 
     if (connectedWallet) {
       fetchBalance();
-      // Refresh balance every 10 seconds
-      const interval = setInterval(fetchBalance, 10000);
+      // Refresh balance every 30 seconds (on-chain reconcile; leaf scan cached 3 min)
+      const interval = setInterval(fetchBalance, 30000);
       return () => clearInterval(interval);
     }
   }, [connectedWallet]);

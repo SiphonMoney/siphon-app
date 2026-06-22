@@ -204,21 +204,32 @@ export async function generateCommitmentData(
   return commitmentData;
 }
 
-// --------- Helper: Get on-chain leaves ----------
-async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
-  console.log("getOnChainLeaves() tokenAddress:", tokenAddress);
-  
-  const provider = getReadProvider();
+// Verbose on-chain logging is off by default (the periodic balance refresh made it spammy).
+// Set NEXT_PUBLIC_ZK_DEBUG=1 to re-enable.
+const ZK_DEBUG = process.env.NEXT_PUBLIC_ZK_DEBUG === '1';
+const zlog = (...args: unknown[]) => { if (ZK_DEBUG) console.log(...args); };
 
+// A token's vault + merkleTree addresses never change — resolve once and cache forever.
+const vaultInfoCache = new Map<string, { vault: Contract; merkleTreeAddress: string }>();
+async function resolveVault(tokenAddress: string): Promise<{ vault: Contract; merkleTreeAddress: string }> {
+  const hit = vaultInfoCache.get(tokenAddress);
+  if (hit) return hit;
+  const provider = getReadProvider();
   const entrypoint = await getEntrypointContract(provider);
   const vaultAddress = await entrypoint.getVault(tokenAddress);
-  console.log("Vault address (from entrypoint):", vaultAddress);
-
   const vault = new Contract(vaultAddress, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
   const merkleTreeAddress = await vault.merkleTree();
-  console.log("MerkleTree address:", merkleTreeAddress);
+  const info = { vault, merkleTreeAddress };
+  vaultInfoCache.set(tokenAddress, info);
+  return info;
+}
 
-  const merkleTree = new Contract(merkleTreeAddress, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider);
+// --------- Helper: Get on-chain leaves ----------
+async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
+  zlog("getOnChainLeaves() tokenAddress:", tokenAddress);
+  const provider = getReadProvider();
+  const { merkleTreeAddress } = await resolveVault(tokenAddress);
+  zlog("MerkleTree address:", merkleTreeAddress);
 
   // LeafInserted(uint256 _index, uint256 _leaf, uint256 _root) — all non-indexed
   // topic[0] = keccak256("LeafInserted(uint256,uint256,uint256)")
@@ -230,7 +241,7 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
     VAULT_DEPLOY_BLOCK,
     latest,
   );
-  console.log("Fetched LeafInserted raw logs:", rawLogs.length);
+  zlog("Fetched LeafInserted raw logs:", rawLogs.length);
 
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
   const parsed = rawLogs.map(log => {
@@ -241,7 +252,7 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   parsed.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
 
   const leaves = parsed.map(p => p.leaf);
-  console.log("Parsed leaves count:", leaves.length);
+  zlog("Parsed leaves count:", leaves.length);
 
   return leaves;
 }
@@ -256,9 +267,9 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
 interface TokenMeta { address: string; decimals: number; symbol: string }
 export interface SpendableBalance { totalBalance: number; details: Record<string, number> }
 
-// Short cache so a periodic balance refresh doesn't re-scan all logs every few seconds.
+// Cache the leaf scan so the periodic balance refresh doesn't re-scan all logs each time.
 const leavesCache = new Map<string, { leaves: Set<string>; ts: number }>();
-const LEAVES_TTL_MS = 60_000;
+const LEAVES_TTL_MS = 180_000; // 3 min
 
 async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
   const hit = leavesCache.get(tokenAddress);
@@ -294,7 +305,6 @@ export async function getSpendableVaultBalance(
 
   const details: Record<string, number> = {};
   let totalBalance = 0;
-  const provider = getReadProvider();
 
   for (const [sym, notes] of Object.entries(notesByToken)) {
     const tok = tokenMap[sym];
@@ -304,10 +314,8 @@ export async function getSpendableVaultBalance(
     let leaves: Set<string>;
     let vault: Contract;
     try {
-      const entrypoint = await getEntrypointContract(provider);
-      const vaultAddr = await entrypoint.getVault(tokenAddress);
-      vault = new Contract(vaultAddr, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
-      leaves = await getLeafSet(tokenAddress);
+      ({ vault } = await resolveVault(tokenAddress)); // cached address resolution
+      leaves = await getLeafSet(tokenAddress);        // cached leaf scan (3 min)
     } catch (e) {
       console.warn(`[balance] reconcile failed for ${sym}:`, e);
       continue;

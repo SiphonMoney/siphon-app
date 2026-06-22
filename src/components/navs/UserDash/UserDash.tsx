@@ -40,8 +40,9 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     };
     
     fetchBalances();
-    // Refresh Siphon balance periodically
-    const interval = setInterval(fetchBalances, 10000);
+    // Refresh Siphon balance periodically (30s — on-chain balance doesn't change faster, and
+    // each refresh does a few RPC reads; the leaf scan itself is cached for 3 min).
+    const interval = setInterval(fetchBalances, 30000);
     return () => clearInterval(interval);
   }, [wallet]);
 
