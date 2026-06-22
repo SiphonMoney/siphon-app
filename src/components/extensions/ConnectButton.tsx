@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import WalletSelector from './WalletSelector';
 import { walletManager, WalletInfo } from './walletManager';
-import { initializeWithProvider, deinit, getSiphonVaultTotalBalance, TOKEN_MAP } from '../../lib/nexus';
+import { initializeWithProvider, deinit, TOKEN_MAP } from '../../lib/nexus';
+import { getSpendableVaultBalance } from '../../lib/zkHandler';
 
 export default function ConnectButton({ className, onConnected }: { className?: string; onConnected?: (wallet: WalletInfo) => void }) {
   const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
@@ -78,12 +79,12 @@ export default function ConnectButton({ className, onConnected }: { className?: 
 
   useEffect(() => {
     // Fetch Siphon Vault balance when wallet is connected
-    const fetchBalance = () => {
+    const fetchBalance = async () => {
       if (connectedWallet && connectedWallet.id === 'metamask') {
         try {
           const VAULT_CHAIN_ID = 11155111; // Sepolia id
-          const { details } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
-          
+          const { details } = await getSpendableVaultBalance(VAULT_CHAIN_ID, TOKEN_MAP);
+
           // Get ETH balance from Siphon Vault (case-insensitive lookup)
           const ethKey = Object.keys(details).find(key => key.toUpperCase() === 'ETH');
           const ethBalance = ethKey ? details[ethKey] : 0;

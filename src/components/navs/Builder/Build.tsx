@@ -58,7 +58,8 @@ import {
 } from "../../../lib/graphLinks";
 import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
-import { createStrategy } from "../../../lib/strategy";
+import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
+import { pollAndAuthorize } from "../../../lib/strategyAuthorizer";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 import { validateRecipientAddress, chainLabelToId, validatePriceConditionTreeRaw, createDefaultLimitOrderTree } from "./BuildNodes";
 
@@ -732,15 +733,36 @@ export default function Build({
       from_chain:        '11155111',
     };
 
-    console.log('[Strategy] Submitting to payload generator:', strategyData);
+    console.log('[Strategy] Encrypting client-side and submitting to trade-executor:', strategyData);
 
-    const result = await createStrategy(strategyData);
+    const result = await submitEncryptedStrategy(strategyData, {
+      onKeygen:    () => alert('Generating your FHE encryption keys (one-time, ~5s)...'),
+      onUploadKey: () => console.log('[Strategy] Uploading FHE server key (one-time)...'),
+      onEncrypt:   () => console.log('[Strategy] Encrypting price conditions locally...'),
+    });
     if (result.success) {
       // Save the new change commitment — funds are not spent until on-chain tx confirms
       if (zkResult.newDepositKey && zkResult.newDeposit) {
         localStorage.setItem(zkResult.newDepositKey, JSON.stringify({ ...zkResult.newDeposit, spent: false }));
       }
       // Do NOT mark old deposit as spent here — scheduler marks it spent after on-chain confirmation
+
+      // Browser-authorized execution: watch the encrypted result, decrypt locally, and authorize
+      // /executeStrategy when it triggers. Runs in the background so the alert below isn't blocked.
+      const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
+      if (strategyId) {
+        void pollAndAuthorize(strategyId, recipient, {
+          onTriggered: () => console.log('[Strategy] Triggered (decrypted locally) — authorizing execution...'),
+          onExecuted:  (tx) => {
+            console.log('[Strategy] Executed on-chain:', tx);
+            alert(tx ? `🎉 Strategy executed on-chain!\ntx: ${tx}` : '🎉 Strategy executed!');
+            // Complete — discard the consumed input note.
+            if (zkResult.spentDepositKey) { try { localStorage.removeItem(zkResult.spentDepositKey); } catch {} }
+          },
+          onError: (m) => console.warn('[Strategy] Authorize:', m),
+        });
+      }
+
       if (useTree) {
         alert(`✅ Composable Strategy registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when your custom multi-asset conditions are met.`);
       } else {

@@ -18,11 +18,13 @@ const merkleTreeInterface = new Interface(merkleTreeAbi);
 
 // --------- getEntrypointContract ----------
 export async function getEntrypointContract(
-  signerOrProvider: Signer | BrowserProvider
+  signerOrProvider: Signer | ethers.Provider
 ): Promise<Contract> {
 
-  let actor: Signer | BrowserProvider = signerOrProvider;
+  let actor: Signer | ethers.Provider = signerOrProvider;
 
+  // A BrowserProvider (injected wallet) must be unwrapped to a signer for writes. A plain
+  // read-only Provider (e.g. JsonRpcProvider fallback) is used directly — fine for view calls.
   if (actor instanceof BrowserProvider) {
     actor = await actor.getSigner();
   }

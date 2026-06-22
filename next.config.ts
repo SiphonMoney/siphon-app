@@ -8,6 +8,17 @@ const nextConfig: NextConfig = {
       asyncWebAssembly: true,
       topLevelAwait: true,
     };
+    // asyncWebAssembly emits async/await to instantiate the wasm. Webpack otherwise
+    // conservatively assumes the target may not support async functions and warns it
+    // "may cause runtime errors". Modern browsers do support it — declare that so the
+    // warning goes away and webpack doesn't try to down-level the async wasm loader.
+    config.output = {
+      ...config.output,
+      environment: {
+        ...config.output?.environment,
+        asyncFunction: true,
+      },
+    };
     return config;
   },
 };

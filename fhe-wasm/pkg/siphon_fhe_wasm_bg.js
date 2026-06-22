@@ -12224,6 +12224,34 @@ export function decrypt_result(ciphertext_hex, client_key_hex) {
 }
 
 /**
+ * Derive the (compressed) server key from an existing client key. Deterministic, so the
+ * browser only needs to persist the small client key and can re-derive the server key
+ * whenever the backend needs it re-uploaded — avoids storing the ~20MB server key locally.
+ * @param {string} client_key_hex
+ * @returns {string}
+ */
+export function derive_server_key(client_key_hex) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(client_key_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.derive_server_key(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Encrypt a price in cents (price * 100) with the given client key.
  * Returns the ciphertext as hex (bincode-serialized RadixCiphertext).
  * @param {bigint} price_cents
@@ -12252,7 +12280,8 @@ export function encrypt_price(price_cents, client_key_hex) {
 }
 
 /**
- * Generate a fresh FHE keypair. Returns `{ clientKey: hex, serverKey: hex }`.
+ * Generate a fresh FHE keypair. Returns `{ clientKey: hex, serverKey: hex }` where
+ * serverKey is a *compressed* server key (the engine decompresses it before use).
  * Heavy: server-key generation is single-threaded on wasm.
  * @returns {any}
  */

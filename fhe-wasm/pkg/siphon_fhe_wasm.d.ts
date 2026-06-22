@@ -1696,13 +1696,21 @@ export class TfhePublicKey {
 export function decrypt_result(ciphertext_hex: string, client_key_hex: string): boolean;
 
 /**
+ * Derive the (compressed) server key from an existing client key. Deterministic, so the
+ * browser only needs to persist the small client key and can re-derive the server key
+ * whenever the backend needs it re-uploaded — avoids storing the ~20MB server key locally.
+ */
+export function derive_server_key(client_key_hex: string): string;
+
+/**
  * Encrypt a price in cents (price * 100) with the given client key.
  * Returns the ciphertext as hex (bincode-serialized RadixCiphertext).
  */
 export function encrypt_price(price_cents: bigint, client_key_hex: string): string;
 
 /**
- * Generate a fresh FHE keypair. Returns `{ clientKey: hex, serverKey: hex }`.
+ * Generate a fresh FHE keypair. Returns `{ clientKey: hex, serverKey: hex }` where
+ * serverKey is a *compressed* server key (the engine decompresses it before use).
  * Heavy: server-key generation is single-threaded on wasm.
  */
 export function generate_keys(): any;

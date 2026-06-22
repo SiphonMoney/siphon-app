@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const decrypt_result: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const derive_server_key: (a: number, b: number) => [number, number, number, number];
 export const encrypt_price: (a: bigint, b: number, c: number) => [number, number, number, number];
 export const generate_keys: () => [number, number, number];
 export const init: () => void;

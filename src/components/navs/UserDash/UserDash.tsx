@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
-import { getSiphonVaultTotalBalance, TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
+import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
+import { getSpendableVaultBalance } from '../../../lib/zkHandler';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
 
 interface UnifiedBalance {
@@ -33,9 +34,9 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   });
   useEffect(() => {
     const fetchBalances = async () => {
-      const { details } = getSiphonVaultTotalBalance(VAULT_CHAIN_ID, TOKEN_MAP);
+      const { details } = await getSpendableVaultBalance(VAULT_CHAIN_ID, TOKEN_MAP);
       setSiphonVaultBalances(details);
-      console.log("Siphon Vault Balances fetched:", details); // Debug log
+      console.log("Siphon Vault spendable balances (on-chain reconciled):", details);
     };
     
     fetchBalances();

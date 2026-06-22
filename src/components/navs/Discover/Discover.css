@@ -2020,6 +2020,46 @@
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
 }
 
+/* Per-step plain-English hint (what the numbers mean) */
+.strategy-step-hint {
+  color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  margin: 2px 0 6px;
+  max-width: 520px;
+}
+
+/* Read-only derived field (e.g. withdraw asset = swap output) */
+.strategy-step-readonly {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 0.375rem 0.5rem;
+  min-width: 140px;
+  height: 28px;
+  box-sizing: border-box;
+  flex: 1;
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+}
+
+.strategy-step-readonly-label {
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 10px;
+}
+
+.strategy-step-readonly-value {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
 .strategy-step-input::placeholder {
   color: rgba(255, 255, 255, 0.4);
   font-style: italic;

@@ -7,7 +7,8 @@ import StrategyPreviewFlow from "../Builder/StrategyPreviewFlow";
 import { getModalStepNodes } from "../../../lib/builderLayout";
 import { getRunStepFieldValue } from "../../../lib/runModeValues";
 import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
-import { createStrategy } from "../../../lib/strategy";
+import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
+import { pollAndAuthorize } from "../../../lib/strategyAuthorizer";
 import { generateZKData } from "../../../lib/zkHandler";
 import { walletManager } from "../../../lib/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
@@ -31,6 +32,42 @@ interface StepTag {
   label: string;
   field: string;
   options?: string[];
+  // Read-only derived tag (e.g. withdraw asset = swap output). Rendered as a static
+  // chip showing `value` instead of an editable control.
+  readOnly?: boolean;
+  value?: string;
+}
+
+// Plain-English one-liner shown under each step so the numbers aren't ambiguous.
+// `coin` is the volatile asset the strategy trades (e.g. ETH), derived from the graph.
+function getStepHint(nodeData: NodeData, coin: string): string | null {
+  switch (nodeData?.type) {
+    case 'deposit':
+      return 'Funds to spend from your vault — you deposit once; this just selects which balance to use.';
+    case 'strategy': {
+      switch (nodeData.strategy) {
+        case 'Limit Order':
+          return `Trigger price in USD for 1 ${coin} (e.g. 1500 = run when 1 ${coin} = $1,500). Direction follows the swap.`;
+        case 'Stop Loss':
+          return `Runs when 1 ${coin} falls to this USD price.`;
+        case 'Take Profit':
+          return `Runs when 1 ${coin} rises to this USD price.`;
+        case 'Range':
+          return `USD price band per 1 ${coin} — runs across this low–high range.`;
+        case 'TWAP':
+        case 'DCA':
+          return 'Splits the order into slices over time.';
+        default:
+          return `Trigger price in USD for 1 ${coin}.`;
+      }
+    }
+    case 'swap':
+      return `The trade executed when the trigger hits (sells/buys via the chosen DEX).`;
+    case 'withdraw':
+      return 'Where the swap output is sent — destination chain + address.';
+    default:
+      return null;
+  }
 }
 
 interface StrategyMetadata {
@@ -201,7 +238,14 @@ export default function DetailsModal({
     if (nodeData?.type === 'withdraw') {
       tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Sepolia'] : undefined });
       if (isRunModeView) {
-        tags.push({ label: 'Coin', field: 'coin', options: ['ETH', 'USDC'] });
+        // The withdrawn asset is whatever the swap outputs — not a free choice. Show it
+        // read-only (derived from the swap's "To" coin, honouring any run-mode override)
+        // instead of a misleading editable dropdown that the execution path ignores.
+        const swapNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === 'swap');
+        const swapOut = swapNode
+          ? getRunStepFieldValue(runModeValues, swapNode.id, 'coinB', swapNode.data as NodeData)
+          : '';
+        tags.push({ label: 'Receive', field: 'coin', readOnly: true, value: swapOut || 'ETH' });
         tags.push({ label: 'Amount', field: 'amount' });
       }
       tags.push({ label: 'Address', field: 'address' });
@@ -496,8 +540,12 @@ export default function DetailsModal({
         }
       };
 
-      addLog('Sending payload to backend...');
-      const result = await createStrategy(strategyPayload);
+      addLog('Encrypting bounds client-side and submitting...');
+      const result = await submitEncryptedStrategy(strategyPayload, {
+        onKeygen:    () => addLog('Generating FHE keys (one-time, ~5s)...'),
+        onUploadKey: () => addLog('Uploading FHE server key (one-time)...'),
+        onEncrypt:   () => addLog('Encrypting price bounds locally...'),
+      });
 
       if (result.success) {
         addLog(
@@ -513,23 +561,48 @@ export default function DetailsModal({
         }
         // Do NOT mark old deposit as spent here — scheduler marks it spent after on-chain confirmation
 
-        addLog('Execution completed successfully!');
-        setTimeout(() => {
-          if (runningStrategies && setRunningStrategies) {
-            const newRunning = new Map(runningStrategies);
-            newRunning.set(selectedStrategy.name, { 
-              startTime: Date.now(), 
-              isRunning: true, 
-              loop: plan.isScheduled 
-            });
-            setRunningStrategies(newRunning);
+        // Mark it as running while we watch the encrypted result.
+        if (runningStrategies && setRunningStrategies) {
+          const newRunning = new Map(runningStrategies);
+          newRunning.set(selectedStrategy.name, { startTime: Date.now(), isRunning: true, loop: plan.isScheduled });
+          setRunningStrategies(newRunning);
+        }
+
+        // Browser-authorized execution: poll the encrypted result, decrypt locally, and when it
+        // triggers, authorize /executeStrategy. The scheduler can't do this (no client key).
+        const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
+        if (strategyId) {
+          addLog('Watching encrypted result — will decrypt & authorize when triggered...');
+          const auth = await pollAndAuthorize(strategyId, recipient, {
+            onWaiting:       (m) => addLog(`⏳ ${m}`),
+            onNotTriggered:  (m) => addLog(`• ${m}`),
+            onTriggered:     () => addLog('✅ Triggered (decrypted locally) — authorizing on-chain execution...'),
+            onExecuted:      (tx) => addLog(tx ? `🎉 Executed on-chain! tx: ${tx}` : '🎉 Executed.'),
+            onError:         (m) => addLog(`⚠️ ${m}`),
+          });
+
+          if (auth.executed) {
+            showToast(auth.txHash ? `Done! Swap tx ${auth.txHash.slice(0, 10)}…` : 'Strategy executed!', 'success');
+            // Strategy is complete — discard it: drop the consumed input note and stop tracking it.
+            if (spentDepositKey) { try { localStorage.removeItem(spentDepositKey); } catch {} }
+            if (runningStrategies && setRunningStrategies) {
+              const m = new Map(runningStrategies);
+              m.delete(selectedStrategy.name);
+              setRunningStrategies(m);
+            }
+          } else if (auth.timedOut) {
+            addLog('Still armed — it will execute once the price condition is met. Safe to close.');
+            showToast('Strategy armed — watching for trigger.', 'success');
+          } else if (auth.error) {
+            showToast(`Execution: ${auth.error}`, 'error');
           }
-          setShowSuccessNotification(true);
-          setTimeout(() => setShowSuccessNotification(false), 3000);
-          setIsExecuting(false);
-          setExecutionLogs([]);
-          handleClose();
-        }, 1500);
+        }
+
+        setShowSuccessNotification(true);
+        setTimeout(() => setShowSuccessNotification(false), 3000);
+        setIsExecuting(false);
+        setExecutionLogs([]);
+        handleClose();
       } else {
         addLog(`Error: ${result.error}`);
         showToast(`Strategy generation failed: ${result.error}`, 'error');
@@ -752,10 +825,18 @@ export default function DetailsModal({
                             <div className="strategy-step-number">{index + 1}</div>
                             <div className="strategy-step-content">
                               <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
+                              {getStepHint(nodeData, chartConfig.coin) && (
+                                <div className="strategy-step-hint">{getStepHint(nodeData, chartConfig.coin)}</div>
+                              )}
                               <div className="strategy-step-details">
                                 {tags.map((tag, idx) => (
                                     <div key={idx} className="strategy-step-input-wrapper">
-                                      {tag.options ? (
+                                      {tag.readOnly ? (
+                                        <div className="strategy-step-readonly" title="Determined by the swap output">
+                                          <span className="strategy-step-readonly-label">{tag.label}</span>
+                                          <span className="strategy-step-readonly-value">{tag.value}</span>
+                                        </div>
+                                      ) : tag.options ? (
                                         <select
                                           className="strategy-step-select"
                                           value={getRunStepFieldValue(runModeValues, stepId, tag.field, nodeData)}
@@ -786,7 +867,13 @@ export default function DetailsModal({
                                           type="text"
                                           className="strategy-step-input"
                                           placeholder={tag.label}
-                                          value={getRunStepFieldValue(runModeValues, stepId, tag.field, nodeData)}
+                                          // Once the user has touched this field, honour their value verbatim —
+                                          // including empty — so backspacing to clear doesn't snap back to the
+                                          // template default. Only fall back to the default before any edit.
+                                          value={
+                                            runModeValues[stepId]?.[tag.field] ??
+                                            getRunStepFieldValue(runModeValues, stepId, tag.field, nodeData)
+                                          }
                                           onChange={(e) => {
                                             setRunModeValues(prev => ({
                                               ...prev,
@@ -1005,6 +1092,9 @@ export default function DetailsModal({
                             <div className="strategy-step-number">{index + 1}</div>
                             <div className="strategy-step-content">
                               <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
+                              {getStepHint(nodeData, chartConfig.coin) && (
+                                <div className="strategy-step-hint">{getStepHint(nodeData, chartConfig.coin)}</div>
+                              )}
                               <div className="strategy-step-details">
                                 {tags.map((tag, idx) => (
                                   <span key={idx} className={`strategy-step-tag strategy-step-${tag.label.toLowerCase().replace(/\s+/g, '-')}`}>

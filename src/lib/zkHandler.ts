@@ -12,6 +12,105 @@ const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const FIELD_SIZE = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const TREE_DEPTH = 32;
 
+// Read-only Sepolia RPC fallback. Reading on-chain Merkle leaves is a view operation, so it
+// must not depend on the wallet's ethers provider being initialized (which only happens on an
+// explicit connect, not on page reload). Prefer the wallet provider when present; otherwise
+// use this URL so deposit verification keeps working after a refresh.
+const FALLBACK_RPC_URL = process.env.NEXT_PUBLIC_ETH_RPC_URL || '';
+
+// Block the vault/MerkleTree was deployed at — scanning from 0 means millions of blocks,
+// which rate-limited RPCs reject. Set NEXT_PUBLIC_VAULT_DEPLOY_BLOCK to the deploy block.
+const VAULT_DEPLOY_BLOCK = parseInt(process.env.NEXT_PUBLIC_VAULT_DEPLOY_BLOCK || '0', 10);
+// Initial getLogs window. Shrinks automatically when an RPC rejects the range (free tiers
+// cap this — Alchemy free is 10 blocks, others 50/2k/10k). Override per-RPC if needed.
+const GETLOGS_CHUNK = parseInt(process.env.NEXT_PUBLIC_GETLOGS_CHUNK || '2000', 10);
+
+/** Retry a provider call with exponential backoff when the RPC rate-limits (HTTP 429). */
+async function withRetry<T>(fn: () => Promise<T>, tries = 6): Promise<T> {
+  let delay = 300;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = JSON.stringify(err ?? '') + String((err as Error)?.message ?? '');
+      const rateLimited = /429|too many requests|rate.?limit/i.test(msg);
+      if (attempt >= tries - 1 || !rateLimited) throw err;
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 4000);
+    }
+  }
+}
+
+/** Run async `fn` over `items` with bounded concurrency (avoids bursting the RPC). */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** Pull `[from, to]` for a suggested block range out of a provider error, if present. */
+function suggestedRangeFromError(err: unknown): number | null {
+  const m = JSON.stringify(err ?? '').match(/\[0x([0-9a-fA-F]+),\s*0x([0-9a-fA-F]+)\]/);
+  if (!m) return null;
+  const span = parseInt(m[2], 16) - parseInt(m[1], 16) + 1;
+  return span > 0 ? span : null;
+}
+
+/**
+ * getLogs across a wide block range by walking it in chunks, shrinking the window when the
+ * RPC rejects it (honouring the provider's suggested range when given). Works on free tiers
+ * that cap eth_getLogs; just slower the smaller the cap.
+ */
+async function getLogsChunked(
+  provider: ethers.Provider,
+  filter: { address: string; topics: (string | null)[] },
+  fromBlock: number,
+  toBlock: number,
+): Promise<ethers.Log[]> {
+  const out: ethers.Log[] = [];
+  let chunk = Math.max(1, GETLOGS_CHUNK);
+  let start = fromBlock;
+  while (start <= toBlock) {
+    const end = Math.min(start + chunk - 1, toBlock);
+    try {
+      const part = await withRetry(() =>
+        provider.getLogs({ ...filter, fromBlock: start, toBlock: end }),
+      );
+      out.push(...part);
+      start = end + 1;
+    } catch (err) {
+      const suggested = suggestedRangeFromError(err);
+      if (suggested && suggested < chunk) { chunk = suggested; continue; }
+      if (chunk > 1) { chunk = Math.max(1, Math.floor(chunk / 2)); continue; }
+      throw err; // already at 1-block windows and still failing — genuine error
+    }
+  }
+  return out;
+}
+
+function getReadProvider(): ethers.Provider {
+  const walletProvider = getProvider();
+  if (walletProvider) return walletProvider;
+  if (FALLBACK_RPC_URL) {
+    console.warn('[zkHandler] Wallet provider not initialized — using read-only RPC fallback.');
+    return new ethers.JsonRpcProvider(FALLBACK_RPC_URL);
+  }
+  throw new Error(
+    'No Ethereum provider: connect your wallet, or set NEXT_PUBLIC_ETH_RPC_URL for a read-only fallback.'
+  );
+}
+
 // --------- Types ----------
 export interface TokenInfo {
   symbol: string;
@@ -109,8 +208,7 @@ export async function generateCommitmentData(
 async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   console.log("getOnChainLeaves() tokenAddress:", tokenAddress);
   
-  const provider = getProvider();
-  if (!provider) throw new Error("Provider not found");
+  const provider = getReadProvider();
 
   const entrypoint = await getEntrypointContract(provider);
   const vaultAddress = await entrypoint.getVault(tokenAddress);
@@ -125,12 +223,13 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   // LeafInserted(uint256 _index, uint256 _leaf, uint256 _root) — all non-indexed
   // topic[0] = keccak256("LeafInserted(uint256,uint256,uint256)")
   const LEAF_INSERTED_TOPIC = ethers.id("LeafInserted(uint256,uint256,uint256)");
-  const rawLogs = await provider.getLogs({
-    address: merkleTreeAddress,
-    topics: [LEAF_INSERTED_TOPIC],
-    fromBlock: 0,
-    toBlock: 'latest',
-  });
+  const latest = await provider.getBlockNumber();
+  const rawLogs = await getLogsChunked(
+    provider,
+    { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
+    VAULT_DEPLOY_BLOCK,
+    latest,
+  );
   console.log("Fetched LeafInserted raw logs:", rawLogs.length);
 
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
@@ -145,6 +244,93 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   console.log("Parsed leaves count:", leaves.length);
 
   return leaves;
+}
+
+// --------- True (on-chain-reconciled) vault balance ----------
+// The naive balance sums every localStorage note, which over-counts: strategy "change" notes
+// are saved as spendable before the withdrawal that creates them confirms, so an un-executed
+// strategy leaves a phantom note. The real spendable balance only counts a note when:
+//   1) its commitment is an actual on-chain leaf (the deposit/change really happened), AND
+//   2) its nullifier hasn't been spent on-chain (it hasn't already been withdrawn).
+
+interface TokenMeta { address: string; decimals: number; symbol: string }
+export interface SpendableBalance { totalBalance: number; details: Record<string, number> }
+
+// Short cache so a periodic balance refresh doesn't re-scan all logs every few seconds.
+const leavesCache = new Map<string, { leaves: Set<string>; ts: number }>();
+const LEAVES_TTL_MS = 60_000;
+
+async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
+  const hit = leavesCache.get(tokenAddress);
+  if (hit && Date.now() - hit.ts < LEAVES_TTL_MS) return hit.leaves;
+  const raw = await getOnChainLeaves(tokenAddress);
+  const set = new Set(raw.map((l) => l.toString()));
+  leavesCache.set(tokenAddress, { leaves: set, ts: Date.now() });
+  return set;
+}
+
+export async function getSpendableVaultBalance(
+  chainId: number,
+  tokenMap: Record<string, TokenMeta>,
+): Promise<SpendableBalance> {
+  // Collect candidate notes (unspent locally, with an amount) grouped by token symbol.
+  const notesByToken: Record<string, Array<{ commitment?: string; nullifierHash?: string; amount: string }>> = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(`${chainId}-`)) continue;
+    const parts = key.split('-');
+    if (parts.length < 3) continue;
+    const sym = parts[1].toUpperCase();
+    try {
+      const d = JSON.parse(localStorage.getItem(key) || '{}');
+      if (!d || !d.amount || d.spent) continue;
+      (notesByToken[sym] ||= []).push({
+        commitment: d.commitment != null ? String(d.commitment) : undefined,
+        nullifierHash: d.nullifierHash != null ? String(d.nullifierHash) : undefined,
+        amount: String(d.amount),
+      });
+    } catch { /* skip unparseable */ }
+  }
+
+  const details: Record<string, number> = {};
+  let totalBalance = 0;
+  const provider = getReadProvider();
+
+  for (const [sym, notes] of Object.entries(notesByToken)) {
+    const tok = tokenMap[sym];
+    if (!tok) continue;
+    const tokenAddress = sym === 'ETH' ? NATIVE_TOKEN : tok.address;
+
+    let leaves: Set<string>;
+    let vault: Contract;
+    try {
+      const entrypoint = await getEntrypointContract(provider);
+      const vaultAddr = await entrypoint.getVault(tokenAddress);
+      vault = new Contract(vaultAddr, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
+      leaves = await getLeafSet(tokenAddress);
+    } catch (e) {
+      console.warn(`[balance] reconcile failed for ${sym}:`, e);
+      continue;
+    }
+
+    const counted = new Set<string>();
+    for (const n of notes) {
+      if (!n.commitment || !leaves.has(n.commitment)) continue; // phantom / not on-chain
+      if (counted.has(n.commitment)) continue;                   // dedupe stale duplicate keys
+      if (n.nullifierHash) {
+        try {
+          if (await vault.nullifiers(BigInt(n.nullifierHash))) continue; // already withdrawn
+        } catch { /* if the check fails, fall through and count it */ }
+      }
+      const amt = parseFloat(n.amount);
+      if (!Number.isFinite(amt)) continue;
+      counted.add(n.commitment);
+      totalBalance += amt;
+      details[sym] = (details[sym] || 0) + amt;
+    }
+  }
+
+  return { totalBalance, details };
 }
 
 // --------- Generate ZK Data (for withdrawals) ----------
@@ -279,21 +465,24 @@ export async function generateZKData(
   // 5) Build Merkle proof using filledSubtrees + zeros from the contract
   // This mirrors the incremental insertion logic in MerkleTree.sol exactly.
   const tokenAddress5 = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
-  const provider5 = getProvider();
-  if (!provider5) return { error: "Provider not found" };
+  // Read-only on-chain reads (root, filledSubtrees, zeros) — use the RPC fallback so this
+  // works without the wallet provider initialized, same as getOnChainLeaves above.
+  const provider5 = getReadProvider();
   const entrypoint5 = await getEntrypointContract(provider5);
   const vaultAddr5 = await entrypoint5.getVault(tokenAddress5);
   const vault5 = new Contract(vaultAddr5, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider5);
   const merkleTreeAddr5 = await vault5.merkleTree();
   const merkleTree5 = new Contract(merkleTreeAddr5, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider5);
 
-  // Fetch on-chain state
-  const onChainRoot = BigInt((await merkleTree5.getRoot()).toString());
-  const filledSubtrees: bigint[] = await Promise.all(
-    Array.from({ length: TREE_DEPTH }, (_, i) => merkleTree5.filledSubtrees(i).then((v: bigint) => BigInt(v.toString())))
+  // Fetch on-chain state. These are TREE_DEPTH*2 calls — run them with bounded concurrency
+  // and 429 retries so public RPC gateways (e.g. Tenderly) don't rate-limit the burst.
+  const onChainRoot = BigInt((await withRetry(() => merkleTree5.getRoot())).toString());
+  const levels = Array.from({ length: TREE_DEPTH }, (_, i) => i);
+  const filledSubtrees: bigint[] = await mapLimit(levels, 4, (i) =>
+    withRetry(() => merkleTree5.filledSubtrees(i)).then((v: bigint) => BigInt(v.toString())),
   );
-  const zeros: bigint[] = await Promise.all(
-    Array.from({ length: TREE_DEPTH }, (_, i) => merkleTree5.zeros(i).then((v: bigint) => BigInt(v.toString())))
+  const zeros: bigint[] = await mapLimit(levels, 4, (i) =>
+    withRetry(() => merkleTree5.zeros(i)).then((v: bigint) => BigInt(v.toString())),
   );
 
   console.log("✅ On-chain root:", onChainRoot.toString());
@@ -328,43 +517,13 @@ export async function generateZKData(
   console.log("newPrecommitment:", newPrecommitment.toString());
   console.log("newCommitment:", newCommitment.toString());
 
-  // 7) Call prepareWithdrawalTransaction to generate proof (try remote relayer first, fallback to local)
+  // 7) Generate the Groth16 proof locally in the browser (snarkjs + /public/zk circuit files).
+  // The remote proving-relayer (:5010) isn't deployed and its auth path triggers a blocking
+  // MetaMask signature popup, and the /api/prove route needs rapidsnark + a machine-specific
+  // ZK_BUILD_DIR — so local proving is the reliable path. Heavy: takes ~20–60s in the browser.
   let withdrawalTxData: WithdrawalTxData;
-  
-  if (signer) {
-    try {
-      console.log("Calling remote proving relayer...");
-      const { prepareWithdrawalTransactionRemote } = await import('./proofRelayer');
-      withdrawalTxData = await prepareWithdrawalTransactionRemote({
-        existingValue:     existingValue.toString(),
-        existingNullifier: existingNullifier.toString(),
-        existingSecret:    existingSecret.toString(),
-        withdrawnValue:    withdrawnValue.toString(),
-        newNullifier:      newNullifier.toString(),
-        newSecret:         newSecret.toString(),
-        pathElements:      pathElements.map((el: bigint) => el.toString()),
-        pathIndices:       pathIndices,
-        recipient:         _recipient,
-        stateRoot:         onChainRoot.toString(),
-      }, signer);
-    } catch (e) {
-      console.warn('[Proof] Relayer failed, falling back to local snarkjs', e);
-      const rawWithdrawalTxData = await prepareWithdrawalTransaction({
-        existingValue: existingValue.toString(),
-        existingNullifier: existingNullifier.toString(),
-        existingSecret: existingSecret.toString(),
-        withdrawnValue: withdrawnValue.toString(),
-        newNullifier: newNullifier.toString(),
-        newSecret: newSecret.toString(),
-        pathElements: pathElements,
-        pathIndices: pathIndices,
-        recipient: _recipient,
-        stateRoot: onChainRoot.toString(),
-      });
-      withdrawalTxData = rawWithdrawalTxData as unknown as WithdrawalTxData;
-    }
-  } else {
-    console.log("No signer connected, using local proving...");
+  {
+    console.log("[Proof] Generating Groth16 proof locally (snarkjs)…");
     const rawWithdrawalTxData = await prepareWithdrawalTransaction({
       existingValue: existingValue.toString(),
       existingNullifier: existingNullifier.toString(),

@@ -11,7 +11,9 @@
 //!   - serialized with bincode 1.3, hex-encoded
 //! Any drift here breaks cross-implementation interop.
 
-use tfhe::integer::{gen_keys_radix, RadixCiphertext, RadixClientKey, ServerKey};
+use tfhe::integer::{
+    gen_keys_radix, CompressedServerKey, RadixCiphertext, RadixClientKey, ServerKey,
+};
 use tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -27,6 +29,9 @@ pub fn init() {
 struct KeyPair {
     #[serde(rename = "clientKey")]
     client_key: String,
+    /// Compressed server (evaluation) key — bincode+hex of `CompressedServerKey`.
+    /// Two orders of magnitude smaller than the expanded `ServerKey` (~MBs vs ~100MB),
+    /// so it's feasible to POST from the browser. The engine decompresses it on receipt.
     #[serde(rename = "serverKey")]
     server_key: String,
 }
@@ -41,18 +46,36 @@ fn from_hex<T: for<'de> serde::Deserialize<'de>>(hex_str: &str) -> Result<T, JsE
     bincode::deserialize(&bytes).map_err(|e| JsError::new(&format!("bincode: {e}")))
 }
 
-/// Generate a fresh FHE keypair. Returns `{ clientKey: hex, serverKey: hex }`.
+/// Generate a fresh FHE keypair. Returns `{ clientKey: hex, serverKey: hex }` where
+/// serverKey is a *compressed* server key (the engine decompresses it before use).
 /// Heavy: server-key generation is single-threaded on wasm.
 #[wasm_bindgen]
 pub fn generate_keys() -> Result<JsValue, JsError> {
-    let (client_key, server_key): (RadixClientKey, ServerKey) =
+    // We only need the client key from this pair; the expanded ServerKey is discarded
+    // in favour of the compressed one below.
+    let (client_key, _server_key): (RadixClientKey, ServerKey) =
         gen_keys_radix(PARAM_MESSAGE_2_CARRY_2_KS_PBS, NUM_BLOCKS);
+
+    // RadixClientKey derefs to the inner integer ClientKey, which the compressed
+    // server-key constructor expects.
+    let compressed_server_key =
+        CompressedServerKey::new_radix_compressed_server_key(client_key.as_ref());
 
     let pair = KeyPair {
         client_key: to_hex(&client_key)?,
-        server_key: to_hex(&server_key)?,
+        server_key: to_hex(&compressed_server_key)?,
     };
     serde_wasm_bindgen::to_value(&pair).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Derive the (compressed) server key from an existing client key. Deterministic, so the
+/// browser only needs to persist the small client key and can re-derive the server key
+/// whenever the backend needs it re-uploaded — avoids storing the ~20MB server key locally.
+#[wasm_bindgen]
+pub fn derive_server_key(client_key_hex: &str) -> Result<String, JsError> {
+    let cks: RadixClientKey = from_hex(client_key_hex)?;
+    let compressed = CompressedServerKey::new_radix_compressed_server_key(cks.as_ref());
+    to_hex(&compressed)
 }
 
 /// Encrypt a price in cents (price * 100) with the given client key.
