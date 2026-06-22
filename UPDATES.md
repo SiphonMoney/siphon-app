@@ -99,13 +99,25 @@ Key decisions (do not revert):
 
 | ID | Area | Issue |
 |---|---|---|
-| C-01 | Contracts | `initializeVaults()` has no `onlyOwner` |
-| C-04 | Contracts | Vault external functions missing `onlyEntrypoint` |
-| H-02 | Contracts | `MerkleTree.insert` missing `onlyVault` |
-| Verifier | Contracts | Deploy Groth16Verifier.sol; assert `publicInputs[4] == recipient` |
 | FHE-01 | Backend | Rotate committed private key; scrub git history |
-| FHE-02 | Backend | Hard-fail on startup if `API_TOKEN` not set |
-| FHE-05 | Backend | `_minAmountOut` is zero — sandwich attack vector |
-| F-01 | Frontend | Encrypt secrets in localStorage |
-| F-03 | Frontend | Replace `Math.random()` with `crypto.randomBytes` for nullifier generation |
+| FHE-02 | Backend | `auth.py` returns 500 if `API_TOKEN` unset but doesn't abort on startup — app still starts |
+| FHE-05 | Backend | `amountOutMinimum = 0` in `swap_eth_to_token()` — sandwich attack vector |
+| F-01 | Frontend | `handler.ts` writes raw nullifier + secret to localStorage — needs AES-GCM encryption |
+| Fee proof | Frontend | `payExecutionFee` proof must use `recipient = vault address` — currently uses user wallet, causing `InvalidZKProof` |
 | Solana | Verifier | Build on-chain Groth16 verifier (currently trust-based relayer) |
+
+## Fixed
+
+**Contracts:**
+- `initializeVaults()` — `onlyOwner` ✓
+- Vault external functions — `onlyEntrypoint` + `nonReentrant` ✓
+- `MerkleTree.insert` — `onlyVault` ✓
+- `rootExists()` check on all vault operations ✓
+- `MerkleTree` — `filledSubtrees` incremental pattern ✓
+- `safeTransferFrom` in `Entrypoint.deposit` ✓
+- `WithdrawalVerifier.sol` — Groth16 verifier with `uint[5]` public signals ✓
+
+**Frontend:**
+- `crypto.randomBytes(32)` for nullifier + secret generation ✓
+- Encryption key derivation separated from auth signature in `noteStore.ts` ✓
+- Error details stripped from `/api/prove` client response ✓
