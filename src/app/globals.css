@@ -854,3 +854,19 @@ canvas {
   letter-spacing: 0.5px;
   font-size: 11px;
 }
+
+/* ── Fit the desktop layout on smaller laptops ──────────────────────────────────
+   The desktop design targets ~1920px-wide screens, so on narrower laptops it looks
+   oversized at 100% browser zoom (you'd otherwise drop to ~75% to see it all). Scale
+   the whole UI down progressively below 1600px so everything is visible at 100%.
+   Large monitors (>1600px) are unaffected; mobile breakpoints (<768px) still apply.
+   `zoom` reflows correctly (unlike transform: scale) and keeps the fixed nav/canvas aligned. */
+@media (max-width: 1600px) {
+  html { zoom: 0.85; }
+}
+@media (max-width: 1440px) {
+  html { zoom: 0.78; }
+}
+@media (max-width: 1280px) {
+  html { zoom: 0.7; }
+}
