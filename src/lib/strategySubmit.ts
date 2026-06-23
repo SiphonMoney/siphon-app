@@ -117,9 +117,15 @@ export async function submitEncryptedStrategy(
     if (!userId) return { success: false, error: "Missing user_id." };
 
     // 1. Per-wallet client key (generate + persist on first use). Time the keygen only if it ran.
+    console.log("🔐 [FHE] Starting client-side encryption…");
     const tKey = now();
-    const clientKey = await getOrCreateClientKey(userId, () => { didKeygen = true; cb.onKeygen?.(); });
+    const clientKey = await getOrCreateClientKey(userId, () => {
+      didKeygen = true;
+      console.log("🔐 [FHE] No client key found — generating a fresh FHE keypair (one-time, ~3-5s)…");
+      cb.onKeygen?.();
+    });
     if (didKeygen) m.keygenMs = now() - tKey;
+    console.log(`🔐 [FHE] Client key ready (${didKeygen ? `generated in ${m.keygenMs.toFixed(0)}ms` : "loaded from localStorage"}).`);
 
     // 2. Make sure the matching server key is uploaded (derive + upload, if not already on file).
     const tSrv = now();
@@ -130,6 +136,7 @@ export async function submitEncryptedStrategy(
     cb.onEncrypt?.();
     const usingTree = input.condition_tree != null;
     const tEnc = now();
+    console.log(`🔐 [FHE] Encrypting ${usingTree ? "condition tree" : `bounds (upper=${input.upper_bound ?? 0}, lower=${input.lower_bound ?? 0})`} in the browser…`);
 
     let encrypted_upper_bound: string | undefined;
     let encrypted_lower_bound: string | undefined;
@@ -144,6 +151,13 @@ export async function submitEncryptedStrategy(
       encrypted_lower_bound = await encryptPrice(lower, clientKey);
     }
     m.encryptMs = now() - tEnc;
+    const ctChars = usingTree
+      ? JSON.stringify(condition_tree).length
+      : (encrypted_upper_bound?.length ?? 0) + (encrypted_lower_bound?.length ?? 0);
+    console.log(
+      `🔐 [FHE] ✅ Encrypted in ${m.encryptMs.toFixed(0)}ms → ${ctChars.toLocaleString()} hex chars of ciphertext. ` +
+        `Plaintext bounds NEVER leave the browser; only ciphertext + the server (eval) key are sent.`,
+    );
 
     // 4. Build the wire payload — strip plaintext bounds, attach ciphertext. No client key.
     const {
