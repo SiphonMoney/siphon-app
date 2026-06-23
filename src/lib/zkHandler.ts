@@ -486,35 +486,44 @@ export async function generateZKData(
   // and 429 retries so public RPC gateways (e.g. Tenderly) don't rate-limit the burst.
   const onChainRoot = BigInt((await withRetry(() => merkleTree5.getRoot())).toString());
   const levels = Array.from({ length: TREE_DEPTH }, (_, i) => i);
-  const filledSubtrees: bigint[] = await mapLimit(levels, 4, (i) =>
-    withRetry(() => merkleTree5.filledSubtrees(i)).then((v: bigint) => BigInt(v.toString())),
-  );
+  // Empty-subtree hashes per level (zeros[0] = empty leaf). Needed to pad partial levels.
   const zeros: bigint[] = await mapLimit(levels, 4, (i) =>
     withRetry(() => merkleTree5.zeros(i)).then((v: bigint) => BigInt(v.toString())),
   );
 
   console.log("✅ On-chain root:", onChainRoot.toString());
 
-  // Reconstruct path using the incremental tree state at insertion time.
-  // At leafIndex, for each level: if the leaf was a right child (odd index),
-  // the sibling is filledSubtrees[level] (the previously filled left subtree).
-  // If it was a left child (even index), the sibling is zeros[level].
+  // Build the Merkle authentication path for `leafIndex` from the FULL on-chain leaf set.
+  // The previous filledSubtrees/zeros shortcut only yields a valid path for the *last* inserted
+  // leaf; spending any older deposit needs the real siblings, which we hash up here level by
+  // level (Poseidon(left,right), padding missing right nodes with zeros[level]).
+  const poseidonHash = (a: bigint, b: bigint): bigint => BigInt(F.toObject(poseidon([a, b])));
   const pathElements: bigint[] = [];
   const pathIndices: number[] = [];
+  let levelNodes: bigint[] = leaves.slice();
   let idx = leafIndex;
   for (let level = 0; level < TREE_DEPTH; level++) {
     const isRight = idx % 2;
     pathIndices.push(isRight);
-    if (isRight === 1) {
-      // leaf is right child — sibling is the filled left subtree at this level
-      pathElements.push(filledSubtrees[level]);
-    } else {
-      // leaf is left child — sibling is the zero value at this level
-      pathElements.push(zeros[level]);
+    const siblingIdx = isRight === 1 ? idx - 1 : idx + 1;
+    pathElements.push(siblingIdx < levelNodes.length ? levelNodes[siblingIdx] : zeros[level]);
+
+    const next: bigint[] = [];
+    for (let i = 0; i < levelNodes.length; i += 2) {
+      const left = levelNodes[i];
+      const right = i + 1 < levelNodes.length ? levelNodes[i + 1] : zeros[level];
+      next.push(poseidonHash(left, right));
     }
+    levelNodes = next;
     idx = Math.floor(idx / 2);
   }
 
+  const computedRoot = levelNodes[0];
+  if (computedRoot !== onChainRoot) {
+    console.warn(`[Proof] ⚠️ computed root ${computedRoot} != on-chain root ${onChainRoot} — proof would fail`);
+  } else {
+    console.log("✅ computed Merkle root matches on-chain root");
+  }
   console.log("✅ pathElements built (length:", pathElements.length, ")");
   console.log("✅ pathIndices:", pathIndices.slice(0, 8));
 
