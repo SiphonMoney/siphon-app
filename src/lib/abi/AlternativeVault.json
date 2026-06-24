@@ -33,7 +33,17 @@
     },
     {
       "inputs": [],
+      "name": "InvalidRecipient",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "InvalidStateRoot",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidSwapParams",
       "type": "error"
     },
     {
@@ -167,6 +177,11 @@
               "internalType": "uint24",
               "name": "fee",
               "type": "uint24"
+            },
+            {
+              "internalType": "uint256",
+              "name": "deadline",
+              "type": "uint256"
             }
           ],
           "indexed": false,
@@ -359,6 +374,11 @@
               "internalType": "uint24",
               "name": "fee",
               "type": "uint24"
+            },
+            {
+              "internalType": "uint256",
+              "name": "deadline",
+              "type": "uint256"
             }
           ],
           "internalType": "struct IVault.SwapParam",
@@ -391,6 +411,26 @@
               "internalType": "address",
               "name": "recipient",
               "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "pool",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "dstToken",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "fee",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "minAmountOut",
+              "type": "uint256"
             },
             {
               "internalType": "uint256[2]",

@@ -4,6 +4,7 @@ import { buildPoseidon } from 'circomlibjs';
 import { prepareWithdrawalTransaction } from "./generateProof";
 import { getProvider, getSigner } from './nexus';
 import { getEntrypointContract } from './handler';
+import { getNetwork } from './networks';
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
 
@@ -12,15 +13,9 @@ const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const FIELD_SIZE = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const TREE_DEPTH = 32;
 
-// Read-only Sepolia RPC fallback. Reading on-chain Merkle leaves is a view operation, so it
-// must not depend on the wallet's ethers provider being initialized (which only happens on an
-// explicit connect, not on page reload). Prefer the wallet provider when present; otherwise
-// use this URL so deposit verification keeps working after a refresh.
-const FALLBACK_RPC_URL = process.env.NEXT_PUBLIC_ETH_RPC_URL || '';
-
-// Block the vault/MerkleTree was deployed at — scanning from 0 means millions of blocks,
-// which rate-limited RPCs reject. Set NEXT_PUBLIC_VAULT_DEPLOY_BLOCK to the deploy block.
-const VAULT_DEPLOY_BLOCK = parseInt(process.env.NEXT_PUBLIC_VAULT_DEPLOY_BLOCK || '0', 10);
+// Per-chain read provider + deploy block come from the network registry so leaf scans always
+// hit the SELECTED chain (Eth Sepolia / Base Sepolia) regardless of the wallet's current network.
+const vaultDeployBlock = (): number => getNetwork().deployBlock;
 // Initial getLogs window. Shrinks automatically when an RPC rejects the range (free tiers
 // cap this — Alchemy free is 10 blocks, others 50/2k/10k). Override per-RPC if needed.
 const GETLOGS_CHUNK = parseInt(process.env.NEXT_PUBLIC_GETLOGS_CHUNK || '2000', 10);
@@ -100,15 +95,13 @@ async function getLogsChunked(
 }
 
 function getReadProvider(): ethers.Provider {
+  // Reads must target the SELECTED chain's entrypoint, so prefer a deterministic JSON-RPC on
+  // that chain rather than the wallet provider (which may be on a different network mid-switch).
+  const net = getNetwork();
+  if (net.rpcUrl) return new ethers.JsonRpcProvider(net.rpcUrl, net.chainId);
   const walletProvider = getProvider();
   if (walletProvider) return walletProvider;
-  if (FALLBACK_RPC_URL) {
-    console.warn('[zkHandler] Wallet provider not initialized — using read-only RPC fallback.');
-    return new ethers.JsonRpcProvider(FALLBACK_RPC_URL);
-  }
-  throw new Error(
-    'No Ethereum provider: connect your wallet, or set NEXT_PUBLIC_ETH_RPC_URL for a read-only fallback.'
-  );
+  throw new Error(`No RPC configured for chain ${net.chainId}.`);
 }
 
 // --------- Types ----------
@@ -209,10 +202,11 @@ export async function generateCommitmentData(
 const ZK_DEBUG = process.env.NEXT_PUBLIC_ZK_DEBUG === '1';
 const zlog = (...args: unknown[]) => { if (ZK_DEBUG) console.log(...args); };
 
-// A token's vault + merkleTree addresses never change — resolve once and cache forever.
+// A token's vault + merkleTree addresses never change — resolve once per chain and cache.
 const vaultInfoCache = new Map<string, { vault: Contract; merkleTreeAddress: string }>();
 async function resolveVault(tokenAddress: string): Promise<{ vault: Contract; merkleTreeAddress: string }> {
-  const hit = vaultInfoCache.get(tokenAddress);
+  const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
+  const hit = vaultInfoCache.get(cacheKey);
   if (hit) return hit;
   const provider = getReadProvider();
   const entrypoint = await getEntrypointContract(provider);
@@ -220,7 +214,7 @@ async function resolveVault(tokenAddress: string): Promise<{ vault: Contract; me
   const vault = new Contract(vaultAddress, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
   const merkleTreeAddress = await vault.merkleTree();
   const info = { vault, merkleTreeAddress };
-  vaultInfoCache.set(tokenAddress, info);
+  vaultInfoCache.set(cacheKey, info);
   return info;
 }
 
@@ -238,7 +232,7 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   const rawLogs = await getLogsChunked(
     provider,
     { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
-    VAULT_DEPLOY_BLOCK,
+    vaultDeployBlock(),
     latest,
   );
   zlog("Fetched LeafInserted raw logs:", rawLogs.length);
@@ -272,11 +266,12 @@ const leavesCache = new Map<string, { leaves: Set<string>; ts: number }>();
 const LEAVES_TTL_MS = 180_000; // 3 min
 
 async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
-  const hit = leavesCache.get(tokenAddress);
+  const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
+  const hit = leavesCache.get(cacheKey);
   if (hit && Date.now() - hit.ts < LEAVES_TTL_MS) return hit.leaves;
   const raw = await getOnChainLeaves(tokenAddress);
   const set = new Set(raw.map((l) => l.toString()));
-  leavesCache.set(tokenAddress, { leaves: set, ts: Date.now() });
+  leavesCache.set(cacheKey, { leaves: set, ts: Date.now() });
   return set;
 }
 
@@ -342,13 +337,21 @@ export async function getSpendableVaultBalance(
 }
 
 // --------- Generate ZK Data (for withdrawals) ----------
+export interface SwapBinding {
+  pool: string;
+  dstToken: string;
+  fee: number | bigint;
+  minAmountOut: bigint | string;
+}
+
 export async function generateZKData(
   _chainId: number,
   _token: TokenInfo,
   _amount: string,
-  _recipient: string
+  _recipient: string,
+  _swap?: SwapBinding
 ): Promise<ZKData | { error: string }> {
-  console.log("generateZKData() called", { _chainId, _token: _token.symbol, _amount, _recipient });
+  console.log("generateZKData() called", { _chainId, _token: _token.symbol, _amount, _recipient, _swap });
 
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
@@ -552,6 +555,12 @@ export async function generateZKData(
       pathIndices: pathIndices,
       recipient: _recipient,
       stateRoot: onChainRoot.toString(),
+      // Swap-binding public signals (0 for plain withdraw / fee payment). For a swap these MUST
+      // match the values passed to Entrypoint.swap, or Vault.swap reverts InvalidSwapParams.
+      pool:         _swap ? _swap.pool : 0,
+      dstToken:     _swap ? _swap.dstToken : 0,
+      fee:          _swap ? _swap.fee : 0,
+      minAmountOut: _swap ? _swap.minAmountOut.toString() : 0,
     });
     withdrawalTxData = rawWithdrawalTxData as unknown as WithdrawalTxData;
   }

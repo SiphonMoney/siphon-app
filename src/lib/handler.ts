@@ -4,11 +4,13 @@ import { generateCommitmentData, generateZKData, TokenInfo } from './zkHandler';
 import entrypointArtifact from "./abi/Entrypoint.json";
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
+import { getNetwork, getSelectedChainId, NATIVE_TOKEN as NATIVE } from './networks';
 
 // --------- Constants ----------
-const VAULT_CHAIN_ID = 11155111; // Sepolia id
-const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const ENTRYPOINT_ADDRESS = '0xCd42793bda2E4ca65E47428329A839194DC3eeaD';
+// Chain + Entrypoint now come from the active network registry (Eth Sepolia / Base Sepolia).
+const currentChainId = (): number => getSelectedChainId();
+const entrypointAddr = (): string => getNetwork().entrypoint;
+const NATIVE_TOKEN = NATIVE;
 
 // --------- ABIs & interface helpers ----------
 const entrypointAbi = entrypointArtifact.abi as ethers.InterfaceAbi;
@@ -30,7 +32,7 @@ export async function getEntrypointContract(
   }
 
   const contract = new Contract(
-    ENTRYPOINT_ADDRESS,
+    entrypointAddr(),
     entrypointAbi,
     actor
   );
@@ -95,7 +97,7 @@ export async function deposit(_token: string, _amount: string) {
   try {
     // 1) Generate commitment data using zkHandler
     console.log("Generating commitment data...");
-    const commitmentData = await generateCommitmentData(VAULT_CHAIN_ID, tokenInfo, _amount);
+    const commitmentData = await generateCommitmentData(currentChainId(), tokenInfo, _amount);
 
     const decAmount = ethers.parseUnits(_amount, token.decimals);
     const tokenAddress = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
@@ -125,7 +127,7 @@ export async function deposit(_token: string, _amount: string) {
       const vaultAddress = await contract.getVault(tokenAddress);
       console.log("Vault address for token:", vaultAddress);
 
-      let currentAllowance = await getTokenAllowance(tokenAddress, signerAddress, ENTRYPOINT_ADDRESS);
+      let currentAllowance = await getTokenAllowance(tokenAddress, signerAddress, entrypointAddr());
       console.log(`Initial allowance for ${token.symbol} (raw): ${currentAllowance.toString()}`);
       console.log(`Initial allowance for ${token.symbol}: ${ethers.formatUnits(currentAllowance, token.decimals)}`);
       console.log(`Deposit amount (raw): ${decAmount.toString()}`);
@@ -134,13 +136,13 @@ export async function deposit(_token: string, _amount: string) {
       if (currentAllowance < decAmount) {
         console.log(`Insufficient allowance. Approving ${token.symbol} for Entrypoint...`);
         try {
-          const approveTx = await approveToken(tokenAddress, ENTRYPOINT_ADDRESS, ethers.MaxUint256);
+          const approveTx = await approveToken(tokenAddress, entrypointAddr(), ethers.MaxUint256);
           console.log("Approve tx sent:", approveTx.hash);
           const approveReceipt = await approveTx.wait();
           if (!approveReceipt) throw new Error("Approve receipt is null");
           console.log("Approve tx mined:", approveReceipt.hash);
 
-          currentAllowance = await getTokenAllowance(tokenAddress, signerAddress, ENTRYPOINT_ADDRESS);
+          currentAllowance = await getTokenAllowance(tokenAddress, signerAddress, entrypointAddr());
           console.log(`Allowance after approval (raw): ${currentAllowance.toString()}`);
           console.log(`Allowance after approval: ${ethers.formatUnits(currentAllowance, token.decimals)}`);
 
@@ -167,7 +169,7 @@ export async function deposit(_token: string, _amount: string) {
     }
 
     // Now that the transaction is successful, store the deposit hint locally
-    depositId = `${VAULT_CHAIN_ID}-${_token}-${commitmentData.precommitment}`;
+    depositId = `${currentChainId()}-${_token}-${commitmentData.precommitment}`;
     localStorage.setItem(depositId, JSON.stringify(commitmentData));
     console.log("Stored deposit hint in localStorage:", depositId);
 
@@ -200,7 +202,7 @@ export async function deposit(_token: string, _amount: string) {
     const commitment = leafBN.toString();
 
     // Update localStorage with commitment (use commitment as final key)
-    finalDepositId = `${VAULT_CHAIN_ID}-${_token}-${commitment}`;
+    finalDepositId = `${currentChainId()}-${_token}-${commitment}`;
     localStorage.removeItem(depositId); // Remove temp key
     localStorage.setItem(finalDepositId, JSON.stringify({
       ...commitmentData,
@@ -216,7 +218,7 @@ export async function deposit(_token: string, _amount: string) {
         commitment,
         commitmentData.nullifierHash ?? '',
         _token,
-        VAULT_CHAIN_ID
+        currentChainId()
       );
     } catch (e) {
       console.warn('Server note save failed, localStorage fallback active', e);
@@ -430,7 +432,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
   try {
     // 1) Generate ZK data using zkHandler
     console.log("Generating ZK data for withdrawal...");
-    const zkDataResult = await generateZKData(VAULT_CHAIN_ID, tokenInfo, _amount, _recipient);
+    const zkDataResult = await generateZKData(currentChainId(), tokenInfo, _amount, _recipient);
 
     if ('error' in zkDataResult) {
       return { success: false, error: zkDataResult.error };

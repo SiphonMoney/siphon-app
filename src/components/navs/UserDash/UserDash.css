@@ -49,9 +49,33 @@
 
 .userdash-header-top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
   width: 100%;
+}
+
+.userdash-chain-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.userdash-chain-toggle button.strategy-modal-category-badge {
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 0.375rem 0.75rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.userdash-chain-toggle button.strategy-modal-category-badge.active {
+  background: rgba(91, 141, 239, 0.2);
+  border-color: rgba(91, 141, 239, 0.5);
+  color: #fff;
 }
 
 .userdash-title {

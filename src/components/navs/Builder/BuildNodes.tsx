@@ -156,27 +156,33 @@ export function validatePriceConditionTreeRaw(
   return validatePriceConditionTree(parseConditionTree(raw));
 }
 
+// Testnet-first: this app runs on Ethereum Sepolia (11155111) and Base Sepolia (84532).
+// "Ethereum"/"Sepolia" → Eth Sepolia, "Base" → Base Sepolia.
 export const CHAIN_LABEL_TO_ID: Record<string, string> = {
   Sepolia: "11155111",
-  Ethereum: "1",
+  Ethereum: "11155111",
+  "Ethereum Sepolia": "11155111",
+  Base: "84532",
+  "Base Sepolia": "84532",
   Arbitrum: "42161",
   Optimism: "10",
-  Base: "8453",
   Polygon: "137",
   Solana: "solana",
 };
 
 export function chainLabelToId(chain?: string | null): string {
-  if (!chain) return "11155111";
+  if (!chain) return "84532";
   const normalized = chain.trim();
   if (CHAIN_LABEL_TO_ID[normalized]) return CHAIN_LABEL_TO_ID[normalized];
+  const ci = Object.keys(CHAIN_LABEL_TO_ID).find(k => k.toLowerCase() === normalized.toLowerCase());
+  if (ci) return CHAIN_LABEL_TO_ID[ci];
   if (normalized === "solana" || /^\d+$/.test(normalized)) return normalized;
-  return "11155111";
+  return "84532";
 }
 
 export function validateRecipientAddress(address: string, toChain: string): string | null {
   if (!address) return "Recipient address required";
-  const EVM_CHAIN_IDS = ["1", "11155111", "42161", "10", "8453", "137"];
+  const EVM_CHAIN_IDS = ["1", "11155111", "84532", "42161", "10", "8453", "137"];
   const EVM_REGEX = /^0x[0-9a-fA-F]{40}$/;
   const SOLANA_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 

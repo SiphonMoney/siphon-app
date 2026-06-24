@@ -1,5 +1,6 @@
 // replaced original nexus handler code with ethers.js implementation
 import { ethers, BrowserProvider, Signer, Contract, formatUnits, parseUnits, Eip1193Provider } from 'ethers';
+import { getSelectedChainId, getNetwork, getTokens } from './networks';
 
 // --- State Variables ---
 let provider: BrowserProvider | null = null;
@@ -19,31 +20,19 @@ const ERC20_ABI_ALLOWANCE = [
   "function approve(address spender, uint256 amount) returns (bool)"
 ];
 
-// Sepolia Chain ID
-const SEPOLIA_CHAIN_ID = 11155111;
-
-export const TOKEN_MAP: { [key: string]: { address: string, decimals: number, symbol: string } } = {
-  'ETH': {
-    address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-    decimals: 18,
-    symbol: 'ETH'
-  },
-  'USDC': {
-    address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    decimals: 6,
-    symbol: 'USDC'
-  },
-  'USDT': {
-    address: '0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0',
-    decimals: 6,
-    symbol: 'USDT'
-  },
-  'WBTC': {
-    address: '0x92f3B59a79bFf5dc60c0d59eA13a44D082B2bdFC',
-    decimals: 8,
-    symbol: 'WBTC'
-  }
-};
+// Token map is now per-chain (ETH + that chain's USDC), sourced from the network registry.
+export function getTokenMap(): { [key: string]: { address: string; decimals: number; symbol: string } } {
+  return getTokens();
+}
+// Back-compat alias for modules/components that import a static TOKEN_MAP — resolves to the
+// active chain's tokens at access time via a Proxy.
+export const TOKEN_MAP: { [key: string]: { address: string; decimals: number; symbol: string } } =
+  new Proxy({}, {
+    get: (_t, prop: string) => getTokenMap()[prop],
+    ownKeys: () => Reflect.ownKeys(getTokenMap()),
+    getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+    has: (_t, prop: string) => prop in getTokenMap(),
+  }) as { [key: string]: { address: string; decimals: number; symbol: string } };
 
 
 // --- Exportable Helper Functions ---
@@ -155,17 +144,17 @@ export async function getUnifiedBalances() {
     symbol: bal.symbol,
     balance: bal.balance,
     decimals: bal.decimals,
-    // Mock the breakdown structure to show it's on Sepolia
+    // Breakdown reflects the active network (Eth Sepolia / Base Sepolia)
     breakdown: [
       {
         balance: bal.balance,
         chain: {
-          id: SEPOLIA_CHAIN_ID,
+          id: getSelectedChainId(),
           logo: '',
-          name: 'Ethereum Sepolia'
+          name: getNetwork().name
         },
-        
-        contractAddress: TOKEN_MAP[bal.symbol]?.address as `0x${string}`
+
+        contractAddress: getTokenMap()[bal.symbol]?.address as `0x${string}`
       }
     ]
   }));

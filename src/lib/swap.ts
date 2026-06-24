@@ -1,27 +1,11 @@
 import { ethers } from 'ethers';
 import { generateZKData } from './zkHandler'; // Removed encodeProof as it's not needed
 import entrypointArtifact from "./abi/Entrypoint.json";
+import { getNetwork, getSelectedChainId, getTokens, NATIVE_TOKEN } from './networks';
 
-const SEPOLIA_CHAIN_ID = 11155111;
-const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
-const ENTRYPOINT_ADDRESS = '0xCd42793bda2E4ca65E47428329A839194DC3eeaD';
 const FEE = 3000;
-const MIN_AMOUNT_OUT = 0;
-
-// Token configuration
-const TOKENS = {
-    ETH: {
-        symbol: 'ETH',
-        address: NATIVE_TOKEN,
-        decimals: 18
-    },
-    USDC: {
-        symbol: 'USDC',
-        address: USDC_ADDRESS,
-        decimals: 6
-    }
-};
+const MIN_AMOUNT_OUT = 0n;
+const SWAP_DEADLINE_SECS = 1800; // 30 min
 
 const ENTRYPOINT_ABI = entrypointArtifact.abi as ethers.InterfaceAbi;
 
@@ -45,17 +29,28 @@ export async function instantSwap(
             return { success: false, error: "source and destination tokens must be different" };
         }
 
-        const srcToken = TOKENS[srcTokenUpper as keyof typeof TOKENS];
-        const dstToken = TOKENS[dstTokenUpper as keyof typeof TOKENS];
+        const net = getNetwork();
+        const TOKENS = getTokens();
+        const srcToken = TOKENS[srcTokenUpper];
+        const dstToken = TOKENS[dstTokenUpper];
         const srcAmount = ethers.parseUnits(_amount, srcToken.decimals);
-        
-        console.log(`Swap - Chain: ${SEPOLIA_CHAIN_ID}, From ${srcAmount.toString()} ${srcToken.symbol} to ${dstToken.symbol}`);
-        // Generate ZK data
+
+        // The dstToken the contract actually routes to (and binds in the proof) is WETH when the
+        // user asked for native out. Both the Entrypoint arg and the proof signal must use this.
+        const dstTokenForSwap = dstToken.address === NATIVE_TOKEN ? net.weth : dstToken.address;
+        const minAmountOut = MIN_AMOUNT_OUT;
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + SWAP_DEADLINE_SECS);
+
+        console.log(`Swap - Chain: ${net.chainId} (${net.name}), ${srcAmount.toString()} ${srcToken.symbol} → ${dstToken.symbol}`);
+
+        // Generate ZK data with swap-binding signals (pool/dstToken/fee/minAmountOut) so the
+        // 9-signal proof matches Entrypoint.swap (else Vault.swap reverts InvalidSwapParams).
         const zkData = await generateZKData(
-            SEPOLIA_CHAIN_ID,
-            { symbol: srcToken.symbol, decimals: srcToken.decimals, address: srcToken.address},
+            net.chainId,
+            { symbol: srcToken.symbol, decimals: srcToken.decimals, address: srcToken.address },
             _amount,
-            _recipient
+            _recipient,
+            { pool: _pool, dstToken: dstTokenForSwap, fee: FEE, minAmountOut }
         );
 
         if ('error' in zkData) {
@@ -68,23 +63,28 @@ export async function instantSwap(
             stateRoot:     withdrawalTxData.stateRoot,
             nullifier:     withdrawalTxData.nullifierHash,
             newCommitment: withdrawalTxData.newCommitment,
+            recipient:     _recipient,
+            pool:          _pool,
+            dstToken:      dstTokenForSwap,
+            fee:           FEE,
+            minAmountOut:  minAmountOut,
             pA: withdrawalTxData.pA,
             pB: withdrawalTxData.pB,
             pC: withdrawalTxData.pC,
         };
 
-
-        const contract = new ethers.Contract(ENTRYPOINT_ADDRESS, ENTRYPOINT_ABI, signer);
-        // Corrected txParams for the new Entrypoint.swap signature
+        const contract = new ethers.Contract(net.entrypoint, ENTRYPOINT_ABI, signer);
+        // New Entrypoint.swap signature: (...,_fee, _deadline, _zkProof)
         const txParams = [
             _pool,
             srcToken.address,
-            dstToken.address,
+            dstTokenForSwap,
             _recipient,
             srcAmount,
-            MIN_AMOUNT_OUT,
+            minAmountOut,
             FEE,
-            zkProofStruct // Pass the ZKProof struct
+            deadline,
+            zkProofStruct,
         ];
 
         // swap transaction
@@ -130,10 +130,11 @@ export async function getEthersProviderAndSigner() {
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
 
-    // Check if we're on Sepolia
+    // Ensure the wallet is on the selected network (Eth Sepolia / Base Sepolia)
+    const selected = getSelectedChainId();
     const network = await provider.getNetwork();
-    if (network.chainId !== BigInt(SEPOLIA_CHAIN_ID)) {
-        throw new Error(`Please switch to Sepolia network. Current network: ${network.chainId}`);
+    if (network.chainId !== BigInt(selected)) {
+        throw new Error(`Please switch your wallet to ${getNetwork(selected).name} (chainId ${selected}). Current: ${network.chainId}`);
     }
 
     return { provider, signer };

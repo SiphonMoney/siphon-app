@@ -5,6 +5,7 @@ import WalletSelector from './WalletSelector';
 import { walletManager, WalletInfo } from './walletManager';
 import { initializeWithProvider, deinit, TOKEN_MAP } from '../../lib/nexus';
 import { getSpendableVaultBalance } from '../../lib/zkHandler';
+import { getSelectedChainId } from '../../lib/networks';
 
 export default function ConnectButton({ className, onConnected }: { className?: string; onConnected?: (wallet: WalletInfo) => void }) {
   const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
@@ -82,7 +83,7 @@ export default function ConnectButton({ className, onConnected }: { className?: 
     const fetchBalance = async () => {
       if (connectedWallet && connectedWallet.id === 'metamask') {
         try {
-          const VAULT_CHAIN_ID = 11155111; // Sepolia id
+          const VAULT_CHAIN_ID = getSelectedChainId(); // active network
           const { details } = await getSpendableVaultBalance(VAULT_CHAIN_ID, TOKEN_MAP);
 
           // Get ETH balance from Siphon Vault (case-insensitive lookup)
@@ -104,6 +105,25 @@ export default function ConnectButton({ className, onConnected }: { className?: 
       const interval = setInterval(fetchBalance, 30000);
       return () => clearInterval(interval);
     }
+  }, [connectedWallet]);
+
+  useEffect(() => {
+    const onChainChanged = () => {
+      if (connectedWallet?.id === 'metamask') {
+        const refetch = async () => {
+          try {
+            const { details } = await getSpendableVaultBalance(getSelectedChainId(), TOKEN_MAP);
+            const ethKey = Object.keys(details).find((key) => key.toUpperCase() === 'ETH');
+            setBalance(ethKey ? details[ethKey] : 0);
+          } catch {
+            setBalance(0);
+          }
+        };
+        refetch();
+      }
+    };
+    window.addEventListener('siphon:chainChanged', onChainChanged);
+    return () => window.removeEventListener('siphon:chainChanged', onChainChanged);
   }, [connectedWallet]);
 
 

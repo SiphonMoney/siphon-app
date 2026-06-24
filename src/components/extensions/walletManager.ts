@@ -1,4 +1,5 @@
 import Solflare from '@solflare-wallet/sdk';
+import { getNetwork, getSelectedChainId, addChainParams } from '../../lib/networks';
 
 export interface WalletInfo {
   id: string;
@@ -36,11 +37,12 @@ class WalletManager {
         return { success: false, error: 'No accounts found' };
       }
 
-      // Then switch to Sepolia network (chain ID: 11155111)
+      // Then switch to the currently selected network (Eth Sepolia / Base Sepolia)
+      const net = getNetwork(getSelectedChainId());
       try {
         await ethereum.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0xaa36a7' }], // 11155111 in hex
+          params: [{ chainId: net.hexChainId }],
         });
       } catch (switchError: unknown) {
         // If the chain doesn't exist, add it
@@ -48,20 +50,10 @@ class WalletManager {
           try {
             await ethereum.request({
               method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0xaa36a7',
-                chainName: 'Sepolia',
-                nativeCurrency: {
-                  name: 'Ether',
-                  symbol: 'ETH',
-                  decimals: 18,
-                },
-                rpcUrls: ['https://sepolia.infura.io/v3/'],
-                blockExplorerUrls: ['https://sepolia.etherscan.io'],
-              }],
+              params: [addChainParams(net.chainId)],
             });
           } catch {
-            return { success: false, error: 'Failed to add Sepolia network. Please add it manually in MetaMask.' };
+            return { success: false, error: `Failed to add ${net.name}. Please add it manually in MetaMask.` };
           }
         } else {
           // User rejected the switch or other error

@@ -58,6 +58,7 @@ import {
 } from "../../../lib/graphLinks";
 import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
+import { getSelectedChainId, getTokens } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { pollAndAuthorize } from "../../../lib/strategyAuthorizer";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
@@ -680,11 +681,13 @@ export default function Build({
       return;
     }
 
-    // Token config for ZK proof generation (Sepolia)
-    const CHAIN_ID = 11155111;
+    // Token config for ZK proof generation — sourced from the active network registry.
+    const CHAIN_ID = getSelectedChainId();
+    const chainTokens = getTokens(CHAIN_ID);
     const TOKEN_CONFIG: Record<string, TokenInfo> = {
-      ETH:  { symbol: 'ETH',  decimals: 18, address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' },
-      USDC: { symbol: 'USDC', decimals: 6,  address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
+      ETH:  { symbol: 'ETH',  decimals: 18, address: chainTokens.ETH.address },
+      USDC: { symbol: 'USDC', decimals: 6,  address: chainTokens.USDC.address },
+      // Legacy testnet-only assets (Ethereum Sepolia); not part of the core loop.
       WBTC: { symbol: 'WBTC', decimals: 8,  address: '0x92f3B59a79bFf5dc60c0d59eA13a44D082B2bdFC' },
       USDT: { symbol: 'USDT', decimals: 6,  address: '0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0' },
     };
@@ -730,7 +733,7 @@ export default function Build({
       zk_proof:          zkProof,
       condition_tree:    useTree ? conditionTree : null,
       to_chain:          toChain,
-      from_chain:        '11155111',
+      from_chain:        String(getSelectedChainId()),
     };
 
     console.log('[Strategy] Encrypting client-side and submitting to trade-executor:', strategyData);

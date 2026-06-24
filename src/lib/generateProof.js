@@ -111,6 +111,8 @@ export async function prepareWithdrawalTransaction(params) {
     withdrawnValue, newNullifier, newSecret,
     pathElements, pathIndices,
     recipient, stateRoot,
+    // Optional swap-binding signals (default 0 for plain withdraw / fee payment).
+    pool, dstToken, fee, minAmountOut,
   } = params;
 
   const { proof, publicSignals, nullifierHash, newCommitment } =
@@ -119,6 +121,7 @@ export async function prepareWithdrawalTransaction(params) {
       withdrawnValue, newNullifier, newSecret,
       pathElements, pathIndices,
       recipient, stateRoot,
+      pool, dstToken, fee, minAmountOut,
     });
 
   const { pA, pB, pC } = proofToCalldata(proof);

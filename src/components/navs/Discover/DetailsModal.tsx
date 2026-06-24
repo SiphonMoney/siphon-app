@@ -10,8 +10,10 @@ import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { pollAndAuthorize } from "../../../lib/strategyAuthorizer";
 import { generateZKData } from "../../../lib/zkHandler";
-import { walletManager } from "../../../lib/walletManager";
+import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
+import { getSelectedChainId, getTokens, getNetwork } from "../../../lib/networks";
+import ChainToggle from "../../ChainToggle";
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
 import StrategyChart, { type ChartOverlay } from "../../charts/StrategyChart";
 import "../../charts/charts.css";
@@ -145,6 +147,7 @@ export default function DetailsModal({
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'loading' } | null>(null);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const [activeChainId, setActiveChainId] = useState(getSelectedChainId);
 
   const stepNodes = useMemo(
     () => getModalStepNodes(modalStrategyNodes, modalStrategyEdges),
@@ -375,6 +378,16 @@ export default function DetailsModal({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    setActiveChainId(getSelectedChainId());
+    const onChain = (e: Event) => {
+      const id = (e as CustomEvent<{ chainId: number }>).detail?.chainId;
+      if (id) setActiveChainId(id);
+    };
+    window.addEventListener('siphon:chainChanged', onChain);
+    return () => window.removeEventListener('siphon:chainChanged', onChain);
+  }, [isOpen]);
+
   // Local wrapper functions that use fetched prices
   const calculateExchange = (inputAmount: number, coinA: string, coinB: string): number => {
     return calculateExchangeUtil(inputAmount, coinA, coinB, coinPrices);
@@ -489,18 +502,14 @@ export default function DetailsModal({
       // Small delay to show the scanning message
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      const tokenMap: Record<string, { symbol: string; decimals: number; address: string }> = {
-        'ETH': { symbol: 'ETH', decimals: 18, address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" },
-        'USDC': { symbol: 'USDC', decimals: 6, address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" }
-      };
-
-      const tokenInfo = tokenMap[assetIn || 'USDC'];
+      const tokenMap = getTokens(activeChainId);
+      const tokenInfo = tokenMap[(assetIn || 'USDC').toUpperCase()];
       if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
 
       // Generate ZK proof for strategy execution using full deposit amount
-      addLog('Generating ZK proof for strategy...');
+      addLog(`Generating ZK proof on ${getNetwork(activeChainId).name}...`);
       const zkResult = await generateZKData(
-        11155111,
+        activeChainId,
         tokenInfo,
         amountStr,
         recipient
@@ -530,6 +539,7 @@ export default function DetailsModal({
           ? { start_delay_sec: bounds.start_delay_sec }
           : {}),
         ...(bounds.max_slippage_bps != null ? { max_slippage_bps: bounds.max_slippage_bps } : {}),
+        from_chain: String(activeChainId),
         zk_proof: {
           pA: withdrawalTxData.pA,
           pB: withdrawalTxData.pB,
@@ -700,6 +710,7 @@ export default function DetailsModal({
           <div className="strategy-modal-header-name">
             <h2 className="strategy-modal-title">{selectedStrategy.name}</h2>
             <p className="strategy-modal-author">by {selectedStrategy.author}</p>
+            <ChainToggle className="strategy-modal-categories" />
           </div>
           <button 
             className="strategy-modal-close"

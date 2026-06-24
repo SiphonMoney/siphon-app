@@ -6,6 +6,8 @@ import { deposit, withdraw } from "../../../lib/handler";
 import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
 import { getSpendableVaultBalance } from '../../../lib/zkHandler';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
+import { getSelectedChainId } from '../../../lib/networks';
+import ChainToggle from '../../ChainToggle';
 
 interface UnifiedBalance {
   symbol: string;
@@ -25,7 +27,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDepositMode, setIsDepositMode] = useState(true);
   const [isNotesBusy, setIsNotesBusy] = useState(false);
-  const VAULT_CHAIN_ID = 11155111; // Sepolia id
+  const [vaultChainId, setVaultChainId] = useState(getSelectedChainId);
   
   const [transactionInput, setTransactionInput] = useState({
     token: "ETH",
@@ -33,18 +35,26 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     recipient: ""
   });
   useEffect(() => {
+    setVaultChainId(getSelectedChainId());
+    const onChain = (e: Event) => {
+      const id = (e as CustomEvent<{ chainId: number }>).detail?.chainId;
+      if (id) setVaultChainId(id);
+    };
+    window.addEventListener('siphon:chainChanged', onChain);
+    return () => window.removeEventListener('siphon:chainChanged', onChain);
+  }, []);
+
+  useEffect(() => {
     const fetchBalances = async () => {
-      const { details } = await getSpendableVaultBalance(VAULT_CHAIN_ID, TOKEN_MAP);
+      const { details } = await getSpendableVaultBalance(vaultChainId, TOKEN_MAP);
       setSiphonVaultBalances(details);
       console.log("Siphon Vault spendable balances (on-chain reconciled):", details);
     };
     
     fetchBalances();
-    // Refresh Siphon balance periodically (30s — on-chain balance doesn't change faster, and
-    // each refresh does a few RPC reads; the leaf scan itself is cached for 3 min).
     const interval = setInterval(fetchBalances, 30000);
     return () => clearInterval(interval);
-  }, [wallet]);
+  }, [wallet, vaultChainId]);
 
   // ... (keep the depositInputs and withdrawals state as is) ...
 
@@ -270,6 +280,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         <div className="userdash-header">
           <div className="userdash-header-top">
             <h1 className="userdash-title">User Dashboard</h1>
+            <ChainToggle className="userdash-chain-toggle" />
             <button
               className="userdash-logout-button"
               onClick={handleLogout}

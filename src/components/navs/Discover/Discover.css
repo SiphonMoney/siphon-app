@@ -2491,6 +2491,19 @@
   letter-spacing: 0.5px;
 }
 
+.strategy-modal-categories,
+.userdash-chain-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.strategy-modal-categories button.strategy-modal-category-badge,
+.userdash-chain-toggle button.strategy-modal-category-badge {
+  cursor: pointer;
+}
+
 .strategy-modal-network-badge {
   display: inline-block;
   background: rgba(255, 255, 255, 0.03);
