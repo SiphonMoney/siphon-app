@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Node, Edge } from '@xyflow/react';
 import StratDetails from "@/components/navs/Run/StratDetails";
+import StrategiesList from "@/components/navs/Run/StrategiesList";
 import "./Run.css";
 
 interface RunProps {
@@ -35,6 +36,7 @@ export default function Run({
   setViewMode
 }: RunProps) {
   const [strategyViewMode] = useState<'cards' | 'list'>('cards');
+  const [runSectionTab, setRunSectionTab] = useState<'runs' | 'blueprints'>('runs');
   const [selectedStrategy, setSelectedStrategy] = useState<{ name: string; nodes: Node[]; edges: Edge[] } | null>(null);
   const [showStrategyModal, setShowStrategyModal] = useState(false);
   const onEditStrategy = useCallback((sceneName: string) => {
@@ -133,10 +135,30 @@ export default function Run({
         <div className="run-mode-header-content">
           <div>
             <h2 className="run-mode-title">Runs</h2>
-            <p className="run-mode-subtitle">Run and monitor your saved trading strategies</p>
+            <p className="run-mode-subtitle">
+              {runSectionTab === 'runs'
+                ? 'Monitor your live strategies — status, execution, and transaction hashes'
+                : 'Run and monitor your saved trading strategies'}
+            </p>
           </div>
           <div className="run-mode-header-right">
-          
+            <div className="run-mode-view-switcher">
+              <button
+                type="button"
+                className={`run-mode-view-btn ${runSectionTab === 'runs' ? 'active' : ''}`}
+                onClick={() => setRunSectionTab('runs')}
+              >
+                My Runs
+              </button>
+              <button
+                type="button"
+                className={`run-mode-view-btn ${runSectionTab === 'blueprints' ? 'active' : ''}`}
+                onClick={() => setRunSectionTab('blueprints')}
+              >
+                Saved Blueprints
+              </button>
+            </div>
+            {runSectionTab === 'blueprints' && (
             <div className="run-mode-controls-stack">
               <button
                 className={`run-mode-favorites-toggle ${showFavoritesOnly ? 'active' : ''}`}
@@ -149,9 +171,13 @@ export default function Run({
               </button>
          
             </div>
+            )}
           </div>
         </div>
       </div>
+      {runSectionTab === 'runs' ? (
+        <StrategiesList isLoaded={isLoaded} />
+      ) : (
       <div className={`run-mode-list ${strategyViewMode === 'list' ? 'list-view' : 'cards-view'}`}>
         {savedScenes.length === 0 ? (
           <div className="run-mode-empty">
@@ -292,6 +318,7 @@ export default function Run({
             })
         )}
       </div>
+      )}
       
       {/* Strategy Details Modal */}
       <StratDetails
