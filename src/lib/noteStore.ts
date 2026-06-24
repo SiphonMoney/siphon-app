@@ -1,6 +1,5 @@
 import { Signer } from 'ethers';
-
-const TRADE_EXECUTOR_URL = process.env.NEXT_PUBLIC_TRADE_EXECUTOR_URL || 'http://localhost:5005';
+import { getTradeExecutorBaseUrl } from './tradeExecutorClient';
 const SIGN_MESSAGE_AUTH_BASE = 'Siphon auth v1';
 const SIGN_MESSAGE_ENC = 'Siphon-Encryption-Key-v1';
 
@@ -97,7 +96,7 @@ export async function postNote(
 ): Promise<string> {
   const { key, headers } = await signOnce(signer);
   const { ciphertext, iv } = await encryptNote(key, note);
-  const res = await fetch(`${TRADE_EXECUTOR_URL}/notes`, {
+  const res = await fetch(`${getTradeExecutorBaseUrl()}/notes`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ ciphertext, iv, commitment, nullifier_hash, asset, chain_id }),
@@ -109,7 +108,7 @@ export async function postNote(
 
 export async function fetchNotes(signer: Signer): Promise<DecryptedNote[]> {
   const { key, headers } = await signOnce(signer);
-  const res = await fetch(`${TRADE_EXECUTOR_URL}/notes`, { headers });
+  const res = await fetch(`${getTradeExecutorBaseUrl()}/notes`, { headers });
   if (!res.ok) throw new Error(`fetchNotes failed: ${res.status}`);
   const { notes } = await res.json();
   return Promise.all(
@@ -122,12 +121,12 @@ export async function fetchNotes(signer: Signer): Promise<DecryptedNote[]> {
 
 export async function markNoteSpent(signer: Signer, noteId: string): Promise<void> {
   const { headers } = await signOnce(signer);
-  await fetch(`${TRADE_EXECUTOR_URL}/notes/${noteId}/spent`, { method: 'PATCH', headers });
+  await fetch(`${getTradeExecutorBaseUrl()}/notes/${noteId}/spent`, { method: 'PATCH', headers });
 }
 
 export async function exportNotes(signer: Signer): Promise<void> {
   const { headers } = await signOnce(signer);
-  const res = await fetch(`${TRADE_EXECUTOR_URL}/notes/export`, { headers });
+  const res = await fetch(`${getTradeExecutorBaseUrl()}/notes/export`, { headers });
   const json = await res.json();
   const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -145,7 +144,7 @@ export async function importNotes(signer: Signer, file: File): Promise<void> {
   for (const n of notes) {
     // Fresh signature per note — avoids timestamp expiry on large imports
     const { headers } = await signOnce(signer);
-    await fetch(`${TRADE_EXECUTOR_URL}/notes`, {
+    await fetch(`${getTradeExecutorBaseUrl()}/notes`, {
       method: 'POST',
       headers,
       body: JSON.stringify(n),

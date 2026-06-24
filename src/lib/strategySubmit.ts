@@ -8,18 +8,7 @@
 //   4. POSTs the encrypted strategy to the trade-executor's /createStrategy.
 // The client (secret) key never leaves the device; the backend only ever sees ciphertext.
 
-import {
-  getOrCreateClientKey,
-  deriveServerKey,
-  encryptPrice,
-  encryptConditionTree,
-} from "@/lib/fhe";
-
-function tradeExecutorBaseUrl(): string {
-  const raw =
-    process.env.NEXT_PUBLIC_TRADE_EXECUTOR_URL || "http://localhost:5005/";
-  return raw.replace(/\/+$/, ""); // strip trailing slashes
-}
+import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
 
 function authHeaders(): HeadersInit {
   const headers: HeadersInit = { "Content-Type": "application/json" };
@@ -38,7 +27,7 @@ export async function ensureServerKeyUploaded(
   clientKey: string,
   onUpload?: () => void,
 ): Promise<void> {
-  const base = tradeExecutorBaseUrl();
+  const base = getTradeExecutorBaseUrl();
 
   let hasKey = false;
   try {
@@ -177,7 +166,7 @@ export async function submitEncryptedStrategy(
         : { encrypted_upper_bound, encrypted_lower_bound }),
     };
 
-    const base = tradeExecutorBaseUrl();
+    const base = getTradeExecutorBaseUrl();
     const tSubmit = now();
     const res = await fetch(`${base}/createStrategy`, {
       method: "POST",
@@ -223,7 +212,7 @@ async function reportClientMetrics(
       `encrypt=${m.encryptMs.toFixed(0)}ms submit=${m.submitMs.toFixed(0)}ms total=${m.totalMs.toFixed(0)}ms`,
   );
   try {
-    await fetch(`${tradeExecutorBaseUrl()}/clientMetrics`, {
+    await fetch(`${getTradeExecutorBaseUrl()}/clientMetrics`, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({ user_id: userId, strategy_id: strategyId, ...m }),

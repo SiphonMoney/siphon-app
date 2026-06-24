@@ -13,7 +13,7 @@ export interface StrategyParams {
 
 // Single backend host (Caddy routes /createStrategy, /strategies, /uploadServerKey, etc. to
 // the trade-executor). The payload-generator is no longer used — encryption happens in-browser.
-export const API_BASE = process.env.NEXT_PUBLIC_PAYLOAD_GENERATOR_URL || "https://35.177.18.115.sslip.io";
+export const API_BASE = process.env.NEXT_PUBLIC_TRADE_EXECUTOR_URL?.replace(/\/+$/, "") || "https://3-81-144-108.sslip.io";
 
 export async function createStrategy(strategyData: StrategyParams) {
   try {

@@ -7,8 +7,10 @@
 
 import { decryptResult, getStoredClientKey } from "@/lib/fhe";
 
+import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
+
 function baseUrl(): string {
-  return (process.env.NEXT_PUBLIC_TRADE_EXECUTOR_URL || "http://localhost:5005/").replace(/\/+$/, "");
+  return getTradeExecutorBaseUrl();
 }
 
 function authHeaders(): HeadersInit {

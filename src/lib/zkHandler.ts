@@ -1,10 +1,10 @@
-import { ethers, Contract } from 'ethers';
+import { ethers, Contract, Network } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
 import { prepareWithdrawalTransaction } from "./generateProof";
 import { getProvider, getSigner } from './nexus';
 import { getEntrypointContract } from './handler';
-import { getNetwork } from './networks';
+import { getNetwork, getReadProviderRpcUrl } from './networks';
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
 
@@ -95,10 +95,12 @@ async function getLogsChunked(
 }
 
 function getReadProvider(): ethers.Provider {
-  // Reads must target the SELECTED chain's entrypoint, so prefer a deterministic JSON-RPC on
-  // that chain rather than the wallet provider (which may be on a different network mid-switch).
   const net = getNetwork();
-  if (net.rpcUrl) return new ethers.JsonRpcProvider(net.rpcUrl, net.chainId);
+  const rpcUrl = getReadProviderRpcUrl(net.chainId);
+  const network = Network.from(net.chainId);
+  if (rpcUrl) {
+    return new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
+  }
   const walletProvider = getProvider();
   if (walletProvider) return walletProvider;
   throw new Error(`No RPC configured for chain ${net.chainId}.`);

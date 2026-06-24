@@ -31,10 +31,7 @@ export const NETWORKS: Record<number, NetworkConfig> = {
     weth: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
     swapRouter: '0x5D49f98ea31bfa7B41473Bc034BCA56B659C11A3',
-    rpcUrl:
-      process.env.NEXT_PUBLIC_ETH_SEPOLIA_RPC ||
-      process.env.NEXT_PUBLIC_ETH_RPC_URL ||
-      'https://ethereum-sepolia-rpc.publicnode.com',
+    rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
     explorer: 'https://sepolia.etherscan.io',
     deployBlock: parseInt(process.env.NEXT_PUBLIC_ETH_SEPOLIA_DEPLOY_BLOCK || '11130700', 10),
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
@@ -49,9 +46,7 @@ export const NETWORKS: Record<number, NetworkConfig> = {
     weth: '0x4200000000000000000000000000000000000006',
     usdc: '0x036CBD53842c5426634E7929741cc1538ff7178E',
     swapRouter: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
-    rpcUrl:
-      process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC ||
-      'https://sepolia.base.org',
+    rpcUrl: 'https://sepolia.base.org',
     explorer: 'https://sepolia.basescan.org',
     deployBlock: parseInt(process.env.NEXT_PUBLIC_BASE_SEPOLIA_DEPLOY_BLOCK || '43273000', 10),
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
@@ -93,6 +88,18 @@ export function getNetwork(chainId?: number): NetworkConfig {
   const cfg = NETWORKS[id];
   if (!cfg) throw new Error(`Unsupported chainId: ${id}`);
   return cfg;
+}
+
+/**
+ * URL for read-only JsonRpcProvider calls.
+ * Browser → same-origin /api/rpc proxy; SSR/server → public gateway (no secrets in bundle).
+ */
+export function getReadProviderRpcUrl(chainId?: number): string {
+  const id = chainId ?? getSelectedChainId();
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api/rpc?chainId=${id}`;
+  }
+  return getNetwork(id).rpcUrl;
 }
 
 /** Map a chain to its supported token set (symbol → {address, decimals}). */
