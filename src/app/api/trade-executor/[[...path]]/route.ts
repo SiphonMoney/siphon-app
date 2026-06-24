@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const UPSTREAM = (
   process.env.TRADE_EXECUTOR_URL ||

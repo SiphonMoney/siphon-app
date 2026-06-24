@@ -16,6 +16,29 @@ import {
 } from "@/lib/fhe";
 import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
 
+function formatSubmitError(status: number, text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return `Request failed (HTTP ${status})`;
+
+  try {
+    const json = JSON.parse(trimmed) as { error?: string; message?: string };
+    const msg = json.error || json.message;
+    if (msg) return msg;
+  } catch {
+    /* not JSON */
+  }
+
+  if (trimmed.startsWith("<!") || trimmed.includes("<html")) {
+    if (status === 429) return "Rate limited — wait a minute and try again.";
+    return `Server error (HTTP ${status}).`;
+  }
+
+  if (trimmed.length > 280) {
+    return `${trimmed.slice(0, 280)}… (HTTP ${status})`;
+  }
+  return status >= 400 ? `${trimmed} (HTTP ${status})` : trimmed;
+}
+
 function authHeaders(): HeadersInit {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   const token = process.env.NEXT_PUBLIC_API_TOKEN || "";
@@ -56,7 +79,7 @@ export async function ensureServerKeyUploaded(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`uploadServerKey failed: HTTP ${res.status}: ${text}`);
+    throw new Error(formatSubmitError(res.status, text));
   }
 }
 
@@ -184,7 +207,7 @@ export async function submitEncryptedStrategy(
     m.submitMs = now() - tSubmit;
     m.totalMs = now() - t0;
     if (!res.ok) {
-      return { success: false, error: `HTTP ${res.status}: ${text}` };
+      return { success: false, error: formatSubmitError(res.status, text) };
     }
     const data = JSON.parse(text);
     // Fire-and-forget: log the client-side encryption timings into the trade-executor terminal.

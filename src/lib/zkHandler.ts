@@ -94,16 +94,30 @@ async function getLogsChunked(
   return out;
 }
 
+// Reuse one read provider per chain — avoids ethers spawning retry loops per call.
+const readProviderCache = new Map<number, ethers.Provider>();
+
 function getReadProvider(): ethers.Provider {
   const net = getNetwork();
+  const cached = readProviderCache.get(net.chainId);
+  if (cached) return cached;
+
   const rpcUrl = getReadProviderRpcUrl(net.chainId);
   const network = Network.from(net.chainId);
   if (rpcUrl) {
-    return new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
+    const provider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
+    readProviderCache.set(net.chainId, provider);
+    return provider;
   }
   const walletProvider = getProvider();
   if (walletProvider) return walletProvider;
   throw new Error(`No RPC configured for chain ${net.chainId}.`);
+}
+
+/** Drop cached provider after a chain switch so reads target the new network. */
+export function resetReadProvider(chainId?: number): void {
+  if (chainId != null) readProviderCache.delete(chainId);
+  else readProviderCache.clear();
 }
 
 // --------- Types ----------
@@ -263,18 +277,32 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
 interface TokenMeta { address: string; decimals: number; symbol: string }
 export interface SpendableBalance { totalBalance: number; details: Record<string, number> }
 
-// Cache the leaf scan so the periodic balance refresh doesn't re-scan all logs each time.
+// Cache the leaf scan — expensive (many eth_getLogs). Refresh infrequently.
 const leavesCache = new Map<string, { leaves: Set<string>; ts: number }>();
-const LEAVES_TTL_MS = 180_000; // 3 min
+const leavesInflight = new Map<string, Promise<Set<string>>>();
+const LEAVES_TTL_MS = 600_000; // 10 min
 
 async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
   const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
   const hit = leavesCache.get(cacheKey);
   if (hit && Date.now() - hit.ts < LEAVES_TTL_MS) return hit.leaves;
-  const raw = await getOnChainLeaves(tokenAddress);
-  const set = new Set(raw.map((l) => l.toString()));
-  leavesCache.set(cacheKey, { leaves: set, ts: Date.now() });
-  return set;
+
+  const pending = leavesInflight.get(cacheKey);
+  if (pending) return pending;
+
+  const task = (async () => {
+    const raw = await getOnChainLeaves(tokenAddress);
+    const set = new Set(raw.map((l) => l.toString()));
+    leavesCache.set(cacheKey, { leaves: set, ts: Date.now() });
+    return set;
+  })();
+
+  leavesInflight.set(cacheKey, task);
+  try {
+    return await task;
+  } finally {
+    leavesInflight.delete(cacheKey);
+  }
 }
 
 export async function getSpendableVaultBalance(
@@ -362,7 +390,8 @@ export async function generateZKData(
   const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
   let leaves: bigint[] = [];
   try {
-      leaves = await getOnChainLeaves(tokenAddress);
+      const leafSet = await getLeafSet(tokenAddress);
+      leaves = [...leafSet].map((s) => BigInt(s));
       console.log("Found leaves count:", leaves.length);
   } catch (err) {
       console.error("Failed to fetch on-chain leaves:", err);
@@ -492,7 +521,7 @@ export async function generateZKData(
   const onChainRoot = BigInt((await withRetry(() => merkleTree5.getRoot())).toString());
   const levels = Array.from({ length: TREE_DEPTH }, (_, i) => i);
   // Empty-subtree hashes per level (zeros[0] = empty leaf). Needed to pad partial levels.
-  const zeros: bigint[] = await mapLimit(levels, 4, (i) =>
+  const zeros: bigint[] = await mapLimit(levels, 2, (i) =>
     withRetry(() => merkleTree5.zeros(i)).then((v: bigint) => BigInt(v.toString())),
   );
 

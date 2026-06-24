@@ -540,6 +540,7 @@ export default function DetailsModal({
           : {}),
         ...(bounds.max_slippage_bps != null ? { max_slippage_bps: bounds.max_slippage_bps } : {}),
         from_chain: String(activeChainId),
+        to_chain: String(activeChainId),
         zk_proof: {
           pA: withdrawalTxData.pA,
           pB: withdrawalTxData.pB,
@@ -615,7 +616,10 @@ export default function DetailsModal({
         handleClose();
       } else {
         addLog(`Error: ${result.error}`);
-        showToast(`Strategy generation failed: ${result.error}`, 'error');
+        showToast(
+          `Strategy generation failed: ${(result.error ?? 'Unknown error').slice(0, 200)}`,
+          'error',
+        );
         setIsExecuting(false);
         setTimeout(() => setExecutionLogs([]), 3000);
       }

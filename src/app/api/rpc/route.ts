@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SUPPORTED_CHAIN_IDS } from '@/lib/networks';
-import { getServerRpcUrl } from '@/lib/rpcServer';
+import { getServerRpcUrls } from '@/lib/rpcServer';
 
 export const runtime = 'nodejs';
 
-/** Proxy JSON-RPC to the upstream node (avoids browser CORS + hides API keys). */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Proxy JSON-RPC to upstream nodes with fallback + 429 backoff. */
 export async function POST(req: NextRequest) {
   const chainId = parseInt(req.nextUrl.searchParams.get('chainId') || '', 10);
   if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
-    return NextResponse.json({ jsonrpc: '2.0', error: { code: -32600, message: 'Unsupported chainId' }, id: null }, { status: 400 });
+    return NextResponse.json(
+      { jsonrpc: '2.0', error: { code: -32600, message: 'Unsupported chainId' }, id: null },
+      { status: 400 },
+    );
   }
 
   const body = await req.text();
-  let upstream: string;
+  let urls: string[];
   try {
-    upstream = getServerRpcUrl(chainId);
+    urls = getServerRpcUrls(chainId);
   } catch (err) {
     return NextResponse.json(
       { jsonrpc: '2.0', error: { code: -32603, message: String(err) }, id: null },
@@ -22,21 +27,43 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  try {
-    const res = await fetch(upstream, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    });
-    const text = await res.text();
-    return new NextResponse(text, {
-      status: res.status,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { jsonrpc: '2.0', error: { code: -32603, message: `RPC proxy failed: ${String(err)}` }, id: null },
-      { status: 502 },
-    );
+  let lastText = '';
+  let lastStatus = 502;
+
+  for (const upstream of urls) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(upstream, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        const text = await res.text();
+        lastText = text;
+        lastStatus = res.status;
+
+        if (res.status === 429) {
+          await sleep(300 * 2 ** attempt);
+          continue;
+        }
+
+        return new NextResponse(text, {
+          status: res.status,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        lastText = JSON.stringify({
+          jsonrpc: '2.0',
+          error: { code: -32603, message: `RPC proxy failed: ${String(err)}` },
+          id: null,
+        });
+        lastStatus = 502;
+      }
+    }
   }
+
+  return new NextResponse(lastText, {
+    status: lastStatus,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }

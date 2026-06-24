@@ -4,7 +4,7 @@ import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
 import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner, refreshProvider } from '../../../lib/nexus';
-import { getSpendableVaultBalance } from '../../../lib/zkHandler';
+import { getSpendableVaultBalance, resetReadProvider } from '../../../lib/zkHandler';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
 import { getNetwork, getSelectedChainId } from '../../../lib/networks';
 import ChainToggle from '../../ChainToggle';
@@ -51,6 +51,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       const id = (e as CustomEvent<{ chainId: number }>).detail?.chainId;
       if (id) {
         setVaultChainId(id);
+        resetReadProvider();
         void refetchWalletBalances(id);
       }
     };
@@ -72,7 +73,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     };
     
     fetchBalances();
-    const interval = setInterval(fetchBalances, 30000);
+    const interval = setInterval(fetchBalances, 60_000);
     return () => clearInterval(interval);
   }, [wallet, vaultChainId]);
 
@@ -167,7 +168,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       } catch (error) {
         console.error('Error refreshing wallet balances:', error);
       }
-    }, 10000);
+    }, 30_000);
 
     return () => clearInterval(interval);
   }, [wallet, vaultChainId]);
