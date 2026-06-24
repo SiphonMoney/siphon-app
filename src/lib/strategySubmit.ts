@@ -8,6 +8,12 @@
 //   4. POSTs the encrypted strategy to the trade-executor's /createStrategy.
 // The client (secret) key never leaves the device; the backend only ever sees ciphertext.
 
+import {
+  getOrCreateClientKey,
+  deriveServerKey,
+  encryptPrice,
+  encryptConditionTree,
+} from "@/lib/fhe";
 import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
 
 function authHeaders(): HeadersInit {
