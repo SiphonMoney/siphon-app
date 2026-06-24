@@ -6,9 +6,7 @@ import {
   getExplorerTxUrl,
   getStrategies,
   isActiveStatus,
-  processArmedStrategies,
   StrategyRecord,
-  tryAuthorizeStrategy,
 } from "@/lib/strategyApi";
 import { resolveWalletAddress } from "@/lib/walletAddress";
 
@@ -22,7 +20,6 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "done">("all");
-  const [authorizingId, setAuthorizingId] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => setWalletAddress(resolveWalletAddress());
@@ -46,10 +43,8 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
     try {
       const result = await getStrategies(userId);
       if (result.success && result.strategies) {
+        // Read-only status view: strategies are evaluated/executed server-side.
         setStrategies(result.strategies);
-        processArmedStrategies(userId)
-          .then((ids) => { if (ids.length) void fetchStrategies(); })
-          .catch((e) => console.error("[StrategiesList] auto-execute:", e));
       } else {
         setError(result.error || "Failed to fetch strategies");
       }
@@ -71,24 +66,6 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
       window.removeEventListener("siphon:strategyExecuted", onExecuted);
     };
   }, [walletAddress, fetchStrategies]);
-
-  const handleAuthorize = async (strategyId: string) => {
-    const userId = walletAddress ?? resolveWalletAddress();
-    if (!userId) return;
-    setAuthorizingId(strategyId);
-    try {
-      const result = await tryAuthorizeStrategy(strategyId, userId);
-      if (result.ok) {
-        await fetchStrategies();
-      } else if (result.triggered === false) {
-        setError(result.error ?? "Condition not met yet");
-      } else {
-        setError(result.error ?? "Authorization failed");
-      }
-    } finally {
-      setAuthorizingId(null);
-    }
-  };
 
   const formatDate = (iso: string | null) => {
     if (!iso) return "—";
@@ -208,21 +185,6 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
               </div>
             )}
 
-            {s.status === "ARMED" && (
-              <div className="run-backend-actions">
-                <button
-                  type="button"
-                  className="run-backend-authorize-btn"
-                  disabled={authorizingId === s.id}
-                  onClick={() => void handleAuthorize(s.id)}
-                >
-                  {authorizingId === s.id ? "Checking…" : "Execute now"}
-                </button>
-                <span className="run-backend-hint">
-                  Auto-executes every ~5s while this browser tab is open. Use Execute now if stuck.
-                </span>
-              </div>
-            )}
           </div>
         ))}
       </div>

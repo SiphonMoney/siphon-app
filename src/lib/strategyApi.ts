@@ -122,7 +122,26 @@ export async function tryAuthorizeStrategy(
     }
     const triggered = await decryptResult(result.encrypted_result, clientKey);
     if (!triggered) {
-      return { ok: false, triggered: false, error: "Price condition not met yet (decrypted locally)." };
+      let priceHint = "";
+      try {
+        const pr = await fetch("/api/pyth_price?coin=ETH");
+        if (pr.ok) {
+          const j = await pr.json();
+          const eth = j?.prices?.ETH ?? j?.price;
+          if (eth) {
+            priceHint =
+              ` Oracle ETH/USD ≈ $${Number(eth).toFixed(2)} (Pyth — same on Base Sepolia & Sepolia).` +
+              ` LIMIT SELL fires when 1 ETH ≥ your trigger price (not USDC output amount).`;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      return {
+        ok: false,
+        triggered: false,
+        error: `Price condition not met (decrypted locally).${priceHint}`,
+      };
     }
     const exec = await authorizeExecution(strategyId, userId);
     if (exec.error || exec.status === "error") {

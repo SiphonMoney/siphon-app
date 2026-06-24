@@ -7,7 +7,6 @@ import Build from "./navs/Builder/Build";
 import Run from "./navs/Run/Run";
 import UserDash from "./navs/UserDash/UserDash";
 import Markets from "./navs/Markets/Markets";
-import StrategyAutoExecutor from "./StrategyAutoExecutor";
 
 interface NexusProps {
   isLoaded?: boolean;
@@ -71,7 +70,6 @@ export default function Nexus({
 
   return (
     <div className="pro-mode-wrapper" style={{ height: '100%', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <StrategyAutoExecutor />
       <div
         className="pro-mode-content"
         style={{

@@ -8,7 +8,6 @@ import { getModalStepNodes } from "../../../lib/builderLayout";
 import { getRunStepFieldValue } from "../../../lib/runModeValues";
 import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
-import { pollAndAuthorize } from "../../../lib/strategyAuthorizer";
 import { generateZKData } from "../../../lib/zkHandler";
 import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
@@ -579,36 +578,17 @@ export default function DetailsModal({
           setRunningStrategies(newRunning);
         }
 
-        // Auto-execution runs globally via StrategyAutoExecutor while this browser tab is open.
+        // Strategy is registered with the trade-executor, which evaluates and executes it
+        // server-side. No local FHE decryption / browser authorization needed.
         const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
         if (strategyId) {
-          addLog('Auto-execution enabled — will swap when price triggers.');
-          showToast('Strategy registered — auto-executes when price hits (keep browser open).', 'success');
+          addLog('Strategy registered — it will execute server-side when the price triggers.');
           window.dispatchEvent(
             new CustomEvent('siphon:strategySubmitted', { detail: { strategyId, userId: recipient } }),
           );
-          void pollAndAuthorize(strategyId, recipient, {
-            onWaiting:      (m) => addLog(`⏳ ${m}`),
-            onNotTriggered: (m) => addLog(`• ${m}`),
-            onTriggered:    () => addLog('✅ Triggered — authorizing on-chain execution...'),
-            onExecuted:     (tx) => {
-              addLog(tx ? `🎉 Executed! tx: ${tx}` : '🎉 Executed.');
-              if (spentDepositKey) { try { localStorage.removeItem(spentDepositKey); } catch {} }
-              if (runningStrategies && setRunningStrategies) {
-                const m = new Map(runningStrategies);
-                m.delete(selectedStrategy.name);
-                setRunningStrategies(m);
-              }
-            },
-            onError: (m) => addLog(`⚠️ ${m}`),
-          }).then((auth) => {
-            if (auth.executed) {
-              showToast(auth.txHash ? `Done! tx ${auth.txHash.slice(0, 10)}…` : 'Strategy executed!', 'success');
-            }
-          });
-        } else {
-          showToast('Strategy registered!', 'success');
+          if (spentDepositKey) { try { localStorage.removeItem(spentDepositKey); } catch {} }
         }
+        showToast('Strategy registered! Track it under Runs.', 'success');
 
         setShowSuccessNotification(true);
         setTimeout(() => setShowSuccessNotification(false), 3000);

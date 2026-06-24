@@ -1,7 +1,7 @@
 import { NETWORKS } from './networks';
 
-function uniqueUrls(urls: string[]): string[] {
-  return [...new Set(urls.filter(Boolean))];
+function uniqueUrls(urls: (string | undefined)[]): string[] {
+  return [...new Set(urls.filter((u): u is string => Boolean(u)))];
 }
 
 /** Ordered upstream RPC URLs — primary first, then public fallbacks. */

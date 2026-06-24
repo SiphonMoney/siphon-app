@@ -60,7 +60,6 @@ import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
 import { getSelectedChainId, getTokens } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
-import { pollAndAuthorize } from "../../../lib/strategyAuthorizer";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 import { validateRecipientAddress, chainLabelToId, validatePriceConditionTreeRaw, createDefaultLimitOrderTree } from "./BuildNodes";
 
@@ -750,23 +749,14 @@ export default function Build({
       }
       // Do NOT mark old deposit as spent here — scheduler marks it spent after on-chain confirmation
 
-      // Browser-authorized execution: watch the encrypted result, decrypt locally, and authorize
-      // /executeStrategy when it triggers. Runs in the background so the alert below isn't blocked.
+      // Strategy is registered with the trade-executor and runs server-side. No local FHE
+      // decryption / browser authorization needed.
       const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
       if (strategyId) {
         window.dispatchEvent(
           new CustomEvent('siphon:strategySubmitted', { detail: { strategyId, userId: recipient } }),
         );
-        void pollAndAuthorize(strategyId, recipient, {
-          onTriggered: () => console.log('[Strategy] Triggered (decrypted locally) — authorizing execution...'),
-          onExecuted:  (tx) => {
-            console.log('[Strategy] Executed on-chain:', tx);
-            alert(tx ? `🎉 Strategy executed on-chain!\ntx: ${tx}` : '🎉 Strategy executed!');
-            // Complete — discard the consumed input note.
-            if (zkResult.spentDepositKey) { try { localStorage.removeItem(zkResult.spentDepositKey); } catch {} }
-          },
-          onError: (m) => console.warn('[Strategy] Authorize:', m),
-        });
+        if (zkResult.spentDepositKey) { try { localStorage.removeItem(zkResult.spentDepositKey); } catch {} }
       }
 
       if (useTree) {
