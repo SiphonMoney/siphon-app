@@ -1,6 +1,6 @@
 import { decryptResult, getStoredClientKey } from "@/lib/fhe";
 import { getNetwork, getSelectedChainId } from "@/lib/networks";
-import { authorizeExecution } from "@/lib/strategyAuthorizer";
+import { authorizeExecution, fetchStrategyResult } from "@/lib/strategyAuthorizer";
 import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
 
 export type StrategyStatusValue = "PENDING" | "ARMED" | "EXECUTED" | "FAILED";
@@ -15,7 +15,7 @@ export interface StrategyRecord {
   tx_hash: string | null;
   executed_at: string | null;
   created_at: string;
-  encrypted_result?: string | null;
+  has_encrypted_result?: boolean;
   result_updated_at?: string | null;
 }
 
@@ -58,27 +58,80 @@ export async function getStrategies(
   }
 }
 
+/** IDs currently being submitted to /executeStrategy (dedupe across pollers). */
+const executingIds = new Set<string>();
+
 /** Decrypt ARMED results locally and authorize any that triggered. */
 export async function processArmedStrategies(userId: string): Promise<string[]> {
   const clientKey = getStoredClientKey(userId);
-  if (!clientKey) return [];
+  if (!clientKey) {
+    console.warn("[strategyApi] No FHE client key on this device — cannot decrypt ARMED results.");
+    return [];
+  }
 
   const { success, strategies } = await getStrategies(userId);
   if (!success || !strategies) return [];
 
+  const armed = strategies.filter((s) => s.status === "ARMED");
   const executed: string[] = [];
-  for (const s of strategies) {
-    if (s.status !== "ARMED" || !s.encrypted_result) continue;
+
+  for (const s of armed) {
+    if (executingIds.has(s.id)) continue;
     try {
-      const triggered = await decryptResult(s.encrypted_result, clientKey);
+      const result = await fetchStrategyResult(s.id);
+      if (!result.encrypted_result) continue;
+
+      const triggered = await decryptResult(result.encrypted_result, clientKey);
+      console.log(`[strategyApi] ${s.id.slice(0, 8)}… decrypt → ${triggered ? "TRIGGERED" : "not yet"}`);
+
       if (!triggered) continue;
-      const exec = await authorizeExecution(s.id, userId);
-      if (!exec.error && exec.status !== "error") executed.push(s.id);
+
+      executingIds.add(s.id);
+      console.log(`[strategyApi] ${s.id} triggered — calling /executeStrategy…`);
+      try {
+        const exec = await authorizeExecution(s.id, userId);
+        if (exec.error || exec.status === "error") {
+          console.error(`[strategyApi] execute failed for ${s.id}:`, exec.error);
+          continue;
+        }
+        executed.push(s.id);
+      } finally {
+        executingIds.delete(s.id);
+      }
     } catch (e) {
+      executingIds.delete(s.id);
       console.error(`[strategyApi] process ${s.id}:`, e);
     }
   }
   return executed;
+}
+
+/** Manually try to authorize one ARMED strategy (user-initiated). */
+export async function tryAuthorizeStrategy(
+  strategyId: string,
+  userId: string,
+): Promise<{ ok: boolean; txHash?: string; error?: string; triggered?: boolean }> {
+  const clientKey = getStoredClientKey(userId);
+  if (!clientKey) {
+    return { ok: false, error: "No FHE key on this device. Re-submit from the same browser." };
+  }
+  try {
+    const result = await fetchStrategyResult(strategyId);
+    if (!result.encrypted_result) {
+      return { ok: false, error: "Waiting for scheduler evaluation…" };
+    }
+    const triggered = await decryptResult(result.encrypted_result, clientKey);
+    if (!triggered) {
+      return { ok: false, triggered: false, error: "Price condition not met yet (decrypted locally)." };
+    }
+    const exec = await authorizeExecution(strategyId, userId);
+    if (exec.error || exec.status === "error") {
+      return { ok: false, error: exec.error || "Execution failed" };
+    }
+    return { ok: true, txHash: exec.tx_hash, triggered: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
 }
 
 export function formatStrategyStatus(status: string): string {

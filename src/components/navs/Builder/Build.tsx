@@ -754,6 +754,9 @@ export default function Build({
       // /executeStrategy when it triggers. Runs in the background so the alert below isn't blocked.
       const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
       if (strategyId) {
+        window.dispatchEvent(
+          new CustomEvent('siphon:strategySubmitted', { detail: { strategyId, userId: recipient } }),
+        );
         void pollAndAuthorize(strategyId, recipient, {
           onTriggered: () => console.log('[Strategy] Triggered (decrypted locally) — authorizing execution...'),
           onExecuted:  (tx) => {

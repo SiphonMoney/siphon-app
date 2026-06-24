@@ -564,49 +564,50 @@ export default function DetailsModal({
             ? 'Strategy registered! Scheduler will run on cadence...'
             : 'Strategy registered! Waiting for price trigger...'
         );
-        showToast('Strategy registered!', 'success');
 
-        // Save the new change commitment — funds are not spent until on-chain tx confirms
         if (newDeposit && newDepositKey) {
-            localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
+          localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
         }
-        // Do NOT mark old deposit as spent here — scheduler marks it spent after on-chain confirmation
 
-        // Mark it as running while we watch the encrypted result.
         if (runningStrategies && setRunningStrategies) {
           const newRunning = new Map(runningStrategies);
-          newRunning.set(selectedStrategy.name, { startTime: Date.now(), isRunning: true, loop: plan.isScheduled });
+          newRunning.set(selectedStrategy.name, {
+            startTime: Date.now(),
+            isRunning: true,
+            loop: plan.isScheduled,
+          });
           setRunningStrategies(newRunning);
         }
 
-        // Browser-authorized execution: poll the encrypted result, decrypt locally, and when it
-        // triggers, authorize /executeStrategy. The scheduler can't do this (no client key).
+        // Auto-execution runs globally via StrategyAutoExecutor while this browser tab is open.
         const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
         if (strategyId) {
-          addLog('Watching encrypted result — will decrypt & authorize when triggered...');
-          const auth = await pollAndAuthorize(strategyId, recipient, {
-            onWaiting:       (m) => addLog(`⏳ ${m}`),
-            onNotTriggered:  (m) => addLog(`• ${m}`),
-            onTriggered:     () => addLog('✅ Triggered (decrypted locally) — authorizing on-chain execution...'),
-            onExecuted:      (tx) => addLog(tx ? `🎉 Executed on-chain! tx: ${tx}` : '🎉 Executed.'),
-            onError:         (m) => addLog(`⚠️ ${m}`),
-          });
-
-          if (auth.executed) {
-            showToast(auth.txHash ? `Done! Swap tx ${auth.txHash.slice(0, 10)}…` : 'Strategy executed!', 'success');
-            // Strategy is complete — discard it: drop the consumed input note and stop tracking it.
-            if (spentDepositKey) { try { localStorage.removeItem(spentDepositKey); } catch {} }
-            if (runningStrategies && setRunningStrategies) {
-              const m = new Map(runningStrategies);
-              m.delete(selectedStrategy.name);
-              setRunningStrategies(m);
+          addLog('Auto-execution enabled — will swap when price triggers.');
+          showToast('Strategy registered — auto-executes when price hits (keep browser open).', 'success');
+          window.dispatchEvent(
+            new CustomEvent('siphon:strategySubmitted', { detail: { strategyId, userId: recipient } }),
+          );
+          void pollAndAuthorize(strategyId, recipient, {
+            onWaiting:      (m) => addLog(`⏳ ${m}`),
+            onNotTriggered: (m) => addLog(`• ${m}`),
+            onTriggered:    () => addLog('✅ Triggered — authorizing on-chain execution...'),
+            onExecuted:     (tx) => {
+              addLog(tx ? `🎉 Executed! tx: ${tx}` : '🎉 Executed.');
+              if (spentDepositKey) { try { localStorage.removeItem(spentDepositKey); } catch {} }
+              if (runningStrategies && setRunningStrategies) {
+                const m = new Map(runningStrategies);
+                m.delete(selectedStrategy.name);
+                setRunningStrategies(m);
+              }
+            },
+            onError: (m) => addLog(`⚠️ ${m}`),
+          }).then((auth) => {
+            if (auth.executed) {
+              showToast(auth.txHash ? `Done! tx ${auth.txHash.slice(0, 10)}…` : 'Strategy executed!', 'success');
             }
-          } else if (auth.timedOut) {
-            addLog('Still armed — it will execute once the price condition is met. Safe to close.');
-            showToast('Strategy armed — watching for trigger.', 'success');
-          } else if (auth.error) {
-            showToast(`Execution: ${auth.error}`, 'error');
-          }
+          });
+        } else {
+          showToast('Strategy registered!', 'success');
         }
 
         setShowSuccessNotification(true);

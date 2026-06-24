@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { walletManager } from "../../extensions/walletManager";
 import {
   formatStrategyStatus,
   getExplorerTxUrl,
@@ -9,27 +8,12 @@ import {
   isActiveStatus,
   processArmedStrategies,
   StrategyRecord,
+  tryAuthorizeStrategy,
 } from "@/lib/strategyApi";
+import { resolveWalletAddress } from "@/lib/walletAddress";
 
 interface StrategiesListProps {
   isLoaded?: boolean;
-}
-
-function resolveWalletAddress(): string | null {
-  const fromManager = walletManager.getPrimaryWallet()?.address
-    ?? walletManager.getConnectedWallets().find((w) => w.id === "metamask")?.address;
-  if (fromManager) return fromManager;
-
-  try {
-    const stored = localStorage.getItem("siphon-connected-wallet");
-    if (stored) {
-      const parsed = JSON.parse(stored) as { address?: string };
-      if (parsed.address) return parsed.address;
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
 }
 
 export default function StrategiesList({ isLoaded = true }: StrategiesListProps) {
@@ -38,6 +22,7 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "done">("all");
+  const [authorizingId, setAuthorizingId] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => setWalletAddress(resolveWalletAddress());
@@ -76,12 +61,34 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
   }, [walletAddress]);
 
   useEffect(() => {
-    if (walletAddress) {
-      void fetchStrategies();
-      const interval = setInterval(() => void fetchStrategies(), 30_000);
-      return () => clearInterval(interval);
-    }
+    if (!walletAddress) return;
+    void fetchStrategies();
+    const interval = setInterval(() => void fetchStrategies(), 8_000);
+    const onExecuted = () => void fetchStrategies();
+    window.addEventListener("siphon:strategyExecuted", onExecuted);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("siphon:strategyExecuted", onExecuted);
+    };
   }, [walletAddress, fetchStrategies]);
+
+  const handleAuthorize = async (strategyId: string) => {
+    const userId = walletAddress ?? resolveWalletAddress();
+    if (!userId) return;
+    setAuthorizingId(strategyId);
+    try {
+      const result = await tryAuthorizeStrategy(strategyId, userId);
+      if (result.ok) {
+        await fetchStrategies();
+      } else if (result.triggered === false) {
+        setError(result.error ?? "Condition not met yet");
+      } else {
+        setError(result.error ?? "Authorization failed");
+      }
+    } finally {
+      setAuthorizingId(null);
+    }
+  };
 
   const formatDate = (iso: string | null) => {
     if (!iso) return "—";
@@ -198,6 +205,22 @@ export default function StrategiesList({ isLoaded = true }: StrategiesListProps)
                 >
                   {s.tx_hash.slice(0, 10)}…{s.tx_hash.slice(-8)} ↗
                 </a>
+              </div>
+            )}
+
+            {s.status === "ARMED" && (
+              <div className="run-backend-actions">
+                <button
+                  type="button"
+                  className="run-backend-authorize-btn"
+                  disabled={authorizingId === s.id}
+                  onClick={() => void handleAuthorize(s.id)}
+                >
+                  {authorizingId === s.id ? "Checking…" : "Execute now"}
+                </button>
+                <span className="run-backend-hint">
+                  Auto-executes every ~5s while this browser tab is open. Use Execute now if stuck.
+                </span>
               </div>
             )}
           </div>
