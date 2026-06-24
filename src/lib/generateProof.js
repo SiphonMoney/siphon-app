@@ -6,7 +6,9 @@ const ZKEY_PATH = '/zk/circuit.zkey';
 
 /**
  * Generate Groth16 ZK proof for withdrawal.
- * Public signals order (matches circuit): [withdrawnValue, stateRoot, newCommitment, nullifierHash, recipient]
+ * Public signals order (matches circuit):
+ *   [withdrawnValue, stateRoot, newCommitment, nullifierHash, recipient, pool, dstToken, fee, minAmountOut]
+ * For plain withdraw / fee payment, set pool, dstToken, fee, minAmountOut to 0.
  */
 export async function generateWithdrawalProof(withdrawalData) {
   const poseidon = await buildPoseidon();
@@ -20,6 +22,10 @@ export async function generateWithdrawalProof(withdrawalData) {
   const newSecret         = BigInt(withdrawalData.newSecret);
   const stateRoot         = withdrawalData.stateRoot;
   const recipient         = withdrawalData.recipient;
+  const pool              = withdrawalData.pool ?? 0;
+  const dstToken          = withdrawalData.dstToken ?? 0;
+  const fee               = withdrawalData.fee ?? 0;
+  const minAmountOut      = withdrawalData.minAmountOut ?? 0;
 
   if (existingValue < withdrawnValue) {
     throw new Error("Withdrawal amount exceeds existing value.");
@@ -40,6 +46,10 @@ export async function generateWithdrawalProof(withdrawalData) {
     newCommitment:     newCommitment,
     nullifierHash:     nullifierHash,
     recipient:         recipientField,
+    pool:              BigInt(pool).toString(),
+    dstToken:          BigInt(dstToken).toString(),
+    fee:               BigInt(fee).toString(),
+    minAmountOut:      BigInt(minAmountOut).toString(),
     // Private inputs
     existingValue:     existingValue.toString(),
     existingNullifier: existingNullifier.toString(),
