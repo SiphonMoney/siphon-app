@@ -3,10 +3,10 @@ import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
-import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
+import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner, refreshProvider } from '../../../lib/nexus';
 import { getSpendableVaultBalance } from '../../../lib/zkHandler';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
-import { getSelectedChainId } from '../../../lib/networks';
+import { getNetwork, getSelectedChainId } from '../../../lib/networks';
 import ChainToggle from '../../ChainToggle';
 
 interface UnifiedBalance {
@@ -28,20 +28,40 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [isDepositMode, setIsDepositMode] = useState(true);
   const [isNotesBusy, setIsNotesBusy] = useState(false);
   const [vaultChainId, setVaultChainId] = useState(getSelectedChainId);
+  const activeNetwork = getNetwork(vaultChainId);
   
-  const [transactionInput, setTransactionInput] = useState({
-    token: "ETH",
-    amount: "",
-    recipient: ""
-  });
+  const refetchWalletBalances = async (chainId: number) => {
+    if (!window.ethereum) return;
+    try {
+      if (isInitialized()) {
+        await refreshProvider(window.ethereum);
+      } else {
+        await initializeWithProvider(window.ethereum);
+      }
+      const balances = await getUnifiedBalances(chainId);
+      setWalletBalances(balances);
+    } catch (error) {
+      console.error('Error refreshing wallet balances after chain switch:', error);
+    }
+  };
+
   useEffect(() => {
     setVaultChainId(getSelectedChainId());
     const onChain = (e: Event) => {
       const id = (e as CustomEvent<{ chainId: number }>).detail?.chainId;
-      if (id) setVaultChainId(id);
+      if (id) {
+        setVaultChainId(id);
+        void refetchWalletBalances(id);
+      }
     };
     window.addEventListener('siphon:chainChanged', onChain);
-    return () => window.removeEventListener('siphon:chainChanged', onChain);
+    window.addEventListener('siphon:walletChainChanged', onChain);
+    window.addEventListener('siphon:networkReady', onChain);
+    return () => {
+      window.removeEventListener('siphon:chainChanged', onChain);
+      window.removeEventListener('siphon:walletChainChanged', onChain);
+      window.removeEventListener('siphon:networkReady', onChain);
+    };
   }, []);
 
   useEffect(() => {
@@ -56,7 +76,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     return () => clearInterval(interval);
   }, [wallet, vaultChainId]);
 
-  // ... (keep the depositInputs and withdrawals state as is) ...
+  const [transactionInput, setTransactionInput] = useState({
+    token: "ETH",
+    amount: "",
+    recipient: ""
+  });
 
   useEffect(() => {
     const checkWalletAndFetchBalances = async () => {
@@ -93,7 +117,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
             }
           }
           
-          const balances = await getUnifiedBalances();
+          const balances = await getUnifiedBalances(vaultChainId);
           setWalletBalances(balances);
         }
       } catch (error) {
@@ -138,7 +162,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           }
         }
         
-        const balances = await getUnifiedBalances();
+        const balances = await getUnifiedBalances(vaultChainId);
         setWalletBalances(balances);
       } catch (error) {
         console.error('Error refreshing wallet balances:', error);
@@ -146,7 +170,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [wallet]);
+  }, [wallet, vaultChainId]);
 
   const formatAddress = (address: string) => {
     if (address.length <= 10) return address;
@@ -317,7 +341,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">Wallet Balance</h2>
-              <span className="userdash-balance-network">Sepolia</span>
+              <span className="userdash-balance-network">{activeNetwork.badgeLabel}</span>
             </div>
             <div className="userdash-balance-content-multi">
               {walletBalances !== null && walletBalances.length > 0 ? (
@@ -342,14 +366,14 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               )}
             </div>
             <div className="userdash-balance-description">
-              Your ETH balance on Sepolia network
+              Your ETH balance on {activeNetwork.name}
             </div>
           </div>
 
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">Siphon Vault Balance</h2>
-              <span className="userdash-balance-network">Sepolia</span>
+              <span className="userdash-balance-network">{activeNetwork.badgeLabel}</span>
             </div>
             <div className="userdash-balance-content-multi">
               {siphonVaultBalances !== null && Object.keys(siphonVaultBalances).length > 0 ? (

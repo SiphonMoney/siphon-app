@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import WalletSelector from './WalletSelector';
 import { walletManager, WalletInfo } from './walletManager';
-import { initializeWithProvider, deinit, TOKEN_MAP } from '../../lib/nexus';
+import { initializeWithProvider, deinit, TOKEN_MAP, refreshProvider, isInitialized } from '../../lib/nexus';
 import { getSpendableVaultBalance } from '../../lib/zkHandler';
 import { getSelectedChainId } from '../../lib/networks';
 
@@ -108,22 +108,32 @@ export default function ConnectButton({ className, onConnected }: { className?: 
   }, [connectedWallet]);
 
   useEffect(() => {
-    const onChainChanged = () => {
-      if (connectedWallet?.id === 'metamask') {
-        const refetch = async () => {
-          try {
-            const { details } = await getSpendableVaultBalance(getSelectedChainId(), TOKEN_MAP);
-            const ethKey = Object.keys(details).find((key) => key.toUpperCase() === 'ETH');
-            setBalance(ethKey ? details[ethKey] : 0);
-          } catch {
-            setBalance(0);
+    const onChainChanged = async () => {
+      if (connectedWallet?.id !== 'metamask') return;
+      const chainId = getSelectedChainId();
+      try {
+        if (window.ethereum) {
+          if (isInitialized()) {
+            await refreshProvider(window.ethereum);
+          } else {
+            await initializeWithProvider(window.ethereum);
           }
-        };
-        refetch();
+        }
+        const { details } = await getSpendableVaultBalance(chainId, TOKEN_MAP);
+        const ethKey = Object.keys(details).find((key) => key.toUpperCase() === 'ETH');
+        setBalance(ethKey ? details[ethKey] : 0);
+      } catch {
+        setBalance(0);
       }
     };
     window.addEventListener('siphon:chainChanged', onChainChanged);
-    return () => window.removeEventListener('siphon:chainChanged', onChainChanged);
+    window.addEventListener('siphon:walletChainChanged', onChainChanged);
+    window.addEventListener('siphon:networkReady', onChainChanged);
+    return () => {
+      window.removeEventListener('siphon:chainChanged', onChainChanged);
+      window.removeEventListener('siphon:walletChainChanged', onChainChanged);
+      window.removeEventListener('siphon:networkReady', onChainChanged);
+    };
   }, [connectedWallet]);
 
 

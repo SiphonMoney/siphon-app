@@ -52,24 +52,28 @@ export function isInitialized(): boolean {
 // --- Core Functions ---
 
 // Initialize the ethers provider and signer from a browser wallet
-export async function initializeWithProvider(eip1193Provider: Eip1193Provider) {
+export async function initializeWithProvider(eip1193Provider: Eip1193Provider, force = false) {
   if (!eip1193Provider) {
     throw new Error('No EIP-1193 provider (e.g., MetaMask) found'); 
   }
-  if (isInitialized()) return;
+  if (!force && isInitialized()) return;
 
   try {
-    // Create a new ethers provider
     provider = new ethers.BrowserProvider(eip1193Provider);
-    // Get the signer
     signer = await provider.getSigner();
     console.log("Ethers initialized with signer:", await signer.getAddress());
-
   } catch (error) {
     console.error("Failed to initialize ethers provider:", error);
     provider = null;
     signer = null;
+    throw error;
   }
+}
+
+/** Re-create the provider/signer after the wallet switches chains. */
+export async function refreshProvider(eip1193Provider: Eip1193Provider) {
+  await deinit();
+  await initializeWithProvider(eip1193Provider, true);
 }
 
 // Deinitialize the provider and signer.
@@ -98,11 +102,19 @@ export async function approveToken(tokenAddress: string, spender: string, amount
   return tokenContract.approve(spender, amount);
 }
 
-// Gets ETH and ERC20 balances for the connected wallet on Sepolia
-export async function getUnifiedBalances() {
+// Gets ETH and ERC20 balances for the connected wallet on the active network
+export async function getUnifiedBalances(chainId?: number) {
   if (!signer || !provider) {
     console.error('Ethers not initialized, cannot get balances.');
     return null;
+  }
+
+  const targetChainId = chainId ?? getSelectedChainId();
+  const walletNetwork = await provider.getNetwork();
+  if (Number(walletNetwork.chainId) !== targetChainId) {
+    console.warn(
+      `Wallet is on chain ${walletNetwork.chainId} but dapp expects ${targetChainId}; balances may be stale until the wallet switches.`,
+    );
   }
 
   const address = await signer.getAddress();
@@ -149,9 +161,9 @@ export async function getUnifiedBalances() {
       {
         balance: bal.balance,
         chain: {
-          id: getSelectedChainId(),
+          id: targetChainId,
           logo: '',
-          name: getNetwork().name
+          name: getNetwork(targetChainId).name
         },
 
         contractAddress: getTokenMap()[bal.symbol]?.address as `0x${string}`

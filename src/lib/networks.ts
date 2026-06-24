@@ -7,6 +7,7 @@ export interface NetworkConfig {
   hexChainId: string;
   name: string;
   shortName: string; // toggle label, e.g. "BASE" / "ETHEREUM"
+  badgeLabel: string; // compact label for balance cards, e.g. "Sepolia" / "Base"
   entrypoint: string;
   weth: string;
   usdc: string;
@@ -25,6 +26,7 @@ export const NETWORKS: Record<number, NetworkConfig> = {
     hexChainId: '0xaa36a7',
     name: 'Ethereum Sepolia',
     shortName: 'ETHEREUM',
+    badgeLabel: 'Sepolia',
     entrypoint: '0x867e9C195eB85960c390D4a7A64F4e16905D6638',
     weth: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
@@ -42,6 +44,7 @@ export const NETWORKS: Record<number, NetworkConfig> = {
     hexChainId: '0x14a34',
     name: 'Base Sepolia',
     shortName: 'BASE',
+    badgeLabel: 'Base',
     entrypoint: '0xf7f2bEC39c3851012Ec722a6443F1979afEE4F9C',
     weth: '0x4200000000000000000000000000000000000006',
     usdc: '0x036CBD53842c5426634E7929741cc1538ff7178E',
@@ -55,7 +58,8 @@ export const NETWORKS: Record<number, NetworkConfig> = {
   },
 };
 
-export const SUPPORTED_CHAIN_IDS = Object.keys(NETWORKS).map(Number);
+// Base first so the toggle reads BASE | ETHEREUM left-to-right.
+export const SUPPORTED_CHAIN_IDS = [84532, 11155111];
 export const DEFAULT_CHAIN_ID = 84532; // Base Sepolia
 
 const STORAGE_KEY = 'siphon.selectedChainId';
@@ -112,9 +116,22 @@ export function addChainParams(chainId?: number) {
   };
 }
 
+type EthereumProvider = {
+  request: (p: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
+};
+
+function walletErrorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
+    return (err as { message: string }).message;
+  }
+  return 'Failed to switch network in wallet';
+}
+
 /** Prompt the connected wallet to switch (adding the chain if missing). */
 export async function switchWalletNetwork(
-  ethereum: { request: (p: { method: string; params?: unknown[] }) => Promise<unknown> },
+  ethereum: EthereumProvider,
   chainId?: number,
 ): Promise<void> {
   const n = getNetwork(chainId);
@@ -127,4 +144,53 @@ export async function switchWalletNetwork(
       throw err;
     }
   }
+}
+
+export type SelectChainResult = { ok: true; chainId: number } | { ok: false; chainId: number; error: string };
+
+/**
+ * Switch the wallet to `chainId` (when available), then update dapp state.
+ * If the wallet rejects the switch, dapp state is left unchanged.
+ */
+export async function selectChainAndSwitchWallet(chainId: number): Promise<SelectChainResult> {
+  const cfg = NETWORKS[chainId];
+  if (!cfg) return { ok: false, chainId: getSelectedChainId(), error: `Unsupported chainId: ${chainId}` };
+
+  const current = getSelectedChainId();
+  if (chainId === current) return { ok: true, chainId };
+
+  const eth =
+    typeof window !== 'undefined'
+      ? (window as Window & { ethereum?: EthereumProvider }).ethereum
+      : undefined;
+
+  if (eth) {
+    try {
+      await switchWalletNetwork(eth, chainId);
+    } catch (err: unknown) {
+      return { ok: false, chainId: current, error: walletErrorMessage(err) };
+    }
+  }
+
+  setSelectedChainId(chainId);
+  return { ok: true, chainId };
+}
+
+let walletChainSyncInstalled = false;
+
+/** Keep dapp selected chain in sync when the user switches networks in their wallet. */
+export function installWalletChainSync(): void {
+  if (typeof window === 'undefined' || walletChainSyncInstalled) return;
+  const eth = (window as Window & { ethereum?: EthereumProvider }).ethereum;
+  if (!eth?.on) return;
+
+  const onChainChanged = (hexChainId: unknown) => {
+    const id = typeof hexChainId === 'string' ? parseInt(hexChainId, 16) : NaN;
+    if (!NETWORKS[id] || id === getSelectedChainId()) return;
+    setSelectedChainId(id);
+    window.dispatchEvent(new CustomEvent('siphon:walletChainChanged', { detail: { chainId: id } }));
+  };
+
+  eth.on('chainChanged', onChainChanged);
+  walletChainSyncInstalled = true;
 }

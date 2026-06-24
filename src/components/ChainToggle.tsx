@@ -5,8 +5,8 @@ import {
   SUPPORTED_CHAIN_IDS,
   getNetwork,
   getSelectedChainId,
-  setSelectedChainId,
-  switchWalletNetwork,
+  installWalletChainSync,
+  selectChainAndSwitchWallet,
 } from '../lib/networks';
 
 type ChainToggleProps = {
@@ -16,28 +16,37 @@ type ChainToggleProps = {
 
 export default function ChainToggle({ className, badgeClassName = 'strategy-modal-category-badge' }: ChainToggleProps) {
   const [chainId, setChainId] = useState(84532);
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
+    installWalletChainSync();
     setChainId(getSelectedChainId());
     const onChain = (e: Event) => {
       const id = (e as CustomEvent<{ chainId: number }>).detail?.chainId;
       if (id) setChainId(id);
     };
     window.addEventListener('siphon:chainChanged', onChain);
-    return () => window.removeEventListener('siphon:chainChanged', onChain);
+    window.addEventListener('siphon:walletChainChanged', onChain);
+    return () => {
+      window.removeEventListener('siphon:chainChanged', onChain);
+      window.removeEventListener('siphon:walletChainChanged', onChain);
+    };
   }, []);
 
   const selectChain = async (id: number) => {
-    if (id === chainId) return;
-    setSelectedChainId(id);
-    setChainId(id);
-    const eth = (window as Window & { ethereum?: { request: (p: { method: string; params?: unknown[] }) => Promise<unknown> } })?.ethereum;
-    if (eth) {
-      try {
-        await switchWalletNetwork(eth, id);
-      } catch {
-        // Dapp network updated even if the wallet rejects the switch prompt.
+    if (id === chainId || switching) return;
+    setSwitching(true);
+    try {
+      const result = await selectChainAndSwitchWallet(id);
+      if (!result.ok) {
+        alert(`Could not switch network: ${result.error}`);
+        setChainId(result.chainId);
+        return;
       }
+      setChainId(result.chainId);
+      window.dispatchEvent(new CustomEvent('siphon:networkReady', { detail: { chainId: result.chainId } }));
+    } finally {
+      setSwitching(false);
     }
   };
 
@@ -52,6 +61,7 @@ export default function ChainToggle({ className, badgeClassName = 'strategy-moda
             type="button"
             className={`${badgeClassName} ${active ? 'active' : 'inactive'}`}
             onClick={() => selectChain(id)}
+            disabled={switching}
             title={net.name}
           >
             {net.shortName}

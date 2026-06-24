@@ -1,5 +1,5 @@
 import Solflare from '@solflare-wallet/sdk';
-import { getNetwork, getSelectedChainId, addChainParams } from '../../lib/networks';
+import { getSelectedChainId, switchWalletNetwork } from '../../lib/networks';
 
 export interface WalletInfo {
   id: string;
@@ -38,28 +38,11 @@ class WalletManager {
       }
 
       // Then switch to the currently selected network (Eth Sepolia / Base Sepolia)
-      const net = getNetwork(getSelectedChainId());
       try {
-        await ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: net.hexChainId }],
-        });
+        await switchWalletNetwork(ethereum, getSelectedChainId());
       } catch (switchError: unknown) {
-        // If the chain doesn't exist, add it
-        if (switchError && typeof switchError === 'object' && 'code' in switchError && switchError.code === 4902) {
-          try {
-            await ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [addChainParams(net.chainId)],
-            });
-          } catch {
-            return { success: false, error: `Failed to add ${net.name}. Please add it manually in MetaMask.` };
-          }
-        } else {
-          // User rejected the switch or other error
-          const errorMessage = switchError instanceof Error ? switchError.message : 'Failed to switch network';
-          return { success: false, error: errorMessage };
-        }
+        const errorMessage = switchError instanceof Error ? switchError.message : 'Failed to switch network';
+        return { success: false, error: errorMessage };
       }
 
       const address = accounts[0];
