@@ -788,6 +788,7 @@ export default function Build({
     const result = await submitEncryptedStrategy(strategyData, {
       onKeygen:    () => alert('Generating your FHE encryption keys (one-time, ~5s)...'),
       onUploadKey: () => console.log('[Strategy] Uploading FHE server key (one-time)...'),
+      onUploadClientKey: () => console.log('[Strategy] Uploading client key to confidential VM...'),
       onEncrypt:   () => console.log('[Strategy] Encrypting price conditions locally...'),
     });
     if (result.success) {

@@ -282,6 +282,15 @@ const leavesCache = new Map<string, { leaves: Set<string>; ts: number }>();
 const leavesInflight = new Map<string, Promise<Set<string>>>();
 const LEAVES_TTL_MS = 600_000; // 10 min
 
+export function invalidateLeafCache(tokenAddress?: string) {
+  if (tokenAddress) {
+    const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
+    leavesCache.delete(cacheKey);
+  } else {
+    leavesCache.clear();
+  }
+}
+
 async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
   const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
   const hit = leavesCache.get(cacheKey);
@@ -309,6 +318,9 @@ export async function getSpendableVaultBalance(
   chainId: number,
   tokenMap: Record<string, TokenMeta>,
 ): Promise<SpendableBalance> {
+  const poseidon = await buildPoseidon();
+  const F = poseidon.F;
+
   // Collect candidate notes (unspent locally, with an amount) grouped by token symbol.
   const notesByToken: Record<string, Array<{ commitment?: string; nullifierHash?: string; amount: string }>> = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -320,9 +332,17 @@ export async function getSpendableVaultBalance(
     try {
       const d = JSON.parse(localStorage.getItem(key) || '{}');
       if (!d || !d.amount || d.spent) continue;
+
+      let nullifierHash = d.nullifierHash != null ? String(d.nullifierHash) : undefined;
+      if (!nullifierHash && d.nullifier) {
+        try {
+          nullifierHash = F.toString(poseidon([BigInt(d.nullifier)]));
+        } catch {}
+      }
+
       (notesByToken[sym] ||= []).push({
         commitment: d.commitment != null ? String(d.commitment) : undefined,
-        nullifierHash: d.nullifierHash != null ? String(d.nullifierHash) : undefined,
+        nullifierHash,
         amount: String(d.amount),
       });
     } catch { /* skip unparseable */ }
@@ -352,7 +372,18 @@ export async function getSpendableVaultBalance(
       if (counted.has(n.commitment)) continue;                   // dedupe stale duplicate keys
       if (n.nullifierHash) {
         try {
-          if (await vault.nullifiers(BigInt(n.nullifierHash))) continue; // already withdrawn
+          if (await vault.nullifiers(BigInt(n.nullifierHash))) {
+            // Nullifier is spent on-chain! Mark it spent locally.
+            const key = `${chainId}-${sym}-${n.commitment}`;
+            const dataStr = localStorage.getItem(key);
+            if (dataStr) {
+              try {
+                const data = JSON.parse(dataStr);
+                localStorage.setItem(key, JSON.stringify({ ...data, spent: true }));
+              } catch {}
+            }
+            continue; // already withdrawn
+          }
         } catch { /* if the check fails, fall through and count it */ }
       }
       const amt = parseFloat(n.amount);
@@ -428,6 +459,8 @@ export async function generateZKData(
   let leafIndex = -1;
 
   console.log("Scanning localStorage for spendable deposits...");
+
+  const { vault } = await resolveVault(tokenAddress);
   
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -449,6 +482,20 @@ export async function generateZKData(
 
         // Check if amount is sufficient
         if (storedAmountBN >= requestedBN) {
+            // Check if the nullifier is already spent on-chain
+            if (data.nullifier) {
+              const localNullifier = BigInt(data.nullifier);
+              const localNullifierHash = F.toString(poseidon([localNullifier]));
+              const isSpentOnChain = await vault.nullifiers(BigInt(localNullifierHash));
+              if (isSpentOnChain) {
+                console.warn("⚠️ Spent Deposit detected on-chain (nullifier spent):", key);
+                try {
+                  localStorage.setItem(key, JSON.stringify({ ...data, spent: true }));
+                } catch {}
+                continue;
+              }
+            }
+
             // 🔍 CRITICAL CHECK: Does this commitment exist on-chain?
             const localCommitment = BigInt(data.commitment);
             
@@ -516,14 +563,44 @@ export async function generateZKData(
   const merkleTreeAddr5 = await vault5.merkleTree();
   const merkleTree5 = new Contract(merkleTreeAddr5, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider5);
 
-  // Fetch on-chain state. These are TREE_DEPTH*2 calls — run them with bounded concurrency
-  // and 429 retries so public RPC gateways (e.g. Tenderly) don't rate-limit the burst.
+  // Fetch on-chain root
   const onChainRoot = BigInt((await withRetry(() => merkleTree5.getRoot())).toString());
-  const levels = Array.from({ length: TREE_DEPTH }, (_, i) => i);
-  // Empty-subtree hashes per level (zeros[0] = empty leaf). Needed to pad partial levels.
-  const zeros: bigint[] = await mapLimit(levels, 2, (i) =>
-    withRetry(() => merkleTree5.zeros(i)).then((v: bigint) => BigInt(v.toString())),
-  );
+  
+  // Pre-computed empty-subtree hashes per level to avoid 20 RPC calls (which trigger 429 errors on Infura free tier)
+  const zeros: bigint[] = [
+    0n,
+    14744269619966411208579211824598458697587494354926760081771325075741142829156n,
+    7423237065226347324353380772367382631490014989348495481811164164159255474657n,
+    11286972368698509976183087595462810875513684078608517520839298933882497716792n,
+    3607627140608796879659380071776844901612302623152076817094415224584923813162n,
+    19712377064642672829441595136074946683621277828620209496774504837737984048981n,
+    20775607673010627194014556968476266066927294572720319469184847051418138353016n,
+    3396914609616007258851405644437304192397291162432396347162513310381425243293n,
+    21551820661461729022865262380882070649935529853313286572328683688269863701601n,
+    6573136701248752079028194407151022595060682063033565181951145966236778420039n,
+    12413880268183407374852357075976609371175688755676981206018884971008854919922n,
+    14271763308400718165336499097156975241954733520325982997864342600795471836726n,
+    20066985985293572387227381049700832219069292839614107140851619262827735677018n,
+    9394776414966240069580838672673694685292165040808226440647796406499139370960n,
+    11331146992410411304059858900317123658895005918277453009197229807340014528524n,
+    15819538789928229930262697811477882737253464456578333862691129291651619515538n,
+    19217088683336594659449020493828377907203207941212636669271704950158751593251n,
+    21035245323335827719745544373081896983162834604456827698288649288827293579666n,
+    6939770416153240137322503476966641397417391950902474480970945462551409848591n,
+    10941962436777715901943463195175331263348098796018438960955633645115732864202n,
+    15019797232609675441998260052101280400536945603062888308240081994073687793470n,
+    11702828337982203149177882813338547876343922920234831094975924378932809409969n,
+    11217067736778784455593535811108456786943573747466706329920902520905755780395n,
+    16072238744996205792852194127671441602062027943016727953216607508365787157389n,
+    17681057402012993898104192736393849603097507831571622013521167331642182653248n,
+    21694045479371014653083846597424257852691458318143380497809004364947786214945n,
+    8163447297445169709687354538480474434591144168767135863541048304198280615192n,
+    14081762237856300239452543304351251708585712948734528663957353575674639038357n,
+    16619959921569409661790279042024627172199214148318086837362003702249041851090n,
+    7022159125197495734384997711896547675021391130223237843255817587255104160365n,
+    4114686047564160449611603615418567457008101555090703535405891656262658644463n,
+    12549363297364877722388257367377629555213421373705596078299904496781819142130n,
+  ];
 
   console.log("✅ On-chain root:", onChainRoot.toString());
 

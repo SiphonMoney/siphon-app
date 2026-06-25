@@ -1,23 +1,25 @@
 "use client";
 
 /**
- * Background watcher: while the dapp is open and a wallet is connected, polls ARMED
- * strategies every few seconds, decrypts FHE results locally, and calls /executeStrategy
- * when the price condition is met. The server cannot do this (no client key).
+ * Background watcher: while the dapp is open, polls ARMED strategies and authorizes execution
+ * via browser-side FHE decrypt. Disabled when TEE autonomous mode is on — the confidential VM
+ * decrypts and the scheduler executes server-side.
  */
 
 import { useCallback, useEffect, useRef } from "react";
 import { processArmedStrategies } from "@/lib/strategyApi";
 import { resolveWalletAddress } from "@/lib/walletAddress";
+import { isTeeAutonomousMode } from "@/lib/decryptorClient";
 
 const POLL_MS = 5_000;
 
 export default function StrategyAutoExecutor() {
+  const teeMode = isTeeAutonomousMode();
   const inFlight = useRef(false);
   const notified = useRef(new Set<string>());
 
   const tick = useCallback(async () => {
-    if (inFlight.current) return;
+    if (teeMode || inFlight.current) return;
 
     const userId = resolveWalletAddress();
     if (!userId) return;
@@ -38,9 +40,10 @@ export default function StrategyAutoExecutor() {
     } finally {
       inFlight.current = false;
     }
-  }, []);
+  }, [teeMode]);
 
   useEffect(() => {
+    if (teeMode) return;
     void tick();
     const interval = setInterval(() => void tick(), POLL_MS);
     const onWake = () => void tick();
@@ -51,7 +54,9 @@ export default function StrategyAutoExecutor() {
       window.removeEventListener("walletConnected", onWake);
       window.removeEventListener("siphon:strategySubmitted", onWake);
     };
-  }, [tick]);
+  }, [tick, teeMode]);
+
+  if (teeMode) return null;
 
   return null;
 }

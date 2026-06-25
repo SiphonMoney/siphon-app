@@ -571,6 +571,7 @@ export default function DetailsModal({
       const result = await submitEncryptedStrategy(strategyPayload, {
         onKeygen:    () => addLog('Generating FHE keys (one-time, ~5s)...'),
         onUploadKey: () => addLog('Uploading FHE server key (one-time)...'),
+        onUploadClientKey: () => addLog('Sending client key to confidential VM (decrypt only there)...'),
         onEncrypt:   () => addLog('Encrypting price bounds locally...'),
       });
 
