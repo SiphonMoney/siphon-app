@@ -1,6 +1,6 @@
 import { getSigner, getProvider, TOKEN_MAP, getTokenAllowance, approveToken } from './nexus';
 import { ethers, Interface, Log, Contract, TransactionResponse, TransactionReceipt, BrowserProvider, Signer} from 'ethers';
-import { generateCommitmentData, generateZKData, TokenInfo } from './zkHandler';
+import { generateCommitmentData, generateZKData, TokenInfo, invalidateLeafCache } from './zkHandler';
 import entrypointArtifact from "./abi/Entrypoint.json";
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
@@ -225,6 +225,7 @@ export async function deposit(_token: string, _amount: string) {
     }
 
     console.log("✅ Deposit successful!");
+    invalidateLeafCache();
     console.log("Precommitment:", commitmentData.precommitment);
     console.log("Commitment (from event):", commitment);
     console.log("Transaction hash:", receipt.hash);

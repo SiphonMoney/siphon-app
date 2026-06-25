@@ -282,6 +282,15 @@ const leavesCache = new Map<string, { leaves: Set<string>; ts: number }>();
 const leavesInflight = new Map<string, Promise<Set<string>>>();
 const LEAVES_TTL_MS = 600_000; // 10 min
 
+export function invalidateLeafCache(tokenAddress?: string) {
+  if (tokenAddress) {
+    const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
+    leavesCache.delete(cacheKey);
+  } else {
+    leavesCache.clear();
+  }
+}
+
 async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
   const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
   const hit = leavesCache.get(cacheKey);
