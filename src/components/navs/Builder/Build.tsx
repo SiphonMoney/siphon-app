@@ -65,7 +65,7 @@ import {
   resolveWithdrawAmount,
   syncLinkedWithdrawFromSwap,
 } from "../../../lib/graphLinks";
-import { processBuilderTurn } from "../../../builder_agent";
+import { processBuilderTurnLLM } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
 import { getSelectedChainId, getTokens } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
@@ -895,7 +895,7 @@ export default function Build({
     setBuilderMessages((prev) => [...prev, userMsg]);
     setIsBuilderAgentLoading(true);
     try {
-      const result = processBuilderTurn(prompt, builderSession, nodes, edges);
+      const result = await processBuilderTurnLLM(prompt, builderSession, nodes, edges);
       setNodes(result.nodes);
       setEdges(result.edges);
       setBuilderSession(result.session);

@@ -1,4 +1,4 @@
-export { processBuilderTurn } from "./conversation";
+export { processBuilderTurn, processBuilderTurnLLM } from "./conversation";
 export { generateFlowFromPrompt } from "./generateFlow";
 export { parsePrompt } from "./parsePrompt";
 export type {

@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import { createFlowFromParsed } from "./createNodes";
+import { llmParse } from "./llmParse";
 import { applyFollowUpAnswer, applyIntentFromMessage, mergeParsed } from "./parseFollowUp";
 import { parsePrompt } from "./parsePrompt";
 import { getNextQuestion } from "./questions";
@@ -94,4 +95,35 @@ export function processBuilderTurn(
     session: nextSession,
     botMessage: next?.question ?? null,
   };
+}
+
+/**
+ * LLM-backed turn: routes the prompt through the Claude agentic chain
+ * (/api/builder-agent) for language understanding, then reuses the same flow
+ * pipeline. The LLM re-derives the full strategy from the running transcript each
+ * turn, so no pendingField state machine is needed. Falls back to the pure-regex
+ * `processBuilderTurn` when the chain is unavailable (no API key) or errors.
+ */
+export async function processBuilderTurnLLM(
+  input: string,
+  session: BuilderAgentSession | null,
+  existingNodes: Node[],
+  existingEdges: Edge[]
+): Promise<BuilderAgentTurnResult> {
+  const trimmed = input.trim();
+  const transcript = [...(session?.transcript ?? []), trimmed];
+
+  const result = await llmParse(trimmed, transcript);
+  if (!result) {
+    // Chain unavailable / errored — deterministic regex path keeps the builder working.
+    return processBuilderTurn(input, session, existingNodes, existingEdges);
+  }
+
+  const { parsed } = result;
+  const { nodes, edges } = applyFlowFromParsed(parsed, existingNodes, existingEdges);
+  const nextSession = buildSession(parsed, transcript);
+  // Prefer Claude's conversational reply; fall back to the next required-field question.
+  const botMessage = result.message ?? getNextQuestion(parsed)?.question ?? null;
+
+  return { nodes, edges, session: nextSession, botMessage };
 }
