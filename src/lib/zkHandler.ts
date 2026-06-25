@@ -318,6 +318,9 @@ export async function getSpendableVaultBalance(
   chainId: number,
   tokenMap: Record<string, TokenMeta>,
 ): Promise<SpendableBalance> {
+  const poseidon = await buildPoseidon();
+  const F = poseidon.F;
+
   // Collect candidate notes (unspent locally, with an amount) grouped by token symbol.
   const notesByToken: Record<string, Array<{ commitment?: string; nullifierHash?: string; amount: string }>> = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -329,9 +332,17 @@ export async function getSpendableVaultBalance(
     try {
       const d = JSON.parse(localStorage.getItem(key) || '{}');
       if (!d || !d.amount || d.spent) continue;
+
+      let nullifierHash = d.nullifierHash != null ? String(d.nullifierHash) : undefined;
+      if (!nullifierHash && d.nullifier) {
+        try {
+          nullifierHash = F.toString(poseidon([BigInt(d.nullifier)]));
+        } catch {}
+      }
+
       (notesByToken[sym] ||= []).push({
         commitment: d.commitment != null ? String(d.commitment) : undefined,
-        nullifierHash: d.nullifierHash != null ? String(d.nullifierHash) : undefined,
+        nullifierHash,
         amount: String(d.amount),
       });
     } catch { /* skip unparseable */ }
@@ -361,7 +372,18 @@ export async function getSpendableVaultBalance(
       if (counted.has(n.commitment)) continue;                   // dedupe stale duplicate keys
       if (n.nullifierHash) {
         try {
-          if (await vault.nullifiers(BigInt(n.nullifierHash))) continue; // already withdrawn
+          if (await vault.nullifiers(BigInt(n.nullifierHash))) {
+            // Nullifier is spent on-chain! Mark it spent locally.
+            const key = `${chainId}-${sym}-${n.commitment}`;
+            const dataStr = localStorage.getItem(key);
+            if (dataStr) {
+              try {
+                const data = JSON.parse(dataStr);
+                localStorage.setItem(key, JSON.stringify({ ...data, spent: true }));
+              } catch {}
+            }
+            continue; // already withdrawn
+          }
         } catch { /* if the check fails, fall through and count it */ }
       }
       const amt = parseFloat(n.amount);
@@ -437,6 +459,8 @@ export async function generateZKData(
   let leafIndex = -1;
 
   console.log("Scanning localStorage for spendable deposits...");
+
+  const { vault } = await resolveVault(tokenAddress);
   
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -458,6 +482,20 @@ export async function generateZKData(
 
         // Check if amount is sufficient
         if (storedAmountBN >= requestedBN) {
+            // Check if the nullifier is already spent on-chain
+            if (data.nullifier) {
+              const localNullifier = BigInt(data.nullifier);
+              const localNullifierHash = F.toString(poseidon([localNullifier]));
+              const isSpentOnChain = await vault.nullifiers(BigInt(localNullifierHash));
+              if (isSpentOnChain) {
+                console.warn("⚠️ Spent Deposit detected on-chain (nullifier spent):", key);
+                try {
+                  localStorage.setItem(key, JSON.stringify({ ...data, spent: true }));
+                } catch {}
+                continue;
+              }
+            }
+
             // 🔍 CRITICAL CHECK: Does this commitment exist on-chain?
             const localCommitment = BigInt(data.commitment);
             
