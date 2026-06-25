@@ -4,9 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
-  Background,
-  Controls,
-  MiniMap,
   addEdge,
   Connection,
   Node,
@@ -16,17 +13,29 @@ import {
   applyEdgeChanges,
   NodeChange,
   EdgeChange,
-  useReactFlow
+  useReactFlow,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import "./Build.css";
+import "./build-dashboard.css";
 import BuildNav from "./BuildNav";
-import BuildAiPrompt from "./BuildAiPrompt";
+import BuildAiPrompt, { type BuildChatMessage } from "./BuildAiPrompt";
+import {
+  DashboardCustomizeProvider,
+} from "@/components/landing/dashboard-customize-context";
+import { BuildWidgetSection } from "@/components/landing/BuildWidgetSection";
+import BuildPageFooter from "./BuildPageFooter";
 import BuildNodeContextMenu from "./BuildNodeContextMenu";
 import BuildSimToast from "./BuildSimToast";
 import DetailsModal from "../Discover/DetailsModal";
 import "../Discover/Discover.css";
-import type { StrategyMetadata } from "../Discover/strategies";
+import {
+  initializeDiscoverStrategies,
+  initializeLimitOrderStrategy,
+  loadStrategyGraphByName,
+  type StrategyMetadata,
+} from "../Discover/strategies";
 import { useCanvasSimulation, type SimHighlightStatus } from "./useCanvasSimulation";
 import { BuildFlowContextProvider, FLOW_NODE_TYPES } from "./flowNodeTypes";
 import { useRepeatDropHandlers } from "./RepeatDropHandler";
@@ -47,7 +56,7 @@ import {
   computeRangeGridLegs,
   validateStrategyFields,
 } from "../../../lib/strategySpec";
-import { layoutStrategyNodes, getModalStepNodes } from "../../../lib/builderLayout";
+import { layoutStrategyNodes, getModalStepNodes, randomBuilderNodePosition } from "../../../lib/builderLayout";
 import { formatGraphForPreview } from "../../../lib/repeatGraph";
 import { buildRunModeValuesFromNodes } from "../../../lib/runModeValues";
 import {
@@ -85,18 +94,34 @@ interface NodeContextMenuState {
 }
 
 function BlueprintFlowViewport({ nodes }: { nodes: Node[] }) {
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter } = useReactFlow();
   const nodeStructureKey = nodes.map((node) => node.id).join("|");
 
+  const alignView = useCallback(() => {
+    if (nodes.length === 0) {
+      void setCenter(0, 0, { zoom: 0.85, duration: 0 });
+      return;
+    }
+    void fitView({ padding: 0.35, duration: 200, maxZoom: 0.8 });
+  }, [nodes.length, setCenter, fitView]);
+
   useEffect(() => {
-    if (nodes.length === 0) return;
+    alignView();
+    const raf = requestAnimationFrame(alignView);
+    const t1 = window.setTimeout(alignView, 80);
+    const t2 = window.setTimeout(alignView, 250);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [nodeStructureKey, nodes.length, alignView]);
 
-    const frame = requestAnimationFrame(() => {
-      void fitView({ padding: 0.2, duration: 200 });
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [nodeStructureKey, nodes.length, fitView]);
+  useEffect(() => {
+    const onResize = () => alignView();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [alignView]);
 
   return null;
 }
@@ -163,11 +188,21 @@ function BlueprintFlow({
     [updateNodeData, tokens, isTokenActive, simHighlight, simShakingId, simExiting]
   );
 
+  const onFlowInit = useCallback(
+    (instance: ReactFlowInstance) => {
+      if (nodes.length === 0) {
+        void instance.setCenter(0, 0, { zoom: 0.85, duration: 0 });
+      }
+    },
+    [nodes.length]
+  );
+
   return (
     <BuildFlowContextProvider value={flowContextValue}>
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      onInit={onFlowInit}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
@@ -178,21 +213,20 @@ function BlueprintFlow({
       onNodesDelete={onNodesDelete}
       onNodeDrag={onNodeDrag}
       onNodeDragStop={onNodeDragStop}
-      fitView
       minZoom={0.1}
       maxZoom={2}
-      defaultViewport={{ x: 0, y: 0, zoom: 1 }}
       deleteKeyCode={['Backspace', 'Delete']}
       nodesDraggable={true}
       nodesConnectable={true}
       elementsSelectable={true}
-      panOnDrag={true}
+      panOnDrag
       panOnScroll={false}
-      zoomOnScroll={true}
-      zoomOnPinch={true}
+      zoomOnScroll
+      zoomOnPinch
       zoomOnDoubleClick={false}
       selectNodesOnDrag={false}
-      preventScrolling={true}
+      preventScrolling
+      autoPanOnNodeDrag={false}
       nodeTypes={FLOW_NODE_TYPES}
       defaultEdgeOptions={{
         style: { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 },
@@ -200,37 +234,7 @@ function BlueprintFlow({
       }}
       proOptions={{ hideAttribution: true }}
     >
-      <Background />
       <BlueprintFlowViewport nodes={nodes} />
-      <Controls position="bottom-left" />
-      <MiniMap
-        position="bottom-right"
-        style={{ width: 168, height: 112 }}
-        pannable
-        zoomable
-        bgColor="rgba(0, 0, 0, 0.85)"
-        maskColor="rgba(0, 0, 0, 0.55)"
-        maskStrokeColor="rgba(255, 255, 255, 0.35)"
-        nodeStrokeWidth={2}
-        nodeColor={(node) => {
-          if (isRepeatGroupNode(node)) return "rgba(59, 130, 246, 0.75)";
-          switch (node.data?.type) {
-            case "strategy":
-              return "rgba(255, 193, 7, 0.75)";
-            case "control":
-              return "rgba(59, 130, 246, 0.75)";
-            case "deposit":
-              return "rgba(96, 165, 250, 0.75)";
-            case "swap":
-              return "rgba(167, 139, 250, 0.75)";
-            case "withdraw":
-              return "rgba(74, 222, 128, 0.75)";
-            default:
-              return "rgba(255, 255, 255, 0.4)";
-          }
-        }}
-        nodeStrokeColor="rgba(255, 255, 255, 0.55)"
-      />
     </ReactFlow>
     </BuildFlowContextProvider>
   );
@@ -262,9 +266,37 @@ export default function Build({
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [isBuilderAgentLoading, setIsBuilderAgentLoading] = useState(false);
   const [builderSession, setBuilderSession] = useState<BuilderAgentSession | null>(null);
-  const [builderBotMessage, setBuilderBotMessage] = useState<string | null>(null);
+  const [builderMessages, setBuilderMessages] = useState<BuildChatMessage[]>([]);
+  const [chatFocus, setChatFocus] = useState(false);
+  const [widgetsVisible, setWidgetsVisible] = useState(true);
   const [builderPrompt, setBuilderPrompt] = useState("");
   const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
+
+  useEffect(() => {
+    if (chatFocus) setWidgetsVisible(false);
+  }, [chatFocus]);
+
+  const handleChatActiveChange = useCallback((active: boolean) => {
+    setChatFocus(active);
+  }, []);
+
+  const handleToggleWidgets = useCallback(() => {
+    setWidgetsVisible((visible) => !visible);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("build-view-expanded", { detail: chatFocus }));
+    document.body.classList.toggle("build-view-expanded", chatFocus);
+    return () => {
+      document.body.classList.remove("build-view-expanded");
+    };
+  }, [chatFocus]);
+  
+  useEffect(() => {
+    initializeLimitOrderStrategy();
+    initializeDiscoverStrategies();
+  }, []);
   
   // Active tokens
   const activeTokens = ['ETH', 'USDC'];
@@ -296,6 +328,31 @@ export default function Build({
 
   const syncRepeatState = useCallback((nds: Node[]) => sortAndSyncRepeat(nds), []);
 
+  const onLoadStrategyTemplate = useCallback((strategyName: string) => {
+    const graph = loadStrategyGraphByName(strategyName);
+    if (!graph.nodes.length) return;
+    const normalizedNodes = sortAndSyncRepeat(graph.nodes.map(normalizeNode));
+    setNodes(normalizedNodes);
+    setEdges(graph.edges);
+    setCurrentFileName(`${strategyName.toLowerCase().replace(/\s+/g, '-')}.io`);
+    setBuilderSession(null);
+    setBuilderMessages([]);
+    setBuilderPrompt("");
+    setNodeContextMenu(null);
+  }, [setNodes, setEdges, setCurrentFileName, normalizeNode]);
+
+  useEffect(() => {
+    const onStrategyPick = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail;
+      if (typeof name === "string" && name.trim()) {
+        onLoadStrategyTemplate(name);
+      }
+    };
+    window.addEventListener("build-select-strategy-template", onStrategyPick as EventListener);
+    return () =>
+      window.removeEventListener("build-select-strategy-template", onStrategyPick as EventListener);
+  }, [onLoadStrategyTemplate]);
+
   const buildBlockNode = useCallback((
     type: 'deposit' | 'withdraw' | 'swap' | 'strategy' | 'control',
     chainOrDexOrStrategy?: string,
@@ -326,10 +383,7 @@ export default function Build({
     return {
       id: `${blockType}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       type: 'custom',
-      position: opts?.position ?? {
-        x: Math.random() * 400 + 100,
-        y: Math.random() * 300 + 200,
-      },
+      position: opts?.position ?? randomBuilderNodePosition(),
       data: {
         label,
         type: isControl ? 'control' : type,
@@ -433,18 +487,12 @@ export default function Build({
   
   const onAddNode = useCallback((type: 'deposit' | 'withdraw' | 'swap' | 'strategy' | 'control', chainOrDexOrStrategy?: string) => {
     if (type === 'control' && ['repeat', 'loop'].includes((chainOrDexOrStrategy || '').toLowerCase())) {
-      setNodes((nds) => sortAndSyncRepeat([...nds, createRepeatGroupNode({
-        x: Math.random() * 300 + 200,
-        y: Math.random() * 200 + 150,
-      })]));
+      setNodes((nds) => sortAndSyncRepeat([...nds, createRepeatGroupNode(randomBuilderNodePosition())]));
       return;
     }
 
     const newNode = buildBlockNode(type, chainOrDexOrStrategy, {
-      position: {
-        x: Math.random() * 400 + 100,
-        y: Math.random() * 300 + 200,
-      },
+      position: randomBuilderNodePosition(),
     });
     
     setNodes((nds) => [...nds, newNode]);
@@ -796,7 +844,7 @@ export default function Build({
     setEdges([]);
     setCurrentFileName('untitled.io');
     setBuilderSession(null);
-    setBuilderBotMessage(null);
+    setBuilderMessages([]);
     setBuilderPrompt("");
   }, [setNodes, setEdges, setCurrentFileName]);
   
@@ -838,13 +886,29 @@ export default function Build({
   }, [savedScenes, setSavedScenes]);
 
   const onBuilderPromptSubmit = useCallback(async (prompt: string) => {
+    const userMsg: BuildChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: prompt,
+    };
+    setBuilderMessages((prev) => [...prev, userMsg]);
     setIsBuilderAgentLoading(true);
     try {
       const result = processBuilderTurn(prompt, builderSession, nodes, edges);
       setNodes(result.nodes);
       setEdges(result.edges);
       setBuilderSession(result.session);
-      setBuilderBotMessage(result.botMessage);
+      if (result.botMessage) {
+        const botMessage = result.botMessage;
+        setBuilderMessages((prev) => [
+          ...prev,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            content: botMessage,
+          },
+        ]);
+      }
       setBuilderPrompt("");
       setNodeContextMenu(null);
     } finally {
@@ -901,7 +965,7 @@ export default function Build({
   }, [nodes, edges, normalizeNode]);
   
   return (
-    <div className={`blueprint-view ${isLoaded ? 'loaded' : ''}`}>
+    <div className={`blueprint-view blueprint-view--fullscreen ${isLoaded ? 'loaded' : ''} ${widgetsVisible ? 'blueprint-view--dash-front' : ''}`}>
       <ReactFlowProvider>
         <div className="blueprint-workspace">
           <BuildNav
@@ -917,17 +981,20 @@ export default function Build({
             isSimulating={isSimulating}
             onOpenRun={openRunModal}
             setCurrentFileName={setCurrentFileName}
+            expandedToolbar={chatFocus && !widgetsVisible}
           />
 
-          <div className="blueprint-canvas" onContextMenu={onCanvasContextMenu}>
-            {simToast && (
-              <BuildSimToast
-                message={simToast.message}
-                type={simToast.type}
-                exiting={simExiting}
-                onDismiss={dismissToast}
-              />
-            )}
+          {simToast && (
+            <BuildSimToast
+              message={simToast.message}
+              type={simToast.type}
+              exiting={simExiting}
+              onDismiss={dismissToast}
+            />
+          )}
+
+          <div className="blueprint-stage">
+            <div className="blueprint-canvas" onContextMenu={onCanvasContextMenu}>
             <BlueprintFlow
               setNodes={setNodes}
               nodes={nodes}
@@ -949,6 +1016,35 @@ export default function Build({
               simShakingId={simShakingId}
               simExiting={simExiting}
             />
+            </div>
+
+            <DashboardCustomizeProvider>
+            <div className={`build-page-layout ${chatFocus && !widgetsVisible ? "build-page-layout--focus" : ""}`}>
+              <div className="build-page-content">
+                <div className="build-hero-band">
+                  <BuildAiPrompt
+                    value={builderPrompt}
+                    onChange={setBuilderPrompt}
+                    onSubmit={onBuilderPromptSubmit}
+                    onSelectStrategy={onLoadStrategyTemplate}
+                    isLoading={isBuilderAgentLoading}
+                    messages={builderMessages}
+                    onChatActiveChange={handleChatActiveChange}
+                    widgetsVisible={widgetsVisible}
+                    onToggleWidgets={handleToggleWidgets}
+                  />
+                </div>
+
+                {widgetsVisible && (
+                  <div className="build-widget-band">
+                    <BuildWidgetSection />
+                  </div>
+                )}
+              </div>
+            </div>
+            </DashboardCustomizeProvider>
+
+            {widgetsVisible && <BuildPageFooter />}
 
             {nodeContextMenu && (
               <BuildNodeContextMenu
@@ -961,14 +1057,6 @@ export default function Build({
               />
             )}
           </div>
-
-          <BuildAiPrompt
-            value={builderPrompt}
-            onChange={setBuilderPrompt}
-            onSubmit={onBuilderPromptSubmit}
-            isLoading={isBuilderAgentLoading}
-            botMessage={builderBotMessage}
-          />
         </div>
       </ReactFlowProvider>
 

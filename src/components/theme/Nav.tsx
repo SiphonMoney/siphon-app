@@ -20,12 +20,12 @@ export default function Nav({ onWalletConnected }: NavProps) {
   const isSwaps = pathname === "/dapp/swaps";
   const isPro = pathname === "/dapp" || pathname === "/dapp/pro";
   
-  const [proViewMode, setProViewMode] = useState<'blueprint' | 'run' | 'discover' | 'markets'>('discover');
+  const [proViewMode, setProViewMode] = useState<'blueprint' | 'run' | 'discover' | 'markets'>('blueprint');
 
   useEffect(() => {
     const handleViewModeChange = (event: CustomEvent) => {
       const mode = event.detail as 'blueprint' | 'run' | 'discover' | 'markets';
-      setProViewMode(mode);
+      setProViewMode(mode === 'discover' ? 'blueprint' : mode === 'markets' ? 'blueprint' : mode);
     };
 
     window.addEventListener('pro-view-mode-change', handleViewModeChange as EventListener);
@@ -35,16 +35,19 @@ export default function Nav({ onWalletConnected }: NavProps) {
   }, []);
 
   const handleProViewModeChange = (mode: 'blueprint' | 'run' | 'discover' | 'markets') => {
-    setProViewMode(mode);
+    const resolved = mode === 'discover' || mode === 'markets' ? 'blueprint' : mode;
+    setProViewMode(resolved);
     // Navigate to dapp page if not already there
     if (!isPro) {
       router.push('/dapp');
     }
     // Trigger view mode change event for Nexus component
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pro-view-mode-change', { detail: mode }));
+      window.dispatchEvent(new CustomEvent('pro-view-mode-change', { detail: resolved }));
     }
   };
+
+  const isBuildMode = proViewMode === 'blueprint';
 
   return (
     <nav>
@@ -61,48 +64,36 @@ export default function Nav({ onWalletConnected }: NavProps) {
         </Link>
       </div>
 
-      {/* Center: Menu Buttons (only for dapp pages) */}
-      {isDappPage && (
+      {/* Center: Menu Buttons (only for dapp pages, not build) */}
+      {isDappPage && !isBuildMode && (
         <div className="nav-center">
-          {/* Darkpools button */}
-          <div 
-            className={`nav-single-btn nav-single-btn-disabled ${isDarkPool ? 'active' : ''}`}
-          >
-            <div className="nav-single-btn-content">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <line x1="9" y1="3" x2="9" y2="21" />
-              </svg>
-              Darkpools
-            </div>
-            <span className="nav-soon-tag">soon</span>
-          </div>
-          {/* Single button for Swap */}
-          <div 
-            className={`nav-single-btn nav-single-btn-disabled ${isSwaps ? 'active' : ''}`}
-          >
-            <div className="nav-single-btn-content">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4" />
-              </svg>
-              Swap
-            </div>
-            <span className="nav-soon-tag">soon</span>
-          </div>
-          {/* Vertical divider */}
-          <div className="nav-divider"></div>
-          {/* Trio selector for Discover/Build/Run - always visible on dapp pages */}
+          <>
+              <div 
+                className={`nav-single-btn nav-single-btn-disabled ${isDarkPool ? 'active' : ''}`}
+              >
+                <div className="nav-single-btn-content">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <line x1="9" y1="3" x2="9" y2="21" />
+                  </svg>
+                  Darkpools
+                </div>
+                <span className="nav-soon-tag">soon</span>
+              </div>
+              <div 
+                className={`nav-single-btn nav-single-btn-disabled ${isSwaps ? 'active' : ''}`}
+              >
+                <div className="nav-single-btn-content">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4" />
+                  </svg>
+                  Swap
+                </div>
+                <span className="nav-soon-tag">soon</span>
+              </div>
+              <div className="nav-divider"></div>
+          </>
           <div className="nav-mode-selector">
-            <button
-              className={`nav-mode-btn ${proViewMode === 'discover' ? 'active' : ''}`}
-              onClick={() => handleProViewModeChange('discover')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              Discover
-            </button>
             <button
               className={`nav-mode-btn ${proViewMode === 'blueprint' ? 'active' : ''}`}
               onClick={() => handleProViewModeChange('blueprint')}
@@ -113,26 +104,6 @@ export default function Nav({ onWalletConnected }: NavProps) {
                 <line x1="12" y1="22.08" x2="12" y2="12" />
               </svg>
               Build
-            </button>
-            <button
-              className={`nav-mode-btn ${proViewMode === 'run' ? 'active' : ''}`}
-              onClick={() => handleProViewModeChange('run')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              Runs
-            </button>
-            <button
-              className={`nav-mode-btn ${proViewMode === 'markets' ? 'active' : ''}`}
-              onClick={() => handleProViewModeChange('markets')}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="20" x2="18" y2="10" />
-                <line x1="12" y1="20" x2="12" y2="4" />
-                <line x1="6" y1="20" x2="6" y2="14" />
-              </svg>
-              Markets
             </button>
           </div>
         </div>
@@ -165,7 +136,7 @@ export default function Nav({ onWalletConnected }: NavProps) {
         </div>
       )}
 
-      {/* Right: Wallet Connector for Dapp pages */}
+      {/* Right: Wallet on dapp */}
       {isDappPage && (
         <div className="nav-wallet">
           <ConnectButton 

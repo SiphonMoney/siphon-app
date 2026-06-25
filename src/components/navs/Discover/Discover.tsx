@@ -3,8 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { Node, Edge } from '@xyflow/react';
 import DetailsModal from "./DetailsModal";
-import Sparkline from "../../charts/Sparkline";
-import "../../charts/charts.css";
 import "./Discover.css";
 // Price utilities are now handled in DetailsModal
 import {
@@ -17,10 +15,23 @@ import {
   initializeLimitOrderStrategy,
   initializeDiscoverStrategies,
   formatStrategyGraphForModal,
+  DISCOVER_FILTER_NETWORKS,
+  DISCOVER_ACTIVE_NETWORK,
 } from "./strategies";
 
 const DISCOVER_CATEGORIES = ['all', 'arbitrage', 'yield', 'trading', 'liquidity'] as const;
-const DISCOVER_NETWORKS = ['Ethereum', 'Base', 'Bitcoin', 'Solana', 'Polygon'] as const;
+
+function networkBtnClass(network: string, selectedNetworks: Set<string>): string {
+  const selected = selectedNetworks.has(network);
+  const live = network === DISCOVER_ACTIVE_NETWORK;
+  return [
+    'discover-network-btn',
+    selected ? 'active' : '',
+    live ? 'live' : 'inactive',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 interface DiscoverProps {
   isLoaded?: boolean;
@@ -67,8 +78,6 @@ export default function Discover({
   const [runDuration, setRunDuration] = useState<string>('1h');
   const [isFading, setIsFading] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
-  // Shared 7d ETH trend, fetched once, shown as a sparkline on every card.
-  const [marketSpark, setMarketSpark] = useState<number[]>([]);
 
   const getTemplateStrategyData = (strategyName: string): StrategyData | null => {
     if (strategyName === 'Limit Order') {
@@ -115,22 +124,6 @@ export default function Discover({
   // Initialize Limit Order strategy in localStorage
   useEffect(() => {
     initializeLimitOrderStrategy();
-  }, []);
-
-  // Load a single 7d ETH trend for card sparklines (cached server-side).
-  useEffect(() => {
-    let active = true;
-    fetch('/api/ohlc?coin=ETH&days=7')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (active && d?.candles) {
-          setMarketSpark((d.candles as Array<{ close: number }>).map((c) => c.close));
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
   }, []);
   
   // Load strategy nodes when modal opens
@@ -279,10 +272,10 @@ export default function Discover({
                   })}
                 </div>
                 <div className="discover-networks">
-                  {DISCOVER_NETWORKS.map((network) => (
+                  {DISCOVER_FILTER_NETWORKS.map((network) => (
                     <button
                       key={network}
-                      className={`discover-network-btn ${selectedNetworks.has(network) ? 'active' : ''}`}
+                      className={networkBtnClass(network, selectedNetworks)}
                       onClick={() => {
                         const newNetworks = new Set(selectedNetworks);
                         if (newNetworks.has(network)) {
@@ -462,29 +455,9 @@ export default function Discover({
                       <button
                         key={`${category}-dup`}
                         className={`discover-category-btn ${isSelected ? 'active' : ''}`}
-                        onClick={() => {
-                          if (category === 'all') {
-                            setSelectedCategory('all');
-                          } else {
-                            const currentCategories: Set<string> = typeof selectedCategory === 'object' && selectedCategory instanceof Set 
-                              ? new Set<string>(selectedCategory) 
-                              : selectedCategory === 'all' 
-                                ? new Set<string>() 
-                                : new Set<string>([selectedCategory]);
-                            
-                            if (currentCategories.has(category)) {
-                              currentCategories.delete(category);
-                              if (currentCategories.size === 0) {
-                                setSelectedCategory('all');
-                              } else {
-                                setSelectedCategory(currentCategories);
-                              }
-                            } else {
-                              currentCategories.add(category);
-                              setSelectedCategory(currentCategories);
-                            }
-                          }
-                        }}
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        disabled
                       >
                         {category.charAt(0).toUpperCase() + category.slice(1)}
                       </button>
@@ -498,10 +471,10 @@ export default function Discover({
             <div className="discover-chains-filters">
               <div className="discover-networks-marquee discover-marquee-ltr">
                 <div className="discover-marquee-content">
-                  {DISCOVER_NETWORKS.map((network) => (
+                  {DISCOVER_FILTER_NETWORKS.map((network) => (
                     <button
                       key={network}
-                      className={`discover-network-btn ${selectedNetworks.has(network) ? 'active' : ''}`}
+                      className={networkBtnClass(network, selectedNetworks)}
                       onClick={() => {
                         const newNetworks = new Set(selectedNetworks);
                         if (newNetworks.has(network)) {
@@ -516,19 +489,13 @@ export default function Discover({
                     </button>
                   ))}
                   {/* Duplicate for seamless loop */}
-                  {DISCOVER_NETWORKS.map((network) => (
+                  {DISCOVER_FILTER_NETWORKS.map((network) => (
                     <button
                       key={`${network}-dup`}
-                      className={`discover-network-btn ${selectedNetworks.has(network) ? 'active' : ''}`}
-                      onClick={() => {
-                        const newNetworks = new Set(selectedNetworks);
-                        if (newNetworks.has(network)) {
-                          newNetworks.delete(network);
-                        } else {
-                          newNetworks.add(network);
-                        }
-                        setSelectedNetworks(newNetworks);
-                      }}
+                      className={networkBtnClass(network, selectedNetworks)}
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      disabled
                     >
                       {network}
                     </button>
@@ -716,14 +683,6 @@ export default function Discover({
                     </span>
                   );
                 })}
-              </div>
-              <div className="discover-card-category-label">
-                <span className="discover-category-text">{strategy.category.charAt(0).toUpperCase() + strategy.category.slice(1)}</span>
-                {marketSpark.length > 1 && (
-                  <span className="discover-card-spark" title="ETH 7d trend">
-                    <Sparkline data={marketSpark} width={80} height={22} />
-                  </span>
-                )}
               </div>
               <div className="discover-card-meta">
                 <div className="discover-meta-item">

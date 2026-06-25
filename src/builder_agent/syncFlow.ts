@@ -1,4 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
+import { BUILDER_NODE_ROW_Y } from "../lib/builderLayout";
 import {
   connectFlowNodes,
   createBlockNodeForType,
@@ -22,7 +23,7 @@ export function syncFlowStructure(
   }
 
   const desired = getDesiredBlockTypes(parsed);
-  const baseY = nodes[0]?.position.y ?? 220;
+  const baseY = nodes[0]?.position.y ?? BUILDER_NODE_ROW_Y;
   const runId = Date.now();
 
   const ordered: Node[] = desired.map((type, index) => {

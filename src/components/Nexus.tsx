@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useNodesState, useEdgesState, Node, Edge } from '@xyflow/react';
-import Discover from "./navs/Discover/Discover";
 import Build from "./navs/Builder/Build";
 import Run from "./navs/Run/Run";
 import UserDash from "./navs/UserDash/UserDash";
-import Markets from "./navs/Markets/Markets";
+import Siphon from "./navs/Siphon/Siphon";
+import type { ProViewMode } from "../lib/nexusView";
 
 interface NexusProps {
   isLoaded?: boolean;
@@ -15,7 +15,7 @@ interface NexusProps {
 export default function Nexus({
   isLoaded = true
 }: NexusProps) {
-  const [viewMode, setViewMode] = useState<'blueprint' | 'run' | 'discover' | 'userdash' | 'markets'>('discover');
+  const [viewMode, setViewMode] = useState<'blueprint' | 'run' | 'discover' | 'userdash' | 'markets'>('blueprint');
   const [runningStrategies, setRunningStrategies] = useState<Map<string, { startTime: number; isRunning: boolean; loop: boolean }>>(new Map());
   const [savedScenes, setSavedScenes] = useState<Array<{ name: string; nodes: Node[]; edges: Edge[] }>>([]);
   const [currentFileName, setCurrentFileName] = useState<string>('untitled.io');
@@ -45,6 +45,10 @@ export default function Nexus({
   useEffect(() => {
     const handleViewModeChange = (event: CustomEvent) => {
       const mode = event.detail as 'blueprint' | 'run' | 'discover' | 'userdash' | 'markets';
+      if (mode === 'discover' || mode === 'markets') {
+        setViewMode('blueprint');
+        return;
+      }
       setViewMode(mode);
     };
 
@@ -73,28 +77,14 @@ export default function Nexus({
       <div
         className="pro-mode-content"
         style={{
-          paddingTop: viewMode === "blueprint" ? "0.25rem" : "2rem",
+          paddingTop: viewMode === "blueprint" ? "0" : "2rem",
           height: "100%",
-          overflow: "hidden",
+          overflow: viewMode === "blueprint" ? "hidden" : "hidden",
           display: "flex",
           flexDirection: "column",
         }}
       >
-        {viewMode === 'discover' ? (
-          <Discover
-            isLoaded={isLoaded}
-            setNodes={setNodes}
-            setEdges={setEdges}
-            setViewMode={setViewMode}
-            setCurrentFileName={setCurrentFileName}
-            savedScenes={savedScenes}
-            setSavedScenes={setSavedScenes}
-            runningStrategies={runningStrategies}
-            setRunningStrategies={setRunningStrategies}
-            favoriteStrategies={favoriteStrategies}
-            setFavoriteStrategies={setFavoriteStrategies}
-          />
-        ) : viewMode === 'run' ? (
+        {viewMode === 'run' ? (
           <Run
             isLoaded={isLoaded}
             savedScenes={savedScenes}
@@ -113,11 +103,6 @@ export default function Nexus({
           <UserDash
             isLoaded={isLoaded}
             walletConnected={walletConnected}
-          />
-        ) : viewMode === 'markets' ? (
-          <Markets
-            isLoaded={isLoaded}
-            setViewMode={setViewMode}
           />
         ) : (
           <Build

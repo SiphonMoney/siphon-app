@@ -1,5 +1,5 @@
 import { Position, type Edge, type Node } from "@xyflow/react";
-import { layoutStrategyNodes } from "../lib/builderLayout";
+import { layoutStrategyNodes, BUILDER_NODE_ROW_Y } from "../lib/builderLayout";
 import { applySwapToWithdrawLink } from "../lib/graphLinks";
 import {
   REPEAT_BODY_OFFSET_X,
@@ -197,7 +197,7 @@ export function createFlowFromParsed(parsed: ParsedPrompt): { nodes: Node[]; edg
     createBlockNodeForType(
       type,
       parsed,
-      { x: 120 + index * 280, y: 220 },
+      { x: 120 + index * 280, y: BUILDER_NODE_ROW_Y },
       `${runId}-${type}`
     )
   );
@@ -212,7 +212,7 @@ export function createRecurringFlowFromParsed(
   const deposit = createBlockNodeForType(
     "deposit",
     parsed,
-    { x: 120, y: 220 },
+    { x: 120, y: BUILDER_NODE_ROW_Y },
     `${runId}-deposit`
   );
 
@@ -225,7 +225,7 @@ export function createRecurringFlowFromParsed(
     nodes.push({
       id: scheduleId,
       type: "custom",
-      position: { x: cursorX, y: 220 },
+      position: { x: cursorX, y: BUILDER_NODE_ROW_Y },
       data: {
         label: "Schedule",
         type: "control",
@@ -274,7 +274,7 @@ export function createRecurringFlowFromParsed(
   nodes.push({
     id: repeatId,
     type: "repeatGroup",
-    position: { x: cursorX, y: 190 },
+    position: { x: cursorX, y: BUILDER_NODE_ROW_Y - 30 },
     data: {
       label: "Loop",
       type: "repeatGroup",

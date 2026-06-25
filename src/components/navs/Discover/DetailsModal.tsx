@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import type { Node, Edge } from '@xyflow/react';
 import "./Discover.css";
 import StrategyPreviewFlow from "../Builder/StrategyPreviewFlow";
@@ -147,6 +148,22 @@ export default function DetailsModal({
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [activeChainId, setActiveChainId] = useState(getSelectedChainId);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.classList.add("strategy-modal-open");
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.classList.remove("strategy-modal-open");
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen]);
 
   const stepNodes = useMemo(
     () => getModalStepNodes(modalStrategyNodes, modalStrategyEdges),
@@ -434,7 +451,7 @@ export default function DetailsModal({
     }
   }, [toast]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const handleClose = () => {
     setIsRunMode(false);
@@ -668,7 +685,7 @@ export default function DetailsModal({
   const notificationMessage = toast?.message || latestLog || '';
   const notificationType = toast?.type || (isExecuting ? 'loading' : 'info');
 
-  return (
+  return createPortal(
     <>
       {(isExecuting || toast) && (
         <div className={`strategy-toast strategy-toast-${notificationType} strategy-toast-central ${isFadingOut ? 'fade-out' : ''}`}>
@@ -689,11 +706,14 @@ export default function DetailsModal({
       <div
         className={`strategy-modal-overlay ${isExecuting ? 'darkened' : ''}`}
         onClick={fromBuilder ? undefined : handleClose}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="strategy-modal-title"
       >
         <div className="strategy-modal" onClick={(e) => e.stopPropagation()}>
         <div className="strategy-modal-header">
           <div className="strategy-modal-header-name">
-            <h2 className="strategy-modal-title">{selectedStrategy.name}</h2>
+            <h2 className="strategy-modal-title" id="strategy-modal-title">{selectedStrategy.name}</h2>
             <p className="strategy-modal-author">by {selectedStrategy.author}</p>
             <ChainToggle className="strategy-modal-categories" />
           </div>
@@ -1183,6 +1203,7 @@ export default function DetailsModal({
         </div>
       </div>
     </div>
-    </>
+    </>,
+    document.body
   );
 }

@@ -170,6 +170,17 @@
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
+.discover-network-btn.live:not(.active) {
+  border-color: rgba(34, 197, 94, 0.45);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.discover-network-btn.inactive:not(.active) {
+  opacity: 0.42;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .discover-title {
   font-size: 32px;
   font-weight: 700;
@@ -1166,20 +1177,26 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* Strategy Modal */
+/* Strategy Modal — portaled to document.body for full-viewport coverage */
+body.strategy-modal-open {
+  overflow: hidden;
+}
+
 .strategy-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 100200;
   padding: 2rem;
+  box-sizing: border-box;
   animation: fadeIn 0.3s ease;
 }
 
@@ -1339,6 +1356,10 @@
   .discover-marquee-content button {
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  .discover-marquee-content button[aria-hidden="true"] {
+    pointer-events: none;
   }
 
   @keyframes marquee-rtl {
@@ -2824,7 +2845,7 @@
   position: fixed;
   top: 2rem;
   right: 2rem;
-  z-index: 10002;
+  z-index: 100201;
   animation: slideInRightToast 0.3s ease-out;
   pointer-events: none;
 }

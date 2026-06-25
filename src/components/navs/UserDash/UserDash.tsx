@@ -189,7 +189,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       localStorage.removeItem('siphon-connected-wallet');
       // Navigate back to discover view
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'discover' }));
+        window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'blueprint' }));
       }
     }
   };

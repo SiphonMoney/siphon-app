@@ -10,8 +10,17 @@ import {
 const NODE_WIDTH = 220;
 const TOP_LEVEL_GAP = 56;
 const CHILD_GAP = 40;
-const START_X = 100;
-const ROW_Y = 200;
+export const BUILDER_NODE_START_X = 100;
+export const BUILDER_NODE_ROW_Y = 480;
+const ROW_Y = BUILDER_NODE_ROW_Y;
+
+/** Spread new top-level blocks along the lower canvas band. */
+export function randomBuilderNodePosition(): { x: number; y: number } {
+  return {
+    x: BUILDER_NODE_START_X + Math.random() * 420,
+    y: BUILDER_NODE_ROW_Y + Math.random() * 64 - 16,
+  };
+}
 
 function topLevelRoots(nodes: Node[], edges: Edge[]): string[] {
   const topIds = new Set(nodes.filter((n) => !n.parentId).map((n) => n.id));
@@ -56,7 +65,7 @@ export function layoutStrategyNodes(nodes: Node[], edges: Edge[]): Node[] {
   if (nodes.length === 0) return nodes;
 
   const positions = new Map<string, { x: number; y: number }>();
-  let cursorX = START_X;
+  let cursorX = BUILDER_NODE_START_X;
 
   for (const node of walkTopLevelOrder(nodes, edges)) {
     if (isRepeatGroupNode(node)) {

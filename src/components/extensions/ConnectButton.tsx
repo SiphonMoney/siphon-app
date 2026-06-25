@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import WalletSelector from './WalletSelector';
 import { walletManager, WalletInfo } from './walletManager';
 import { initializeWithProvider, deinit, TOKEN_MAP, refreshProvider, isInitialized } from '../../lib/nexus';
@@ -163,21 +163,20 @@ export default function ConnectButton({ className, onConnected }: { className?: 
   };
 
   const handleDashboardClick = () => {
-    // Trigger view mode change to userdash
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'userdash' }));
+      window.dispatchEvent(new CustomEvent('pro-view-mode-change', { detail: 'userdash' }));
     }
   };
 
   if (connectedWallet) {
     return (
-      <div className={`wallet-container ${className}`}>
+      <div className={`wallet-container ${className ?? ""}`}>
         <button 
           className="wallet-connected-button"
           onClick={handleDashboardClick}
           title="Open dashboard"
         >
-          {/* Wallet Icon and Balance in the same block */}
           <div className="wallet-info-block">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12v-2a5 5 0 0 0-5-5H8a5 5 0 0 0-5 5v2" />

@@ -48,6 +48,34 @@ export interface StrategyData {
   networks?: string[];
 }
 
+/** Filter bar + card badge order — Base is live; others shown as coming soon. */
+export const DISCOVER_FILTER_NETWORKS = [
+  'Base',
+  'Ethereum',
+  'Arbitrum',
+  'Optimism',
+  'Polygon',
+ 
+] as const;
+
+export const DISCOVER_STRATEGY_NETWORKS = [
+  'Base',
+  'Ethereum',
+  'Arbitrum',
+  'Optimism',
+  'Polygon',
+] as const;
+
+export const DISCOVER_STRATEGY_CHAINS = [
+  'base',
+  'ethereum',
+  'arbitrum',
+  'optimism',
+  'polygon',
+] as const;
+
+export const DISCOVER_ACTIVE_NETWORK = 'Base';
+
 /**
  * Strategy list metadata
  */
@@ -60,9 +88,9 @@ export const strategyList: StrategyMetadata[] = [
     profit: '+5.2%', 
     description: 'Set your desired price and wait for the market to reach it. Execute trades at your specified price level for better control.', 
     category: 'trading', 
-    chains: ['ethereum', 'base'], 
-    networks: ['Ethereum', 'Base'],
-    activeNetworks: ['Sepolia'], // Only Sepolia (Ethereum) is active
+    chains: [...DISCOVER_STRATEGY_CHAINS], 
+    networks: [...DISCOVER_STRATEGY_NETWORKS],
+    activeNetworks: [DISCOVER_ACTIVE_NETWORK],
     isActive: true 
   },
   { 
@@ -73,9 +101,9 @@ export const strategyList: StrategyMetadata[] = [
     profit: '+2.1%', 
     description: 'Simple DCA: deposit once, then loop swap + withdraw on a cadence until funds end.', 
     category: 'trading', 
-    chains: ['ethereum', 'base'], 
-    networks: ['Ethereum', 'Base'],
-    activeNetworks: ['Sepolia'],
+    chains: [...DISCOVER_STRATEGY_CHAINS], 
+    networks: [...DISCOVER_STRATEGY_NETWORKS],
+    activeNetworks: [DISCOVER_ACTIVE_NETWORK],
     isActive: true
   },
   { 
@@ -84,10 +112,10 @@ export const strategyList: StrategyMetadata[] = [
     nodes: 5, 
     usage: 14, 
     profit: '+3.4%', 
-    description: 'Range-based grid strategy with bounded low/high levels and configurable grid count.', 
+    description: 'Multi-leg range strategy — needs chained strategy execution (not yet supported).', 
     category: 'trading', 
-    chains: ['ethereum', 'base'], 
-    networks: ['Ethereum', 'Base'],
+    chains: [...DISCOVER_STRATEGY_CHAINS], 
+    networks: [...DISCOVER_STRATEGY_NETWORKS],
     activeNetworks: [],
     isActive: false
   },
@@ -99,8 +127,8 @@ export const strategyList: StrategyMetadata[] = [
     profit: '+4.1%', 
     description: 'Slice large orders over time with fixed intervals and slippage controls.', 
     category: 'trading', 
-    chains: ['ethereum'], 
-    networks: ['Ethereum'],
+    chains: [...DISCOVER_STRATEGY_CHAINS], 
+    networks: [...DISCOVER_STRATEGY_NETWORKS],
     activeNetworks: [],
     isActive: false
   },
@@ -112,8 +140,8 @@ export const strategyList: StrategyMetadata[] = [
     profit: '+6.8%', 
     description: 'Automated buy/sell legs across a price range — coming soon to the library.', 
     category: 'trading', 
-    chains: ['ethereum', 'base'], 
-    networks: ['Ethereum', 'Base'],
+    chains: [...DISCOVER_STRATEGY_CHAINS], 
+    networks: [...DISCOVER_STRATEGY_NETWORKS],
     activeNetworks: [],
     isActive: false
   },
@@ -123,12 +151,12 @@ export const strategyList: StrategyMetadata[] = [
     nodes: 4, 
     usage: 7, 
     profit: '+1.9%', 
-    description: 'Protect downside with trigger-based exits and partial position unwinds.', 
+    description: 'Sell when price drops to your stop level — deposit ETH, trigger exit, swap to stablecoin, withdraw.', 
     category: 'trading', 
-    chains: ['ethereum'], 
-    networks: ['Ethereum'],
-    activeNetworks: [],
-    isActive: false
+    chains: [...DISCOVER_STRATEGY_CHAINS], 
+    networks: [...DISCOVER_STRATEGY_NETWORKS],
+    activeNetworks: [DISCOVER_ACTIVE_NETWORK],
+    isActive: true
   },
 ];
 
@@ -324,6 +352,19 @@ const STRATEGY_LIBRARY_SPECS: Record<string, StrategyTemplateSpec> = {
       { source: 'swap', target: 'withdraw' },
     ],
   },
+  'Stop-Loss Shield': {
+    nodes: [
+      { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'ETH', amount: '0.5' } },
+      { id: 'strategy', x: 400, y: 200, data: { label: 'Stop Loss', type: 'strategy', strategy: 'Stop Loss', priceGoal: '2800', positionPct: '100' } },
+      { id: 'swap', x: 700, y: 200, data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'ETH', toCoin: 'USDC', amount: '0.5' } },
+      { id: 'withdraw', x: 1000, y: 200, data: { label: 'Withdraw', type: 'withdraw', chain: 'Sepolia', coin: 'USDC', amount: '', amountSource: 'output', linkedFromNodeId: 'swap', wallet: '0x...' } },
+    ],
+    edges: [
+      { source: 'deposit', target: 'strategy' },
+      { source: 'strategy', target: 'swap' },
+      { source: 'swap', target: 'withdraw' },
+    ],
+  },
 };
 
 function composeStrategyGraph(name: string): { nodes: Node[]; edges: Edge[] } {
@@ -395,6 +436,48 @@ export function formatStrategyGraphForModal(nodes: Node[], edges: Edge[]): { nod
   };
 }
 
+function getTemplateStrategyData(strategyName: string): StrategyData | null {
+  if (strategyName === 'Limit Order') {
+    const { nodes, edges } = createLimitOrderStrategy();
+    return { nodes, edges };
+  }
+  const other = createOtherStrategies();
+  return other[strategyName] ?? null;
+}
+
+/** Load a library strategy graph for Build / modal preview. */
+export function loadStrategyGraphByName(strategyName: string): { nodes: Node[]; edges: Edge[] } {
+  const template = getTemplateStrategyData(strategyName);
+  if (template?.nodes?.length && template?.edges?.length) {
+    return formatStrategyGraphForModal(template.nodes as Node[], template.edges as Edge[]);
+  }
+
+  const discoverStrategiesKey = 'siphon-discover-strategies';
+  const stored = localStorage.getItem(discoverStrategiesKey);
+  if (stored) {
+    try {
+      const strategiesData = JSON.parse(stored) as Record<string, StrategyData>;
+      const strategyData = strategiesData[strategyName];
+      if (strategyData?.nodes?.length && strategyData?.edges?.length) {
+        const formattedNodes = strategyData.nodes.map((node: Node) => ({
+          ...node,
+          type: node.type || 'custom',
+          position: node.position || { x: 0, y: 0 },
+        }));
+        const formattedEdges = strategyData.edges.map((edge: Edge) => ({
+          ...edge,
+          type: edge.type || 'smoothstep',
+        }));
+        return formatStrategyGraphForModal(formattedNodes, formattedEdges);
+      }
+    } catch (error) {
+      console.error('Failed to load strategy data from localStorage:', error);
+    }
+  }
+
+  return { nodes: [], edges: [] };
+}
+
 /**
  * Create Limit Order strategy nodes and edges
  */
@@ -409,6 +492,7 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
   return {
     'DCA Accumulator': { name: 'DCA Accumulator', ...composeStrategyGraph('DCA Accumulator') },
     'Grid Trading': { name: 'Grid Trading', ...composeStrategyGraph('Grid Trading') },
+    'Stop-Loss Shield': { name: 'Stop-Loss Shield', ...composeStrategyGraph('Stop-Loss Shield') },
   };
 };
 
@@ -439,8 +523,8 @@ export const initializeLimitOrderStrategy = (): void => {
       usage: 25,
       profit: '+5.2%',
       category: 'trading',
-      chains: ['base', 'ethereum', 'solana', 'btc'],
-      networks: ['Base', 'Ethereum', 'Solana', 'Bitcoin']
+      chains: [...DISCOVER_STRATEGY_CHAINS],
+      networks: [...DISCOVER_STRATEGY_NETWORKS]
     };
     
     localStorage.setItem(discoverStrategiesKey, JSON.stringify(discoverStrategies));

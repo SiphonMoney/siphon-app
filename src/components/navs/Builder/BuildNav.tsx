@@ -55,9 +55,9 @@ const CATEGORY_META: Record<ActionCategory, { label: string; icon: ReactNode }> 
   },
 };
 
-interface SubmenuState {
-  category: ActionCategory;
-  x: number;
+interface AddMenuState {
+  step: "categories" | "category";
+  category?: ActionCategory;
   walletAction?: WalletAction;
 }
 
@@ -74,6 +74,9 @@ interface BuildNavProps {
   isSimulating?: boolean;
   onOpenRun: () => void;
   setCurrentFileName: (name: string) => void;
+  hideAddControls?: boolean;
+  /** When true, show save / open / run in the mid top bar (expanded chat / no widget band). */
+  expandedToolbar?: boolean;
 }
 
 export default function BuildNav({
@@ -88,9 +91,11 @@ export default function BuildNav({
   onSimulate,
   isSimulating = false,
   onOpenRun,
-  setCurrentFileName
+  setCurrentFileName,
+  hideAddControls = false,
+  expandedToolbar = false,
 }: BuildNavProps) {
-  const [showSubmenu, setShowSubmenu] = useState<SubmenuState | null>(null);
+  const [addMenu, setAddMenu] = useState<AddMenuState | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [sceneName, setSceneName] = useState('');
   const [showSavedScenesDropdown, setShowSavedScenesDropdown] = useState(false);
@@ -99,7 +104,7 @@ export default function BuildNav({
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [mobilePicker, setMobilePicker] = useState<MobilePicker>(null);
   
-  const submenuRef = useRef<HTMLDivElement>(null);
+  const addMenuRef = useRef<HTMLDivElement>(null);
   
   const chains = ['Sepolia', 'Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
   const strategies = ['Limit Order', 'Stop Loss', 'Take Profit'];
@@ -117,16 +122,19 @@ export default function BuildNav({
     const handleOutsidePointerDown = (event: PointerEvent) => {
       const target = event.target as Element | null;
       if (!target) return;
-      if (target.closest('.blueprint-submenu-wrapper')) return;
-      if (target.closest('.blueprint-action-btn')) return;
-      setShowSubmenu(null);
+      if (target.closest(".blueprint-add-menu-anchor")) return;
+      setAddMenu(null);
     };
 
-    if (showSubmenu) {
-      document.addEventListener('pointerdown', handleOutsidePointerDown, true);
-      return () => document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+    if (addMenu) {
+      document.addEventListener("pointerdown", handleOutsidePointerDown, true);
+      return () => document.removeEventListener("pointerdown", handleOutsidePointerDown, true);
     }
-  }, [showSubmenu]);
+  }, [addMenu]);
+
+  useEffect(() => {
+    if (!expandedToolbar) setAddMenu(null);
+  }, [expandedToolbar]);
   
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -142,30 +150,29 @@ export default function BuildNav({
     }
   }, [showSavedScenesDropdown]);
   
-  const onCategoryClick = useCallback((category: ActionCategory, event: React.MouseEvent) => {
+  const addMenuTitle = (menu: AddMenuState) => {
+    if (menu.step === "categories") return "Add node";
+    if (menu.category === "wallet") {
+      if (menu.walletAction === "deposit") return "Deposit from";
+      if (menu.walletAction === "withdraw") return "Withdraw to";
+      return "Wallet";
+    }
+    if (menu.category === "triggers") return "Triggers";
+    if (menu.category === "control") return "Control";
+    return "DeFi";
+  };
+
+  const closeAddMenu = useCallback(() => setAddMenu(null), []);
+
+  const onAddButtonClick = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const actionsButtons = event.currentTarget.closest('.blueprint-actions-buttons');
-    if (actionsButtons) {
-      const buttonsRect = actionsButtons.getBoundingClientRect();
-      setShowSubmenu({
-        category,
-        x: rect.left - buttonsRect.left,
-      });
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      setShowAddModal(true);
+      return;
     }
+    setAddMenu((current) => (current ? null : { step: "categories" }));
   }, []);
-
-  const submenuHeader = (submenu: SubmenuState) => {
-    if (submenu.category === 'wallet') {
-      if (submenu.walletAction === 'deposit') return 'Deposit from:';
-      if (submenu.walletAction === 'withdraw') return 'Withdraw to:';
-      return 'Wallet:';
-    }
-    if (submenu.category === 'triggers') return 'Triggers:';
-    if (submenu.category === 'control') return 'Control:';
-    return 'DeFi:';
-  };
   
   const handleSaveScene = useCallback(() => {
     if (!sceneName.trim()) {
@@ -190,10 +197,186 @@ export default function BuildNav({
     setShowOpenModal(false);
   }, [onLoadScene]);
 
+  const renderAddMenuPanel = () => {
+    if (!addMenu) return null;
+
+    return (
+      <div
+        ref={addMenuRef}
+        className="blueprint-add-menu"
+        role="menu"
+        aria-label="Add node"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="blueprint-add-menu-header">
+          {addMenu.step === "category" ? (
+            <button
+              type="button"
+              className="blueprint-add-menu-back"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (addMenu.category === "wallet" && addMenu.walletAction) {
+                  setAddMenu({ step: "category", category: "wallet" });
+                  return;
+                }
+                setAddMenu({ step: "categories" });
+              }}
+            >
+              ← Back
+            </button>
+          ) : null}
+          <span>{addMenuTitle(addMenu)}</span>
+        </div>
+
+        {addMenu.step === "categories" &&
+          (Object.keys(CATEGORY_META) as ActionCategory[]).map((category) => (
+            <button
+              key={category}
+              type="button"
+              role="menuitem"
+              className={`blueprint-add-menu-item blueprint-add-menu-item--${category}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setAddMenu({ step: "category", category });
+              }}
+            >
+              <span className="blueprint-add-menu-item-icon">{CATEGORY_META[category].icon}</span>
+              <span>{CATEGORY_META[category].label}</span>
+            </button>
+          ))}
+
+        {addMenu.step === "category" && addMenu.category === "wallet" && !addMenu.walletAction && (
+          <>
+            <button
+              type="button"
+              className="blueprint-add-menu-item"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAddMenu({ step: "category", category: "wallet", walletAction: "deposit" });
+              }}
+            >
+              Deposit
+            </button>
+            <button
+              type="button"
+              className="blueprint-add-menu-item"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAddMenu({ step: "category", category: "wallet", walletAction: "withdraw" });
+              }}
+            >
+              Withdraw
+            </button>
+          </>
+        )}
+
+        {addMenu.step === "category" && addMenu.category === "wallet" && addMenu.walletAction &&
+          chains.map((chain) => {
+            const isActive = isChainActive(chain);
+            return (
+              <button
+                key={chain}
+                type="button"
+                className={`blueprint-add-menu-item ${!isActive ? "inactive" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isActive) {
+                    onAddNode(addMenu.walletAction!, chain);
+                    closeAddMenu();
+                  }
+                }}
+                disabled={!isActive}
+              >
+                {chain}
+              </button>
+            );
+          })}
+
+        {addMenu.step === "category" && addMenu.category === "triggers" &&
+          strategies.map((strategy) => (
+            <button
+              key={strategy}
+              type="button"
+              className="blueprint-add-menu-item"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddNode("strategy", strategy);
+                closeAddMenu();
+              }}
+            >
+              {strategy}
+            </button>
+          ))}
+
+        {addMenu.step === "category" && addMenu.category === "control" &&
+          controls.map((control) => (
+            <button
+              key={control}
+              type="button"
+              className="blueprint-add-menu-item"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddNode("control", control);
+                closeAddMenu();
+              }}
+            >
+              {control}
+            </button>
+          ))}
+
+        {addMenu.step === "category" && addMenu.category === "defi" &&
+          defiActions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              className={`blueprint-add-menu-item ${!action.active ? "inactive" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (action.active) {
+                  onAddNode("swap");
+                  closeAddMenu();
+                }
+              }}
+              disabled={!action.active}
+            >
+              {action.label}
+            </button>
+          ))}
+      </div>
+    );
+  };
+
+  const addButton =
+    !hideAddControls && expandedToolbar ? (
+      <div className="blueprint-add-menu-anchor">
+        <button
+          type="button"
+          className={`blueprint-add-btn blueprint-add-btn--labeled${addMenu ? " blueprint-add-btn--active" : ""}`}
+          onClick={onAddButtonClick}
+          title="Add node"
+          aria-label="Add node"
+          aria-expanded={Boolean(addMenu)}
+          aria-haspopup="menu"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span className="blueprint-toolbar-label">Add</span>
+        </button>
+        {renderAddMenuPanel()}
+      </div>
+    ) : null;
+
   return (
     <>
-      <div className="blueprint-top-bar">
-        <div className="blueprint-toolbar-file">
+      <div
+        className={`blueprint-top-bar blueprint-top-bar--mid blueprint-top-bar--expanded${
+          expandedToolbar ? " blueprint-top-bar--visible" : ""
+        }`}
+        aria-hidden={!expandedToolbar}
+      >
+        <div className="blueprint-toolbar-end blueprint-toolbar-end--scene">
           <div className="blueprint-file-group">
             <div className="blueprint-saved-scenes desktop-only">
               <button 
@@ -203,9 +386,10 @@ export default function BuildNav({
                   e.stopPropagation();
                   setShowSavedScenesDropdown(!showSavedScenesDropdown);
                 }}
-                title="Saved Scenes"
+                title="Open scene"
+                aria-label="Open scene"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
               </button>
@@ -247,9 +431,10 @@ export default function BuildNav({
                 e.stopPropagation();
                 setShowOpenModal(true);
               }}
-              title="Open Scene"
+              title="Open scene"
+              aria-label="Open scene"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
               </svg>
             </button>
@@ -264,7 +449,7 @@ export default function BuildNav({
             />
           </div>
           <button 
-            className={`blueprint-save-btn ${saveSuccess ? 'save-success' : ''}`}
+            className={`blueprint-save-btn blueprint-save-btn--labeled ${saveSuccess ? 'save-success' : ''}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -273,14 +458,14 @@ export default function BuildNav({
               }
             }}
             disabled={nodes.length === 0 || saveSuccess}
-            title="Save Scene"
+            title="Save scene"
           >
             {saveSuccess ? (
               <>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="checkmark-icon">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                <span>Saved</span>
+                <span className="blueprint-toolbar-label">Saved</span>
               </>
             ) : (
               <>
@@ -289,187 +474,12 @@ export default function BuildNav({
                   <polyline points="17 21 17 13 7 13 7 21" />
                   <polyline points="7 3 7 8 15 8" />
                 </svg>
-                <span>Save</span>
+                <span className="blueprint-toolbar-label">Save</span>
               </>
             )}
           </button>
           <button 
-            className="blueprint-restart-btn"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (nodes.length > 0) {
-                onRestart();
-              }
-            }}
-            disabled={nodes.length === 0}
-            title="Clear canvas"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
-          </button>
-
-          <div className="blueprint-toolbar-add desktop-only">
-            <span className="blueprint-actions-label">Add</span>
-            <div className="blueprint-actions-buttons">
-              {(Object.keys(CATEGORY_META) as ActionCategory[]).map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  className={`blueprint-action-btn blueprint-action-btn--${category}`}
-                  onClick={(e) => onCategoryClick(category, e)}
-                  title={`Add ${CATEGORY_META[category].label}`}
-                >
-                  <span className="blueprint-action-btn-icon">{CATEGORY_META[category].icon}</span>
-                  <span className="blueprint-action-btn-label">{CATEGORY_META[category].label}</span>
-                </button>
-              ))}
-              {showSubmenu && (
-              <div 
-                ref={submenuRef}
-                className="blueprint-submenu-wrapper"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div 
-                  className="blueprint-submenu"
-                  style={{ left: `${showSubmenu.x}px` }}
-                >
-                  <div className="blueprint-submenu-header">
-                    {showSubmenu.walletAction && (
-                      <button
-                        type="button"
-                        className="blueprint-submenu-back"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSubmenu({ ...showSubmenu, walletAction: undefined });
-                        }}
-                      >
-                        ← Back
-                      </button>
-                    )}
-                    {submenuHeader(showSubmenu)}
-                  </div>
-                  {showSubmenu.category === 'wallet' && !showSubmenu.walletAction && (
-                    <>
-                      <button
-                        className="blueprint-submenu-item"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSubmenu({ ...showSubmenu, walletAction: 'deposit' });
-                        }}
-                      >
-                        Deposit
-                      </button>
-                      <button
-                        className="blueprint-submenu-item"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSubmenu({ ...showSubmenu, walletAction: 'withdraw' });
-                        }}
-                      >
-                        Withdraw
-                      </button>
-                    </>
-                  )}
-                  {showSubmenu.category === 'wallet' && showSubmenu.walletAction && (
-                    chains.map((chain) => {
-                      const isActive = isChainActive(chain);
-                      return (
-                        <button
-                          key={chain}
-                          className={`blueprint-submenu-item ${!isActive ? 'inactive' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isActive) {
-                              onAddNode(showSubmenu.walletAction!, chain);
-                              setShowSubmenu(null);
-                            }
-                          }}
-                          disabled={!isActive}
-                        >
-                          {chain}
-                        </button>
-                      );
-                    })
-                  )}
-                  {showSubmenu.category === 'triggers' && (
-                    strategies.map((strategy) => (
-                      <button
-                        key={strategy}
-                        className="blueprint-submenu-item"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddNode('strategy', strategy);
-                          setShowSubmenu(null);
-                        }}
-                      >
-                        {strategy}
-                      </button>
-                    ))
-                  )}
-                  {showSubmenu.category === 'control' && (
-                    controls.map((control) => (
-                      <button
-                        key={control}
-                        className="blueprint-submenu-item"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddNode('control', control);
-                          setShowSubmenu(null);
-                        }}
-                      >
-                        {control}
-                      </button>
-                    ))
-                  )}
-                  {showSubmenu.category === 'defi' && (
-                    defiActions.map((action) => (
-                      <button
-                        key={action.label}
-                        className={`blueprint-submenu-item ${!action.active ? 'inactive' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (action.active) {
-                            onAddNode('swap');
-                            setShowSubmenu(null);
-                          }
-                        }}
-                        disabled={!action.active}
-                      >
-                        {action.label}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        </div>
-
-        <div className="blueprint-toolbar-spacer desktop-only" aria-hidden="true" />
-
-        <div className="blueprint-toolbar-end">
-          {/* Mobile: Plus button - opens fullscreen modal */}
-          <button 
-            className="blueprint-icon-btn mobile-only"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowAddModal(true);
-            }}
-            title="Add Node"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-          <button 
-            className="blueprint-run-btn desktop-only"
+            className="blueprint-run-btn blueprint-run-btn--labeled"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -478,14 +488,15 @@ export default function BuildNav({
               }
             }}
             disabled={nodes.length === 0}
+            title="Run strategy"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               <polygon points="5 3 19 12 5 21 5 3" />
             </svg>
-            <span>Run</span>
+            <span className="blueprint-toolbar-label">Run</span>
           </button>
           <button
-            className="blueprint-execute-btn"
+            className="blueprint-execute-btn blueprint-execute-btn--labeled"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -494,12 +505,39 @@ export default function BuildNav({
               }
             }}
             disabled={nodes.length === 0 || isSimulating}
+            title="Smoke test strategy"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <polygon points="5 3 19 12 5 21 5 3" />
             </svg>
-            <span>{isSimulating ? "Smoking…" : "Smoke"}</span>
+            <span className="blueprint-toolbar-label">{isSimulating ? "Smoking" : "Smoke"}</span>
           </button>
+          <button
+            className="blueprint-restart-btn blueprint-restart-btn--icon"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (nodes.length > 0) {
+                onRestart();
+              }
+            }}
+            disabled={nodes.length === 0}
+            title="Reset canvas"
+            aria-label="Reset canvas"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M3 21v-5h5" />
+            </svg>
+          </button>
+          {addButton ? (
+            <>
+              <span className="blueprint-toolbar-sep" aria-hidden="true" />
+              {addButton}
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -567,7 +605,7 @@ export default function BuildNav({
       )}
 
       {/* Mobile: Add Node Fullscreen Modal */}
-      {showAddModal && (
+      {!hideAddControls && showAddModal && (
         <div className="blueprint-mobile-modal-overlay" onClick={(e) => {
           e.stopPropagation();
           setShowAddModal(false);

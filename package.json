@@ -21,6 +21,7 @@
     "circomlibjs": "^0.1.7",
     "ethers": "^6.16.0",
     "lightweight-charts": "^5.2.0",
+    "lucide-react": "^1.21.0",
     "next": "15.5.7",
     "react": "19.1.2",
     "react-dom": "19.1.2",
