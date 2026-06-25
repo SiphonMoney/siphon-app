@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Nav from "@/components/theme/Nav";
 import Nexus from "@/components/Nexus";
+import StrategyAutoExecutor from "@/components/StrategyAutoExecutor";
+import TeeClientKeySync from "@/components/TeeClientKeySync";
 import { WalletInfo } from "@/components/extensions/walletManager";
 import styles from "../hero.module.css";
 
@@ -117,6 +119,8 @@ export default function DappPage() {
           }}>
             {/* Content */}
             <Nexus isLoaded={true} />
+            <TeeClientKeySync />
+            <StrategyAutoExecutor />
           </div>
         </div>
       </div>

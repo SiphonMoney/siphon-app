@@ -1,12 +1,13 @@
 // Client-side encrypted strategy submission.
 //
-// Replaces the old server-side flow (POST plaintext bounds -> payload-generator, which
-// generated keys and encrypted them server-side). Now the browser:
-//   1. holds a per-wallet FHE client key (generated + persisted locally, never uploaded),
+// The browser:
+//   1. holds a per-wallet FHE client key (generated + persisted locally),
 //   2. uploads the matching (compressed) server key to the trade-executor once,
-//   3. encrypts the price bounds / condition tree locally,
-//   4. POSTs the encrypted strategy to the trade-executor's /createStrategy.
-// The client (secret) key never leaves the device; the backend only ever sees ciphertext.
+//   3. when TEE autonomous mode is on, uploads the client key to the confidential VM
+//      (via trade-executor proxy) so decryption happens only inside that VM,
+//   4. encrypts price bounds / condition tree locally,
+//   5. POSTs the encrypted strategy to the trade-executor's /createStrategy.
+// Plaintext bounds never leave the browser; the backend only ever sees ciphertext.
 
 import {
   getOrCreateClientKey,
@@ -14,6 +15,7 @@ import {
   encryptPrice,
   encryptConditionTree,
 } from "@/lib/fhe";
+import { ensureClientKeyInDecryptor, isTeeAutonomousMode } from "@/lib/decryptorClient";
 import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
 
 function formatSubmitError(status: number, text: string): string {
@@ -113,6 +115,8 @@ export interface SubmitCallbacks {
   onKeygen?: () => void;
   /** Called when the server key is being uploaded (one-time, ~20MB). */
   onUploadKey?: () => void;
+  /** Called when the client key is being sent to the confidential VM. */
+  onUploadClientKey?: () => void;
   /** Called when bounds are being encrypted. */
   onEncrypt?: () => void;
 }
@@ -150,6 +154,12 @@ export async function submitEncryptedStrategy(
     await ensureServerKeyUploaded(userId, clientKey, cb.onUploadKey);
     m.serverKeyMs = now() - tSrv;
 
+    // 2b. Confidential VM: upload client key so decryption happens only inside the TEE.
+    if (isTeeAutonomousMode()) {
+      console.log("🔐 [TEE] Uploading client key to confidential VM (decrypt happens only there)…");
+      await ensureClientKeyInDecryptor(userId, clientKey, cb.onUploadClientKey);
+    }
+
     // 3. Encrypt bounds / tree locally.
     cb.onEncrypt?.();
     const usingTree = input.condition_tree != null;
@@ -174,7 +184,9 @@ export async function submitEncryptedStrategy(
       : (encrypted_upper_bound?.length ?? 0) + (encrypted_lower_bound?.length ?? 0);
     console.log(
       `🔐 [FHE] ✅ Encrypted in ${m.encryptMs.toFixed(0)}ms → ${ctChars.toLocaleString()} hex chars of ciphertext. ` +
-        `Plaintext bounds NEVER leave the browser; only ciphertext + the server (eval) key are sent.`,
+        (isTeeAutonomousMode()
+          ? "Plaintext bounds stay in the browser; trigger decryption runs only in the confidential VM."
+          : "Plaintext bounds NEVER leave the browser; only ciphertext + the server (eval) key are sent."),
     );
 
     // 4. Build the wire payload — strip plaintext bounds, attach ciphertext. No client key.

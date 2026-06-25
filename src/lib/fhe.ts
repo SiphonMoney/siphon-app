@@ -2,10 +2,8 @@
 // fhe-wasm/pkg. The wasm is byte-compatible with the Rust FHE engine (tfhe 0.5,
 // integer radix, PARAM_MESSAGE_2_CARRY_2_KS_PBS, NUM_BLOCKS=16, bincode 1.3 + hex).
 //
-// The client key is generated and held client-side and MUST NOT be sent to any
-// server — only the serverKey (evaluation key) and the encrypted bounds leave the
-// browser. The clientKey is kept locally so the user can later decrypt the
-// engine-produced trigger result.
+// The client key is generated client-side. With TEE autonomous mode it is also sent (via
+// trade-executor proxy) to the confidential VM for result-bit decryption only.
 
 // Bundler-target wasm-bindgen module lives outside src/. next.config.ts enables
 // asyncWebAssembly + topLevelAwait so webpack can resolve the .wasm import.
