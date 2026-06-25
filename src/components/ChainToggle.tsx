@@ -15,7 +15,7 @@ type ChainToggleProps = {
 };
 
 export default function ChainToggle({ className, badgeClassName = 'strategy-modal-category-badge' }: ChainToggleProps) {
-  const [chainId, setChainId] = useState(84532);
+  const [chainId, setChainId] = useState(8453);
   const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
