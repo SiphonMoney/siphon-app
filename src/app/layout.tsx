@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Source_Code_Pro } from "next/font/google";
+import { AppProviders } from "./providers";
 import "./globals.css";
 
 const sourceCode = Source_Code_Pro({
@@ -38,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${sourceCode.variable} antialiased`}>
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

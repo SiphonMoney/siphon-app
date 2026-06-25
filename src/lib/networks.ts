@@ -21,6 +21,23 @@ export interface NetworkConfig {
 export const NATIVE_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
 export const NETWORKS: Record<number, NetworkConfig> = {
+  8453: {
+    chainId: 8453,
+    hexChainId: '0x2105',
+    name: 'Base',
+    shortName: 'BASE',
+    badgeLabel: 'Base',
+    entrypoint:
+      process.env.NEXT_PUBLIC_ENTRYPOINT_ADDRESS?.trim() ||
+      '0x2f7d237977A86830708D9C872f5F4D3D7A980138',
+    weth: '0x4200000000000000000000000000000000000006',
+    usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    swapRouter: '0x2626664c2603336E57B271c5C0b26F421741e481',
+    rpcUrl: 'https://mainnet.base.org',
+    explorer: 'https://basescan.org',
+    deployBlock: parseInt(process.env.NEXT_PUBLIC_BASE_DEPLOY_BLOCK || '22000000', 10),
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  },
   11155111: {
     chainId: 11155111,
     hexChainId: '0xaa36a7',
@@ -53,9 +70,9 @@ export const NETWORKS: Record<number, NetworkConfig> = {
   },
 };
 
-// Base first so the toggle reads BASE | ETHEREUM left-to-right.
-export const SUPPORTED_CHAIN_IDS = [84532, 11155111];
-export const DEFAULT_CHAIN_ID = 84532; // Base Sepolia
+// Base mainnet — production vaults and entrypoint.
+export const SUPPORTED_CHAIN_IDS = [8453];
+export const DEFAULT_CHAIN_ID = 8453;
 
 const STORAGE_KEY = 'siphon.selectedChainId';
 

@@ -1,10 +1,11 @@
 import type { StrategyKind } from "../lib/strategySpec";
+import { getNetwork, DEFAULT_CHAIN_ID } from "../lib/networks";
 import type { BlockType } from "./types";
 
 export const SUPPORTED_TOKENS = ["ETH", "USDC", "SOL", "USDT", "WBTC", "XMR"] as const;
 export const ACTIVE_TOKENS = ["ETH", "USDC"] as const;
 
-export const DEFAULT_CHAIN = "Sepolia";
+export const DEFAULT_CHAIN = getNetwork(DEFAULT_CHAIN_ID).badgeLabel;
 export const DEFAULT_DEX = "Uniswap";
 
 export const CANONICAL_FLOW: BlockType[] = ["deposit", "strategy", "swap", "withdraw"];

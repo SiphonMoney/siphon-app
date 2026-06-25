@@ -20,7 +20,10 @@ import {
   type StrategyKind,
   type StrategyPayload,
 } from "./strategySpec";
-import { validatePriceConditionTreeRaw } from "../components/navs/Builder/BuildNodes";
+import {
+  resolveLimitOrderConditionTree,
+  validatePriceConditionTreeRaw,
+} from "./limitOrderTree";
 
 export type SimStepStatus = "ok" | "warn" | "error" | "pending";
 
@@ -253,9 +256,12 @@ function resolveGraphContext(
 
   if (strategyKind && strategyFields) {
     if (strategyKind === "Limit Order") {
-      const treeValidation = validatePriceConditionTreeRaw(
-        strategyNode?.data.conditionTree as string | undefined
+      const resolvedTree = resolveLimitOrderConditionTree(
+        strategyNode?.data.conditionTree as string | undefined,
+        strategyNode?.data.priceGoal as string | undefined,
+        strategyNode?.data.side as string | undefined
       );
+      const treeValidation = validatePriceConditionTreeRaw(resolvedTree);
       if (!treeValidation.valid) {
         addIssue(
           issues,
@@ -468,7 +474,7 @@ function validateDeposit(node: Node, issues: SimulationIssue[]): number | null {
     addIssue(
       issues,
       "error",
-      `Deposit coin ${coin} is not active on Sepolia (use ETH or USDC).`,
+      `Deposit coin ${coin} is not active on Base (use ETH or USDC).`,
       node.id
     );
   }
@@ -498,7 +504,7 @@ function validateSwap(
     return null;
   }
   if (!EXECUTABLE_ASSETS.has(from) || !EXECUTABLE_ASSETS.has(to)) {
-    addIssue(issues, "warn", `Swap pair ${from}→${to} may not be supported on Sepolia.`, node.id);
+    addIssue(issues, "warn", `Swap pair ${from}→${to} may not be supported on Base.`, node.id);
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     const available = balance.get(from) ?? 0;

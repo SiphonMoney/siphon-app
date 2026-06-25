@@ -1,93 +1,88 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { BUILDER_LLM_SYSTEM_PROMPT } from "@/builder_agent/builderContext";
+import { resolveMarketPricesUsd, type MarketPricesUsd } from "@/lib/fetchEthUsd";
 
-// Node runtime — needs process.env and the Anthropic SDK (not edge-compatible).
 export const runtime = "nodejs";
 
-/**
- * Agentic LLM chain behind the Builder chat (modeled on the webfour orchestrator):
- * the user's natural-language prompt → Claude with a forced `set_strategy` tool →
- * structured strategy fields the existing flow pipeline (createFlowFromParsed /
- * getNextQuestion) already understands. Replaces the brittle regex parsePrompt brain
- * with real language understanding while reusing the rest of the builder unchanged.
- *
- * The client merges these fields onto the regex parse as a base (so chain/dex
- * defaults survive) and falls back to the regex parser entirely if this route is
- * unavailable (no key) or errors.
- */
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-const SYSTEM_PROMPT = `You are Siphon's strategy builder. The user describes a DeFi trading strategy in natural language; you translate it into structured fields by calling the set_strategy tool.
+/** Default free model on OpenRouter — override with OPENROUTER_MODEL. */
+const DEFAULT_MODEL = "qwen/qwen-2.5-7b-instruct:free";
 
-Siphon strategies run privately on Base/Ethereum via a ZK vault. Supported strategy kinds:
-- "Limit Order": buy or sell when price crosses a single trigger.
-- "Stop Loss": sell when price falls to a trigger.
-- "Take Profit": sell when price rises to a trigger.
-- "Range": grid of buys/sells between a low and high price (needs rangeLow, rangeHigh, gridLevels).
-- "TWAP": split an order into slices over time (needs sliceCount, intervalSeconds).
-- "Buy Dip": accumulate as price drops.
-- "Sell Rally": distribute as price rises.
-- "DCA": recurring buys on a schedule (set useLoop=true with loopIntervalValue/loopIntervalUnit).
+function getApiKey(): string | null {
+  return (
+    process.env.OPENROUTER_API_KEY?.trim() ||
+    process.env.OPENROUTER_KEY?.trim() ||
+    null
+  );
+}
 
-Rules:
-- Only ETH and USDC are active tokens. If the user names another, still capture it in coin/toCoin so the UI can warn.
-- Amounts, prices, and counts are strings (e.g. "0.1", "1500", "5"). Use null for anything the user did not specify — never guess values.
-- includeSwap=true when the strategy converts one token to another. includeWithdraw=true when funds should be sent to a wallet. useLoop=true only for recurring/DCA/"every N hours" strategies.
-- side is "buy" or "sell" (or null if not applicable/unclear).
-- Always provide a short, friendly "message": confirm what you built in one sentence, and if a required field is missing, ask for exactly that one thing.
+function getModel(): string {
+  return process.env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL;
+}
 
-Call set_strategy exactly once.`;
+function extractJson(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) {
+      try {
+        return JSON.parse(fenced[1].trim()) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
 
-const SET_STRATEGY_TOOL: Anthropic.Tool = {
-  name: "set_strategy",
-  description: "Record the structured trading strategy parsed from the user's request.",
-  input_schema: {
-    type: "object",
-    properties: {
-      message: { type: "string", description: "One-sentence confirmation, or a question for the single missing required field." },
-      strategy: {
-        type: "string",
-        enum: ["Limit Order", "Stop Loss", "Take Profit", "Range", "TWAP", "Buy Dip", "Sell Rally", "DCA"],
-        description: "The strategy kind.",
-      },
-      side: { type: ["string", "null"], enum: ["buy", "sell", null], description: "Trade direction." },
-      coin: { type: ["string", "null"], description: "Input token symbol, e.g. ETH or USDC." },
-      toCoin: { type: ["string", "null"], description: "Output token symbol for swaps." },
-      amount: { type: ["string", "null"], description: "Amount of the input token, as a string." },
-      priceGoal: { type: ["string", "null"], description: "Trigger price in USD, as a string." },
-      rangeLow: { type: ["string", "null"], description: "Range low price (Range strategy)." },
-      rangeHigh: { type: ["string", "null"], description: "Range high price (Range strategy)." },
-      gridLevels: { type: ["string", "null"], description: "Number of grid levels (Range strategy)." },
-      sliceCount: { type: ["string", "null"], description: "Number of slices (TWAP)." },
-      intervalSeconds: { type: ["string", "null"], description: "Seconds between slices (TWAP)." },
-      includeSwap: { type: "boolean", description: "True if the strategy swaps one token for another." },
-      includeWithdraw: { type: "boolean", description: "True if funds are withdrawn to a wallet." },
-      useLoop: { type: "boolean", description: "True for recurring/DCA strategies." },
-      loopIntervalValue: { type: ["string", "null"], description: "Loop interval amount (recurring)." },
-      loopIntervalUnit: {
-        type: ["string", "null"],
-        enum: ["seconds", "minutes", "hours", "blocks", null],
-        description: "Loop interval unit (recurring).",
-      },
-      wallet: { type: ["string", "null"], description: "Recipient wallet address for withdrawals." },
-    },
-    required: ["message"],
-    additionalProperties: false,
-  },
-};
+function buildSystemPrompt(
+  currentState?: Record<string, unknown>,
+  marketPrices?: MarketPricesUsd
+): string {
+  const parts = [BUILDER_LLM_SYSTEM_PROMPT];
 
-let _client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  return _client;
+  if (marketPrices?.ETH != null && marketPrices.ETH > 0) {
+    parts.push(`
+<market_prices_usd>
+${JSON.stringify(marketPrices, null, 2)}
+</market_prices_usd>`);
+  }
+
+  if (currentState && Object.keys(currentState).length > 0) {
+    parts.push(`
+<current_flow_state>
+${JSON.stringify(currentState, null, 2)}
+</current_flow_state>`);
+  }
+
+  return parts.join("\n");
 }
 
 export async function POST(req: NextRequest) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    // Signal the client to fall back to the regex parser.
+  const apiKey = getApiKey();
+  if (!apiKey) {
     return NextResponse.json({ error: "llm_unconfigured" }, { status: 501 });
   }
 
-  let body: { prompt?: string; transcript?: string[] };
+  let body: {
+    prompt?: string;
+    transcript?: string[];
+    chatHistory?: Array<{ role?: string; content?: string }>;
+    currentState?: Record<string, unknown>;
+    marketPrices?: Partial<{ ETH: number | null; USDC: number }>;
+  };
   try {
     body = await req.json();
   } catch {
@@ -99,29 +94,80 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "prompt is required" }, { status: 400 });
   }
 
-  const history = Array.isArray(body.transcript) ? body.transcript.slice(-6) : [];
-  const priorContext = history.length
-    ? `<conversation_so_far>\n${history.join("\n")}\n</conversation_so_far>\n\n`
-    : "";
+  const chatHistory = Array.isArray(body.chatHistory)
+    ? body.chatHistory
+        .filter(
+          (turn): turn is { role: "user" | "assistant"; content: string } =>
+            (turn.role === "user" || turn.role === "assistant") &&
+            typeof turn.content === "string" &&
+            turn.content.trim() !== ""
+        )
+        .slice(-10)
+    : [];
+
+  const legacyTranscript = Array.isArray(body.transcript) ? body.transcript.slice(-6) : [];
+  const fallbackHistory =
+    chatHistory.length > 0
+      ? chatHistory
+      : legacyTranscript.map((content) => ({ role: "user" as const, content }));
+
+  const currentState =
+    body.currentState && typeof body.currentState === "object" ? body.currentState : undefined;
+
+  const marketPrices = await resolveMarketPricesUsd(body.marketPrices);
+
+  const apiMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: buildSystemPrompt(currentState, marketPrices) },
+    ...fallbackHistory.map((turn) => ({
+      role: turn.role,
+      content: turn.content,
+    })),
+  ];
+
+  if (
+    fallbackHistory.length === 0 ||
+    fallbackHistory[fallbackHistory.length - 1]?.content.trim() !== prompt
+  ) {
+    apiMessages.push({ role: "user", content: prompt });
+  }
 
   try {
-    const response = await getClient().messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      tools: [SET_STRATEGY_TOOL],
-      tool_choice: { type: "tool", name: "set_strategy" },
-      messages: [{ role: "user", content: `${priorContext}${prompt}` }],
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.OPENROUTER_SITE_URL?.trim() || "https://siphon.money",
+        "X-Title": process.env.OPENROUTER_APP_NAME?.trim() || "Siphon Builder",
+      },
+      body: JSON.stringify({
+        model: getModel(),
+        max_tokens: 1024,
+        temperature: 0.2,
+        messages: apiMessages,
+      }),
     });
 
-    const toolUse = response.content.find(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "set_strategy",
-    );
-    if (!toolUse) {
-      return NextResponse.json({ error: "no_tool_use" }, { status: 502 });
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[builder-agent] OpenRouter error:", response.status, errText);
+      return NextResponse.json({ error: "openrouter_error" }, { status: 502 });
     }
 
-    const input = toolUse.input as Record<string, unknown>;
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) {
+      return NextResponse.json({ error: "empty_response" }, { status: 502 });
+    }
+
+    const input = extractJson(content);
+    if (!input) {
+      console.error("[builder-agent] Failed to parse JSON:", content.slice(0, 400));
+      return NextResponse.json({ error: "invalid_llm_json" }, { status: 502 });
+    }
+
     const { message, ...parsed } = input;
     return NextResponse.json({
       parsed,

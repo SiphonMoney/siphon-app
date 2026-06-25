@@ -18,7 +18,7 @@ export function buildRunModeValuesFromNodes(nodes: Node[]): Record<string, Recor
     const step: Record<string, string> = {};
 
     if (type === "deposit") {
-      setIfPresent(step, "chain", d.chain || "Sepolia");
+      setIfPresent(step, "chain", d.chain || "Base");
       setIfPresent(step, "tokenA", d.coin);
       setIfPresent(step, "amount", d.amount);
     } else if (type === "swap") {
@@ -42,7 +42,7 @@ export function buildRunModeValuesFromNodes(nodes: Node[]): Record<string, Recor
         setIfPresent(step, field, d[field]);
       }
     } else if (type === "withdraw") {
-      setIfPresent(step, "chain", d.chain || "Sepolia");
+      setIfPresent(step, "chain", d.chain || "Base");
       setIfPresent(step, "coin", d.coin);
       setIfPresent(step, "amount", d.amount);
       setIfPresent(step, "address", d.wallet);

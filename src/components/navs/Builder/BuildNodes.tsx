@@ -6,38 +6,15 @@ import { simHighlightClass } from "./simHighlight";
 import type { SimHighlightStatus } from "./useCanvasSimulation";
 import "./BuildNodes.css";
 
-export interface ConditionNode {
-  op: "LEAF" | "AND" | "OR" | "NOT";
-  asset?: string;
-  condition?: "GTE" | "LTE";
-  bound?: number;
-  price_feed_id?: string;
-  conditions?: ConditionNode[];
-}
-
-export const PYTH_PRICE_FEED_IDS: Record<string, string> = {
-  SOL: "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
-  ETH: "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
-  BTC: "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
-  USDC: "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
-};
-
-export function createDefaultPriceConditionTree(): ConditionNode {
-  return {
-    op: "LEAF",
-    asset: "ETH",
-    condition: "LTE",
-    bound: 1500,
-    price_feed_id: PYTH_PRICE_FEED_IDS.ETH,
-  };
-}
-
-export function createDefaultLimitOrderTree(): ConditionNode {
-  return {
-    op: "AND",
-    conditions: [createDefaultPriceConditionTree()],
-  };
-}
+import {
+  createDefaultLimitOrderTree,
+  createDefaultPriceConditionTree,
+  parseConditionTree,
+  validatePriceConditionTree,
+  validatePriceConditionTreeRaw,
+  type ConditionNode,
+  PYTH_PRICE_FEED_IDS,
+} from "../../../lib/limitOrderTree";
 
 export type LimitOrderSegment =
   | { type: "and"; leaves: ConditionNode[] }
@@ -74,6 +51,10 @@ export function parseLimitOrderSegments(raw: unknown): LimitOrderSegment[] {
   return [{ type: "and", leaves: [createDefaultPriceConditionTree()] }];
 }
 
+export { validatePriceConditionTreeRaw, validatePriceConditionTree, parseConditionTree };
+export type { ConditionNode };
+export { PYTH_PRICE_FEED_IDS, createDefaultLimitOrderTree, createDefaultPriceConditionTree };
+
 export function segmentsToConditionTree(segments: LimitOrderSegment[]): ConditionNode {
   if (!segments.length) {
     return createDefaultLimitOrderTree();
@@ -89,80 +70,13 @@ export function segmentsToConditionTree(segments: LimitOrderSegment[]): Conditio
   };
 }
 
-export function parseConditionTree(raw: unknown): ConditionNode {
-  if (typeof raw === "string") {
-    try {
-      return parseConditionTree(JSON.parse(raw));
-    } catch {
-      return createDefaultPriceConditionTree();
-    }
-  }
-  if (raw && typeof raw === "object" && "op" in raw) {
-    return raw as ConditionNode;
-  }
-  return createDefaultPriceConditionTree();
-}
-
-export function validatePriceConditionTree(
-  tree: ConditionNode
-): { valid: boolean; error?: string } {
-  if (tree.op === "LEAF") {
-    const bound = Number(tree.bound);
-    if (!tree.asset) return { valid: false, error: "Limit Order needs an asset for each price condition." };
-    if (!Number.isFinite(bound) || bound <= 0) {
-      return { valid: false, error: "Limit Order needs a valid price on each condition." };
-    }
-    return { valid: true };
-  }
-
-  if (tree.op === "AND" || tree.op === "OR") {
-    const children = tree.conditions ?? [];
-    if (children.length === 0) {
-      return {
-        valid: false,
-        error: `Limit Order ${tree.op} group needs at least one price condition.`,
-      };
-    }
-    for (const child of children) {
-      if (tree.op === "OR" && child.op === "AND") {
-        const leaves = extractPriceLeaves(child);
-        if (!leaves.length) {
-          return { valid: false, error: "Limit Order AND group needs at least one price condition." };
-        }
-        for (const leaf of leaves) {
-          const leafResult = validatePriceConditionTree(leaf);
-          if (!leafResult.valid) return leafResult;
-        }
-        continue;
-      }
-      if (child.op !== "LEAF") {
-        return { valid: false, error: "Limit Order has an unsupported condition type." };
-      }
-      const childResult = validatePriceConditionTree(child);
-      if (!childResult.valid) return childResult;
-    }
-    return { valid: true };
-  }
-
-  return { valid: false, error: "Limit Order has an unsupported condition type." };
-}
-
-export function validatePriceConditionTreeRaw(
-  raw: string | null | undefined
-): { valid: boolean; error?: string } {
-  if (!raw?.trim()) {
-    return { valid: false, error: "Limit Order needs at least one price condition." };
-  }
-  return validatePriceConditionTree(parseConditionTree(raw));
-}
-
-// Testnet-first: this app runs on Ethereum Sepolia (11155111) and Base Sepolia (84532).
-// "Ethereum"/"Sepolia" → Eth Sepolia, "Base" → Base Sepolia.
+// Production: Base mainnet (8453). Legacy testnet labels map for saved scenes.
 export const CHAIN_LABEL_TO_ID: Record<string, string> = {
+  Base: "8453",
+  "Base Mainnet": "8453",
   Sepolia: "11155111",
   Ethereum: "11155111",
   "Ethereum Sepolia": "11155111",
-  Base: "84532",
   "Base Sepolia": "84532",
   Arbitrum: "42161",
   Optimism: "10",
@@ -171,13 +85,13 @@ export const CHAIN_LABEL_TO_ID: Record<string, string> = {
 };
 
 export function chainLabelToId(chain?: string | null): string {
-  if (!chain) return "84532";
+  if (!chain) return "8453";
   const normalized = chain.trim();
   if (CHAIN_LABEL_TO_ID[normalized]) return CHAIN_LABEL_TO_ID[normalized];
   const ci = Object.keys(CHAIN_LABEL_TO_ID).find(k => k.toLowerCase() === normalized.toLowerCase());
   if (ci) return CHAIN_LABEL_TO_ID[ci];
   if (normalized === "solana" || /^\d+$/.test(normalized)) return normalized;
-  return "84532";
+  return "8453";
 }
 
 export function validateRecipientAddress(address: string, toChain: string): string | null {

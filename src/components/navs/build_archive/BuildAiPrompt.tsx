@@ -27,7 +27,7 @@ export default function BuildAiPrompt({
   isLoading = false,
   disabled = false,
   className = "",
-  disclaimer = "AI can make mistakes. Use Smoke to validate, then review before committing funds.",
+  disclaimer = "AI can make mistakes. Review before committing funds.",
   botMessage = null,
 }: BuildAiPromptProps) {
   const [internalValue, setInternalValue] = useState(defaultValue);

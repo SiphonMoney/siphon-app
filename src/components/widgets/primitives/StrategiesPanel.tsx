@@ -1,23 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { strategyList, type StrategyMetadata } from "@/components/navs/Discover/strategies";
+import type { SizePreset } from "@/components/widgets/config/grid";
+import { SIZE_TO_GRID } from "@/components/widgets/config/grid";
 
-type StrategyFilter = "all" | "active" | "trading";
-
-const FILTERS: { id: StrategyFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "active", label: "Live" },
-  { id: "trading", label: "Trading" },
-];
-
-function filterStrategies(list: StrategyMetadata[], filter: StrategyFilter) {
-  if (filter === "active") return list.filter((s) => s.isActive);
-  if (filter === "trading") return list.filter((s) => s.category === "trading");
-  return list;
-}
-
-function StrategyCard({ strategy }: { strategy: StrategyMetadata }) {
+function StrategyCard({ strategy, compact }: { strategy: StrategyMetadata; compact?: boolean }) {
   const load = () => {
     if (!strategy.isActive) return;
     window.dispatchEvent(
@@ -28,7 +15,7 @@ function StrategyCard({ strategy }: { strategy: StrategyMetadata }) {
   return (
     <button
       type="button"
-      className={`build-strategy-card ${strategy.isActive ? "" : "build-strategy-card--soon"}`}
+      className={`build-strategy-card ${compact ? "build-strategy-card--compact" : ""} ${strategy.isActive ? "" : "build-strategy-card--soon"}`}
       onClick={load}
       disabled={!strategy.isActive}
       title={strategy.isActive ? `Load ${strategy.name}` : "Coming soon"}
@@ -38,7 +25,7 @@ function StrategyCard({ strategy }: { strategy: StrategyMetadata }) {
         {!strategy.isActive ? <span className="build-strategy-soon">Soon</span> : null}
       </div>
       <p className="build-strategy-name">{strategy.name}</p>
-      <p className="build-strategy-desc">{strategy.description}</p>
+      {!compact ? <p className="build-strategy-desc">{strategy.description}</p> : null}
       <div className="build-strategy-meta">
         <span>{strategy.nodes} nodes</span>
         <span className="build-strategy-profit">{strategy.profit}</span>
@@ -47,35 +34,34 @@ function StrategyCard({ strategy }: { strategy: StrategyMetadata }) {
   );
 }
 
-export function StrategiesPanel({ sectionId }: { sectionId?: string }) {
-  const [filter, setFilter] = useState<StrategyFilter>("all");
-  const items = useMemo(() => filterStrategies(strategyList, filter), [filter]);
+function gridColumnsForSize(size: SizePreset): 1 | 2 {
+  const { col, row } = SIZE_TO_GRID[size];
+  return col >= 2 && row >= 2 ? 2 : 1;
+}
+
+export function StrategiesPanel({
+  sectionId,
+  size = "2x2",
+}: {
+  sectionId?: string;
+  size?: SizePreset;
+}) {
+  const columns = gridColumnsForSize(size);
+  const compact = columns === 2;
 
   return (
     <div {...(sectionId ? { id: sectionId } : {})} className="widget-hover widget-card">
-      <div className="widget-card-header">
+      <div className="widget-card-header widget-card-header--compact">
         <div>
           <p className="widget-card-title">Strategies</p>
           <p className="widget-card-subtitle">Library — tap to load on canvas</p>
         </div>
-        <div className="widget-tabs" role="tablist">
-          {FILTERS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={filter === t.id}
-              onClick={() => setFilter(t.id)}
-              className={`widget-tab ${filter === t.id ? "widget-tab--active" : ""}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
       </div>
-      <div className="widget-strategies-list scrollbar-hide">
-        {items.map((s) => (
-          <StrategyCard key={s.name} strategy={s} />
+      <div
+        className={`widget-strategies-list scrollbar-hide widget-strategies-list--cols-${columns}`}
+      >
+        {strategyList.map((s) => (
+          <StrategyCard key={s.name} strategy={s} compact={compact} />
         ))}
       </div>
     </div>

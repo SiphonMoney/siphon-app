@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   SUPPORTED_CHAIN_IDS,
+  DEFAULT_CHAIN_ID,
   getNetwork,
   getSelectedChainId,
   installWalletChainSync,
@@ -15,7 +16,7 @@ type ChainToggleProps = {
 };
 
 export default function ChainToggle({ className, badgeClassName = 'strategy-modal-category-badge' }: ChainToggleProps) {
-  const [chainId, setChainId] = useState(84532);
+  const [chainId, setChainId] = useState(DEFAULT_CHAIN_ID);
   const [switching, setSwitching] = useState(false);
 
   useEffect(() => {

@@ -130,7 +130,7 @@ export async function tryAuthorizeStrategy(
           const eth = j?.prices?.ETH ?? j?.price;
           if (eth) {
             priceHint =
-              ` Oracle ETH/USD ≈ $${Number(eth).toFixed(2)} (Pyth — same on Base Sepolia & Sepolia).` +
+              ` Oracle ETH/USD ≈ $${Number(eth).toFixed(2)} (Pyth on Base).` +
               ` LIMIT SELL fires when 1 ETH ≥ your trigger price (not USDC output amount).`;
           }
         }

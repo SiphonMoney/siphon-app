@@ -25,6 +25,7 @@ import {
   DashboardCustomizeProvider,
 } from "@/components/landing/dashboard-customize-context";
 import { BuildWidgetSection } from "@/components/landing/BuildWidgetSection";
+import { RunningStrategiesProvider } from "@/components/widgets/running-strategies-context";
 import BuildPageFooter from "./BuildPageFooter";
 import BuildNodeContextMenu from "./BuildNodeContextMenu";
 import BuildSimToast from "./BuildSimToast";
@@ -65,12 +66,17 @@ import {
   resolveWithdrawAmount,
   syncLinkedWithdrawFromSwap,
 } from "../../../lib/graphLinks";
-import { processBuilderTurnLLM } from "../../../builder_agent";
+import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
+import { useEthPrice } from "@/lib/useEthPrice";
 import { getSelectedChainId, getTokens } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
-import { validateRecipientAddress, chainLabelToId, validatePriceConditionTreeRaw, createDefaultLimitOrderTree } from "./BuildNodes";
+import { validateRecipientAddress, chainLabelToId, createDefaultLimitOrderTree } from "./BuildNodes";
+import {
+  resolveLimitOrderConditionTree,
+  validatePriceConditionTreeRaw,
+} from "@/lib/limitOrderTree";
 
 interface BuildProps {
   isLoaded?: boolean;
@@ -270,6 +276,7 @@ export default function Build({
   const [chatFocus, setChatFocus] = useState(false);
   const [widgetsVisible, setWidgetsVisible] = useState(true);
   const [builderPrompt, setBuilderPrompt] = useState("");
+  const ethUsd = useEthPrice();
   const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
 
   useEffect(() => {
@@ -698,14 +705,18 @@ export default function Build({
     let conditionTree = null;
 
     if (useTree) {
-      const rawTree = strategyNode.data.conditionTree as string;
+      const rawTree = resolveLimitOrderConditionTree(
+        strategyNode.data.conditionTree as string,
+        strategyNode.data.priceGoal as string,
+        strategyNode.data.side as string
+      );
       const treeValidation = validatePriceConditionTreeRaw(rawTree);
       if (!treeValidation.valid) {
         alert(treeValidation.error ?? 'Please build your Limit Order price conditions.');
         return;
       }
       try {
-        conditionTree = JSON.parse(rawTree);
+        conditionTree = JSON.parse(rawTree!);
       } catch {
         alert('Invalid price condition tree.'); return;
       }
@@ -734,7 +745,7 @@ export default function Build({
     const TOKEN_CONFIG: Record<string, TokenInfo> = {
       ETH:  { symbol: 'ETH',  decimals: 18, address: chainTokens.ETH.address },
       USDC: { symbol: 'USDC', decimals: 6,  address: chainTokens.USDC.address },
-      // Legacy testnet-only assets (Ethereum Sepolia); not part of the core loop.
+      // Legacy inactive assets; not part of the core Base mainnet loop.
       WBTC: { symbol: 'WBTC', decimals: 8,  address: '0x92f3B59a79bFf5dc60c0d59eA13a44D082B2bdFC' },
       USDT: { symbol: 'USDT', decimals: 6,  address: '0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0' },
     };
@@ -892,10 +903,21 @@ export default function Build({
       role: "user",
       content: prompt,
     };
+    const chatHistory = [
+      ...builderMessages.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user" as const, content: prompt },
+    ];
     setBuilderMessages((prev) => [...prev, userMsg]);
     setIsBuilderAgentLoading(true);
     try {
-      const result = await processBuilderTurnLLM(prompt, builderSession, nodes, edges);
+      const result = await processBuilderTurn(
+        prompt,
+        builderSession,
+        nodes,
+        edges,
+        chatHistory,
+        { ethUsd }
+      );
       setNodes(result.nodes);
       setEdges(result.edges);
       setBuilderSession(result.session);
@@ -915,7 +937,7 @@ export default function Build({
     } finally {
       setIsBuilderAgentLoading(false);
     }
-  }, [builderSession, nodes, edges, setNodes, setEdges]);
+  }, [builderSession, builderMessages, nodes, edges, ethUsd, setNodes, setEdges]);
 
   const buildStrategyName = useMemo(
     () => currentFileName.replace(/\.io$/i, '') || 'untitled',
@@ -949,9 +971,9 @@ export default function Build({
     profit: '+0.00%',
     description: getStrategyDescription(nodes),
     category: 'custom',
-    chains: ['ethereum'],
-    networks: ['Sepolia'],
-    activeNetworks: ['Sepolia'],
+    chains: ['base'],
+    networks: ['Base'],
+    activeNetworks: ['Base'],
     isActive: true,
   }), [buildStrategyName, nodes, edges, getStrategyDescription]);
 
@@ -1019,6 +1041,7 @@ export default function Build({
             />
             </div>
 
+            <RunningStrategiesProvider runningStrategies={runningStrategies ?? new Map()}>
             <DashboardCustomizeProvider>
             <div className={`build-page-layout ${chatFocus && !widgetsVisible ? "build-page-layout--focus" : ""}`}>
               <div className="build-page-content">
@@ -1044,6 +1067,7 @@ export default function Build({
               </div>
             </div>
             </DashboardCustomizeProvider>
+            </RunningStrategiesProvider>
 
             {widgetsVisible && <BuildPageFooter />}
 

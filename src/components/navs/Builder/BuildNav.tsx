@@ -106,7 +106,7 @@ export default function BuildNav({
   
   const addMenuRef = useRef<HTMLDivElement>(null);
   
-  const chains = ['Sepolia', 'Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
+  const chains = ['Base', 'Solana', 'Zcash', 'Bitcoin', 'XMR', 'Ethereum'];
   const strategies = ['Limit Order', 'Stop Loss', 'Take Profit'];
   const controls = ['Schedule', 'Loop'];
   const defiActions = [
@@ -116,7 +116,7 @@ export default function BuildNav({
   ];
   
   const isChainActive = (chain: string) => chain === activeChain;
-  const activeChain = 'Sepolia';
+  const activeChain = 'Base';
   
   useEffect(() => {
     const handleOutsidePointerDown = (event: PointerEvent) => {
@@ -351,7 +351,7 @@ export default function BuildNav({
       <div className="blueprint-add-menu-anchor">
         <button
           type="button"
-          className={`blueprint-add-btn blueprint-add-btn--labeled${addMenu ? " blueprint-add-btn--active" : ""}`}
+          className={`blueprint-add-btn blueprint-add-btn--icon${addMenu ? " blueprint-add-btn--active" : ""}`}
           onClick={onAddButtonClick}
           title="Add node"
           aria-label="Add node"
@@ -362,7 +362,6 @@ export default function BuildNav({
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          <span className="blueprint-toolbar-label">Add</span>
         </button>
         {renderAddMenuPanel()}
       </div>

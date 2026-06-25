@@ -48,6 +48,16 @@
       "component": "MarketVolumeWidget",
       "description": "Aggregate 24h trading volume across tracked markets."
     },
+    "dominance": {
+      "label": "Dominance",
+      "hint": "BTC & ETH share",
+      "tier": "starter",
+      "defaultSize": "1x1",
+      "allowedSizes": ["1x1", "1x2", "2x2"],
+      "resizable": false,
+      "component": "DominanceWidget",
+      "description": "Bitcoin and Ethereum market cap dominance."
+    },
     "news": {
       "label": "News",
       "hint": "Headlines",
@@ -62,11 +72,21 @@
       "label": "Swap",
       "hint": "Quick token swap",
       "tier": "core",
-      "defaultSize": "2x2",
-      "allowedSizes": ["2x2", "4x2"],
+      "defaultSize": "1x1",
+      "allowedSizes": ["1x1", "1x2", "2x2", "4x2"],
       "resizable": true,
       "component": "SwapPanel",
-      "description": "Pay / receive swap UI. Default 2×2."
+      "description": "Compact pay / receive swap. Default 1×1 glance tile."
+    },
+    "runs": {
+      "label": "Runs",
+      "hint": "Active strategies",
+      "tier": "core",
+      "defaultSize": "1x1",
+      "allowedSizes": ["1x1", "1x2", "2x1", "2x2"],
+      "resizable": true,
+      "component": "RunsPanel",
+      "description": "Live running strategies with elapsed time."
     },
     "coins": {
       "label": "Coins",
@@ -83,7 +103,7 @@
       "hint": "Strategy library",
       "tier": "core",
       "defaultSize": "2x2",
-      "allowedSizes": ["2x2", "4x2", "6x2"],
+      "allowedSizes": ["1x2", "2x2", "4x2", "6x2"],
       "resizable": true,
       "component": "StrategiesPanel",
       "description": "Browse and load strategy templates into the builder."
@@ -97,37 +117,18 @@
       "resizable": true,
       "component": "WalletPanel",
       "description": "Connected wallet with ETH / USDC vault balances."
-    },
-    "stocks": {
-      "label": "Stocks",
-      "hint": "US equities",
-      "tier": "optional",
-      "defaultSize": "2x2",
-      "allowedSizes": ["2x2", "4x2"],
-      "resizable": true,
-      "component": "StocksPanel",
-      "description": "US equities glance (optional add-on)."
-    },
-    "learn": {
-      "label": "Learn",
-      "hint": "Modules & primers",
-      "tier": "optional",
-      "defaultSize": "2x2",
-      "allowedSizes": ["2x2", "4x2"],
-      "resizable": true,
-      "component": "PlaceholderWidget",
-      "description": "Education modules — placeholder on build page."
     }
   },
   "defaultLayout": [
-    { "kind": "swap", "size": "2x2" },
     { "kind": "fear-greed", "size": "1x1" },
     { "kind": "market-cap", "size": "1x1" },
     { "kind": "market-volume", "size": "1x1" },
+    { "kind": "dominance", "size": "1x1" },
     { "kind": "news", "size": "2x1" },
     { "kind": "coins", "size": "2x2", "anchorId": "movers" },
     { "kind": "opportunities", "size": "2x2", "anchorId": "strategies" },
-    { "kind": "wallet", "size": "2x2", "anchorId": "wallet" }
+    { "kind": "swap", "size": "1x1" },
+    { "kind": "runs", "size": "1x1" }
   ],
-  "starterKinds": ["fear-greed", "market-cap", "market-volume"]
+  "starterKinds": ["fear-greed", "market-cap", "market-volume", "dominance"]
 }

@@ -77,7 +77,7 @@ export default function BuildNodeContextMenu({
             className="build-node-context-menu-item"
             role="menuitem"
             onClick={() => {
-              onAddInside("withdraw", "Sepolia");
+              onAddInside("withdraw", "Base");
               onClose();
             }}
           >

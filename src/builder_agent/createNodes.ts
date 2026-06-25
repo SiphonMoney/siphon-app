@@ -1,26 +1,20 @@
 import { Position, type Edge, type Node } from "@xyflow/react";
 import { layoutStrategyNodes, BUILDER_NODE_ROW_Y } from "../lib/builderLayout";
 import { applySwapToWithdrawLink } from "../lib/graphLinks";
+import { getTokenPrices } from "../lib/tokenPrices";
 import {
   REPEAT_BODY_OFFSET_X,
   REPEAT_BODY_OFFSET_Y,
   REPEAT_GROUP_DEFAULT_SIZE,
 } from "../lib/repeatGraph";
 import { defaultSideForKind } from "../lib/strategySpec";
+import { applyLimitOrderTreeFields } from "../lib/limitOrderTree";
 import type { BlockNodeData, BlockType, ParsedPrompt } from "./types";
 
-const TOKEN_PRICES: Record<string, number> = {
-  SOL: 192,
-  USDC: 1,
-  USDT: 1,
-  WBTC: 45000,
-  XMR: 120,
-  ETH: 3200,
-};
-
 function estimateToAmount(amount: string, from: string, to: string): string | null {
-  const pFrom = TOKEN_PRICES[from] ?? 0;
-  const pTo = TOKEN_PRICES[to] ?? 0;
+  const prices = getTokenPrices();
+  const pFrom = prices[from] ?? 0;
+  const pTo = prices[to] ?? 0;
   if (!pFrom || !pTo) return null;
   return (parseFloat(amount) * (pFrom / pTo)).toFixed(4);
 }
@@ -43,11 +37,76 @@ function blockStyle(type: BlockType): Node["style"] {
   };
 }
 
+export type FlowSegment = BlockType | "schedule";
+
+export function isScheduleControlNode(node: Node): boolean {
+  return (
+    node.data?.type === "control" &&
+    String(node.data?.controlKind || "").toLowerCase() === "schedule"
+  );
+}
+
 export function getDesiredBlockTypes(parsed: ParsedPrompt): BlockType[] {
   const types: BlockType[] = ["deposit", "strategy"];
   if (parsed.includeSwap) types.push("swap");
   if (parsed.includeWithdraw) types.push("withdraw");
   return types;
+}
+
+/** Ordered canvas segments for single-shot flows (non-loop). */
+export function getDesiredFlowSegments(parsed: ParsedPrompt): FlowSegment[] {
+  const segments: FlowSegment[] = ["deposit"];
+  if (parsed.includeSchedule) segments.push("schedule");
+  segments.push("strategy");
+  if (parsed.includeSwap) segments.push("swap");
+  if (parsed.includeWithdraw) segments.push("withdraw");
+  return segments;
+}
+
+export function createScheduleNode(
+  parsed: ParsedPrompt,
+  position: { x: number; y: number },
+  id: string
+): Node {
+  return {
+    id,
+    type: "custom",
+    position,
+    data: {
+      label: "Schedule",
+      type: "control",
+      controlKind: "schedule",
+      scheduleValue: parsed.scheduleValue ?? "1",
+      scheduleUnit: parsed.scheduleUnit ?? "hours",
+      chain: null,
+      dex: null,
+      strategy: null,
+      coin: null,
+      amount: null,
+      toCoin: null,
+      toAmount: null,
+      wallet: null,
+      side: null,
+      priceGoal: null,
+      rangeLow: null,
+      rangeHigh: null,
+      gridLevels: null,
+      sliceCount: null,
+      intervalSeconds: null,
+      maxSlippageBps: null,
+      intervals: null,
+    },
+    style: blockStyle("strategy"),
+    draggable: true,
+    selectable: true,
+    connectable: true,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+  };
+}
+
+function swapAmountForParsed(parsed: ParsedPrompt): string | null {
+  return parsed.swapAmount ?? parsed.amount;
 }
 
 export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNodeData {
@@ -76,13 +135,14 @@ export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNode
   }
 
   if (type === "strategy") {
-    return {
+    const side = parsed.side ?? defaultSideForKind(parsed.strategy);
+    const baseData: BlockNodeData = {
       label: parsed.strategy,
       type,
       chain: null,
       dex: null,
       strategy: parsed.strategy,
-      side: parsed.side ?? defaultSideForKind(parsed.strategy),
+      side,
       coin: null,
       amount: null,
       toCoin: null,
@@ -97,12 +157,13 @@ export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNode
       maxSlippageBps: parsed.maxSlippageBps,
       intervals: parsed.intervals,
     };
+    return applyLimitOrderTreeFields(baseData) as BlockNodeData;
   }
 
   if (type === "swap") {
     const fromCoin = parsed.coin;
     const toCoin = parsed.toCoin;
-    const amount = parsed.amount;
+    const amount = swapAmountForParsed(parsed);
     const toAmount =
       fromCoin && toCoin && amount ? estimateToAmount(amount, fromCoin, toCoin) : null;
 
@@ -185,21 +246,28 @@ export function connectFlowNodes(nodes: Node[]): Edge[] {
   });
 }
 
+function createSegmentNode(
+  segment: FlowSegment,
+  parsed: ParsedPrompt,
+  position: { x: number; y: number },
+  runId: string
+): Node {
+  if (segment === "schedule") {
+    return createScheduleNode(parsed, position, `schedule-${runId}`);
+  }
+  return createBlockNodeForType(segment, parsed, position, `${runId}-${segment}`);
+}
+
 export function createFlowFromParsed(parsed: ParsedPrompt): { nodes: Node[]; edges: Edge[] } {
   if (parsed.useLoop) {
     return createRecurringFlowFromParsed(parsed);
   }
 
-  const runId = Date.now();
-  const blockTypes = getDesiredBlockTypes(parsed);
+  const runId = String(Date.now());
+  const segments = getDesiredFlowSegments(parsed);
 
-  const nodes = blockTypes.map((type, index) =>
-    createBlockNodeForType(
-      type,
-      parsed,
-      { x: 120 + index * 280, y: BUILDER_NODE_ROW_Y },
-      `${runId}-${type}`
-    )
+  const nodes = segments.map((segment, index) =>
+    createSegmentNode(segment, parsed, { x: 120 + index * 280, y: BUILDER_NODE_ROW_Y }, runId)
   );
 
   return { nodes, edges: connectFlowNodes(nodes) };
@@ -222,41 +290,12 @@ export function createRecurringFlowFromParsed(
 
   if (parsed.includeSchedule) {
     const scheduleId = `schedule-${runId}`;
-    nodes.push({
-      id: scheduleId,
-      type: "custom",
-      position: { x: cursorX, y: BUILDER_NODE_ROW_Y },
-      data: {
-        label: "Schedule",
-        type: "control",
-        controlKind: "schedule",
-        scheduleValue: parsed.scheduleValue ?? "1",
-        scheduleUnit: parsed.scheduleUnit ?? "minutes",
-        chain: null,
-        dex: null,
-        strategy: null,
-        coin: null,
-        amount: null,
-        toCoin: null,
-        toAmount: null,
-        wallet: null,
-        side: null,
-        priceGoal: null,
-        rangeLow: null,
-        rangeHigh: null,
-        gridLevels: null,
-        sliceCount: null,
-        intervalSeconds: null,
-        maxSlippageBps: null,
-        intervals: null,
-      },
-      style: blockStyle("strategy"),
-      draggable: true,
-      selectable: true,
-      connectable: true,
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-    });
+    const scheduleNode = createScheduleNode(
+      parsed,
+      { x: cursorX, y: BUILDER_NODE_ROW_Y },
+      scheduleId
+    );
+    nodes.push(scheduleNode);
     edges.push({
       id: `edge-${deposit.id}-${scheduleId}`,
       source: deposit.id,

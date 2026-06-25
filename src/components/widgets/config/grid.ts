@@ -10,14 +10,14 @@ import {
 export type WidgetKind =
   | "coins"
   | "opportunities"
-  | "stocks"
   | "wallet"
   | "fear-greed"
   | "market-cap"
   | "market-volume"
+  | "dominance"
   | "news"
-  | "learn"
-  | "swap";
+  | "swap"
+  | "runs";
 
 export type SizePreset = "1x1" | "1x2" | "2x1" | "2x2" | "4x2" | "6x1" | "6x2";
 
@@ -29,7 +29,7 @@ export type PlacedWidget = {
   anchorId?: string;
 };
 
-export const STORAGE_KEY = "siphon-build-dashboard-widgets-v5";
+export const STORAGE_KEY = "siphon-build-dashboard-widgets-v7";
 
 export const SIZE_TO_GRID: Record<SizePreset, { col: number; row: number }> = {
   "1x1": { col: 1, row: 1 },
@@ -67,12 +67,56 @@ function uid() {
     : `w-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** See widget-library.json — swap 2×2 + starter 1×1 glance row + core tiles. */
+const LEGACY_V6_DEFAULT_KINDS = new Set([
+  "fear-greed",
+  "market-cap",
+  "market-volume",
+  "dominance",
+  "news",
+  "coins",
+  "swap",
+  "opportunities",
+]);
+
+const LEGACY_DEFAULT_KINDS = new Set([
+  "swap",
+  "fear-greed",
+  "market-cap",
+  "market-volume",
+  "news",
+  "coins",
+  "opportunities",
+  "wallet",
+]);
+
+function isLegacyV6DefaultLayout(placed: PlacedWidget[]): boolean {
+  const kinds = new Set(placed.map((p) => p.kind));
+  if (kinds.size !== LEGACY_V6_DEFAULT_KINDS.size) return false;
+  for (const kind of LEGACY_V6_DEFAULT_KINDS) {
+    if (!kinds.has(kind as WidgetKind)) return false;
+  }
+  return true;
+}
+
+function isLegacyDefaultLayout(placed: PlacedWidget[]): boolean {
+  const kinds = new Set(placed.map((p) => p.kind));
+  if (kinds.size !== LEGACY_DEFAULT_KINDS.size) return false;
+  for (const kind of LEGACY_DEFAULT_KINDS) {
+    if (!kinds.has(kind as WidgetKind)) return false;
+  }
+  return true;
+}
+
+function freshDefaultPlaced(): PlacedWidget[] {
+  return DEFAULT_PLACED.map((d) => ({ ...d, id: uid() }));
+}
+
+/** Glance row + coins / strategies + compact swap & runs. */
 export const DEFAULT_PLACED: PlacedWidget[] = [
-  { id: "default-swap", kind: "swap", size: "2x2" },
   { id: "default-fg", kind: "fear-greed", size: "1x1" },
   { id: "default-cap", kind: "market-cap", size: "1x1" },
   { id: "default-vol", kind: "market-volume", size: "1x1" },
+  { id: "default-dom", kind: "dominance", size: "1x1" },
   { id: "default-news", kind: "news", size: "2x1" },
   { id: "default-coins", kind: "coins", size: "2x2", anchorId: "movers" },
   {
@@ -81,7 +125,8 @@ export const DEFAULT_PLACED: PlacedWidget[] = [
     size: "2x2",
     anchorId: "strategies",
   },
-  { id: "default-wallet", kind: "wallet", size: "2x2", anchorId: "wallet" },
+  { id: "default-swap", kind: "swap", size: "1x1" },
+  { id: "default-runs", kind: "runs", size: "1x1" },
 ];
 
 export function cycleSize(size: SizePreset): SizePreset {
@@ -93,6 +138,8 @@ export function loadPlacedFromStorage(): PlacedWidget[] {
   if (typeof window === "undefined") return DEFAULT_PLACED;
   const keys = [
     STORAGE_KEY,
+    "siphon-build-dashboard-widgets-v6",
+    "siphon-build-dashboard-widgets-v5",
     "siphon-build-dashboard-widgets-v4",
     "siphon-build-dashboard-widgets-v3",
   ];
@@ -118,16 +165,22 @@ export function loadPlacedFromStorage(): PlacedWidget[] {
           (p.anchorId === undefined || typeof p.anchorId === "string"),
       );
       if (valid.length > 0) {
+        const next =
+          key === "siphon-build-dashboard-widgets-v5" && isLegacyDefaultLayout(valid)
+            ? freshDefaultPlaced()
+            : key === "siphon-build-dashboard-widgets-v6" && isLegacyV6DefaultLayout(valid)
+              ? freshDefaultPlaced()
+              : valid;
         if (key !== STORAGE_KEY) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(valid));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         }
-        return valid;
+        return next;
       }
     } catch {
       continue;
     }
   }
-  return DEFAULT_PLACED.map((d) => ({ ...d, id: uid() }));
+  return freshDefaultPlaced();
 }
 
 export { defaultSizeForKind, isAllowedSize, migratePlacedKinds };

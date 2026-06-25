@@ -160,8 +160,7 @@ export default function BuildAiPrompt({
   isLoading = false,
   disabled = false,
   className = "",
-  disclaimer = "AI can make mistakes. Use Smoke to validate, then review before committing funds.",
-  botMessage = null,
+  disclaimer = "AI can make mistakes. Review before committing funds.",  botMessage = null,
   messages = [],
   onChatActiveChange,
   widgetsVisible = true,
@@ -321,7 +320,7 @@ export default function BuildAiPrompt({
         {isEmpty && !chatActive && (
           <div className="build-ai-tagline-block" aria-hidden={false}>
             <p className="build-ai-tagline-welcome">Welcome to the Siphon</p>
-            <h2 className="build-ai-tagline">Your fully encrypted execution layer for the defi</h2>
+            <h2 className="build-ai-tagline">Your Fully Encrypted Execution Layer for the DeFi</h2>
             <p className="build-ai-tagline-sub">What are you up to today?</p>
           </div>
         )}

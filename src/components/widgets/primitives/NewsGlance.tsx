@@ -18,7 +18,6 @@ type ApiNewsItem = {
 type DisplayNewsItem = {
   id: string;
   title: string;
-  excerpt: string;
   source: string;
   time: string;
 };
@@ -40,14 +39,12 @@ export function NewsGlance() {
     ? liveNews.slice(0, 5).map((n) => ({
         id: n.id,
         title: n.title,
-        excerpt: n.summary ?? "",
         source: n.source,
         time: formatRelativeTime(n.published_at),
       }))
     : mockNews.slice(0, 5).map((n) => ({
         id: n.id,
         title: n.title,
-        excerpt: n.excerpt,
         source: n.source,
         time: n.time,
       }));
@@ -83,20 +80,19 @@ export function NewsGlance() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <article key={n.id} className="animate-news-fade flex-1" aria-live="polite">
-        <p className="text-[13px] font-medium leading-snug text-[var(--defi-text)]">{n.title}</p>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--defi-text-muted)]">{n.excerpt}</p>
-        <p className="mt-2 font-mono text-[10px] text-[var(--defi-text-subtle)]">
+    <div className="build-news-glance flex min-h-0 flex-1 flex-col">
+      <div className="build-news-header">
+        <span className="build-news-header-label">News</span>
+        <span className="build-news-meta">
           {n.source} · {n.time}
-        </p>
+        </span>
+      </div>
+
+      <article key={n.id} className="build-news-article animate-news-fade" aria-live="polite">
+        <p className="build-news-title">{n.title}</p>
       </article>
 
-      <div
-        className="build-news-dots"
-        role="tablist"
-        aria-label="News headlines"
-      >
+      <div className="build-news-dots" role="tablist" aria-label="News headlines">
         {items.map((item, i) => (
           <button
             key={item.id}

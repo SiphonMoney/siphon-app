@@ -219,7 +219,7 @@ export default function DetailsModal({
   const getStepTags = (nodeData: NodeData, isRunModeView: boolean): StepTag[] => {
     const tags: StepTag[] = [];
     if (nodeData?.type === 'deposit') {
-      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Sepolia'] : undefined });
+      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Base'] : undefined });
       tags.push({ label: 'Token A', field: 'tokenA', options: isRunModeView ? ['USDC', 'ETH'] : undefined });
       tags.push({ label: 'Amount', field: 'amount' });
       return tags;
@@ -255,7 +255,7 @@ export default function DetailsModal({
     }
 
     if (nodeData?.type === 'withdraw') {
-      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Sepolia'] : undefined });
+      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Base'] : undefined });
       if (isRunModeView) {
         // The withdrawn asset is whatever the swap outputs — not a free choice. Show it
         // read-only (derived from the swap's "To" coin, honouring any run-mode override)

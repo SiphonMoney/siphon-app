@@ -15,6 +15,8 @@ export interface ParsedPrompt {
   coin: string | null;
   toCoin: string | null;
   amount: string | null;
+  /** Per-iteration swap size in loop flows; deposit uses `amount`. */
+  swapAmount: string | null;
   priceGoal: string | null;
   rangeLow: string | null;
   rangeHigh: string | null;

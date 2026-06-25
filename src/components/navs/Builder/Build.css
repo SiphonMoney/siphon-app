@@ -111,7 +111,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: clamp(5rem, 12vh, 6.5rem) 0 max(1rem, env(safe-area-inset-bottom));
+  padding: clamp(5.25rem, 13vh, 6.75rem) 0 max(0.5rem, env(safe-area-inset-bottom));
   pointer-events: none;
   overflow-x: hidden;
   overflow-y: auto;
@@ -122,7 +122,7 @@
   overflow-x: hidden;
   overflow-y: visible;
   padding-top: clamp(3.5rem, 8vh, 5rem);
-  padding-bottom: max(5.75rem, calc(env(safe-area-inset-bottom) + 4rem));
+  padding-bottom: max(3.25rem, calc(env(safe-area-inset-bottom) + 2rem));
 }
 
 .build-page-content {
@@ -144,8 +144,8 @@
 }
 
 .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
-  margin-top: clamp(1.35rem, 3.5vh, 2.25rem);
-  padding-bottom: 1.35rem;
+  margin-top: clamp(0.85rem, 2.5vh, 1.5rem);
+  padding-bottom: 1.5rem;
 }
 
 /* Fixed footer — terms, privacy, about */
@@ -157,7 +157,7 @@
   z-index: 12;
   display: flex;
   justify-content: center;
-  padding: 0.65rem 1rem max(0.65rem, env(safe-area-inset-bottom));
+  padding: 0.65rem 1rem max(0.35rem, env(safe-area-inset-bottom));
   pointer-events: none;
 }
 
@@ -210,7 +210,7 @@
   min-height: 0;
   align-items: flex-end;
   padding: 0 1.5rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.35rem;
 }
 
 .build-widget-band {
@@ -297,6 +297,33 @@
 .blueprint-top-bar--expanded .blueprint-add-menu-anchor {
   position: relative;
   flex-shrink: 0;
+}
+
+.blueprint-top-bar--expanded .blueprint-add-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.blueprint-top-bar--expanded .blueprint-add-btn--icon:hover,
+.blueprint-top-bar--expanded .blueprint-add-btn--active {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .blueprint-top-bar--expanded .blueprint-add-btn--labeled {
@@ -406,37 +433,60 @@
 
 .blueprint-top-bar--expanded .blueprint-file-group {
   display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.15rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.03);
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.blueprint-top-bar--expanded .blueprint-file-group .blueprint-saved-scenes {
+  display: flex;
+  align-items: stretch;
 }
 
 .blueprint-top-bar--expanded .blueprint-folder-btn {
-  border-radius: 6px !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.16) !important;
-  height: 32px;
-  min-height: 32px;
+  border-radius: 8px 0 0 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-right: none !important;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.blueprint-top-bar--expanded .blueprint-folder-btn.mobile-only {
+  border-radius: 8px 0 0 8px !important;
+  border-right: none !important;
 }
 
 .blueprint-top-bar--expanded .blueprint-file-name-input {
-  border-radius: 6px !important;
-  border-top-left-radius: 6px !important;
-  border-bottom-left-radius: 6px !important;
-  height: 32px;
-  line-height: 32px;
+  border-radius: 0 8px 8px 0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: none;
+  height: 34px;
+  line-height: 34px;
   width: min(9rem, 28vw);
   max-width: min(9rem, 28vw);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.blueprint-top-bar--expanded .blueprint-file-name-input:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.blueprint-top-bar--expanded .blueprint-file-group:focus-within .blueprint-folder-btn {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .blueprint-top-bar--expanded .blueprint-save-btn--labeled,
 .blueprint-top-bar--expanded .blueprint-run-btn--labeled,
 .blueprint-top-bar--expanded .blueprint-execute-btn--labeled,
-.blueprint-top-bar--expanded .blueprint-restart-btn--icon,
-.blueprint-top-bar--expanded .blueprint-folder-btn:not(.mobile-only) {
+.blueprint-top-bar--expanded .blueprint-restart-btn--icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -610,7 +660,7 @@
 }
 
 .blueprint-view--fullscreen:has(.blueprint-top-bar--visible) .build-sim-toast {
-  top: calc(7.35rem + env(safe-area-inset-top, 0px));
+  top: calc(8.5rem + env(safe-area-inset-top, 0px));
 }
 
 .blueprint-stage .build-node-context-menu {
@@ -647,7 +697,7 @@
   }
 
   .build-page-layout--focus {
-    padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom) + 3rem));
+    padding-bottom: max(2.75rem, calc(env(safe-area-inset-bottom) + 1.75rem));
   }
 
   .build-hero-band {
@@ -673,11 +723,11 @@
   }
 
   .build-sim-toast {
-    top: calc(4.15rem + env(safe-area-inset-top, 0px));
+    top: calc(5.35rem + env(safe-area-inset-top, 0px));
   }
 
   .blueprint-view--fullscreen:has(.blueprint-top-bar--visible) .build-sim-toast {
-    top: calc(6.85rem + env(safe-area-inset-top, 0px));
+    top: calc(7.75rem + env(safe-area-inset-top, 0px));
   }
 
   .blueprint-top-bar--expanded .blueprint-toolbar-label {

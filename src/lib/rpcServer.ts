@@ -6,6 +6,14 @@ function uniqueUrls(urls: (string | undefined)[]): string[] {
 
 /** Ordered upstream RPC URLs — primary first, then public fallbacks. */
 export function getServerRpcUrls(chainId: number): string[] {
+  if (chainId === 8453) {
+    return uniqueUrls([
+      process.env.BASE_MAINNET_RPC,
+      process.env.BASE_RPC_URL,
+      NETWORKS[8453].rpcUrl,
+      'https://mainnet.base.org',
+    ]);
+  }
   if (chainId === 84532) {
     return uniqueUrls([
       process.env.BASE_SEPOLIA_RPC,

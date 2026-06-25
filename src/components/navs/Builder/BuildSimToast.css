@@ -1,6 +1,6 @@
 .build-sim-toast {
   position: fixed;
-  top: calc(4.5rem + env(safe-area-inset-top, 0px));
+  top: calc(5.75rem + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 22;

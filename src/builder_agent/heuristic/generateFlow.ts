@@ -1,10 +1,10 @@
-import { isActiveToken } from "./blocks";
-import { createFlowFromParsed } from "./createNodes";
-import { parsePrompt } from "./parsePrompt";
-import { getMissingFields } from "./questions";
-import type { BuilderAgentResult } from "./types";
+import { isActiveToken } from "../blocks";
+import { createFlowFromParsed } from "../createNodes";
+import { parsePrompt } from "../parsePrompt";
+import { getMissingFields } from "../questions";
+import type { BuilderAgentResult, ParsedPrompt } from "../types";
 
-function collectWarnings(parsed: ReturnType<typeof parsePrompt>): string[] {
+function collectWarnings(parsed: ParsedPrompt): string[] {
   return getMissingFields(parsed).map((field) => {
     switch (field) {
       case "coin":
@@ -39,7 +39,7 @@ function collectWarnings(parsed: ReturnType<typeof parsePrompt>): string[] {
   });
 }
 
-function buildSummary(parsed: ReturnType<typeof parsePrompt>, blockCount: number): string {
+function buildSummary(parsed: ParsedPrompt, blockCount: number): string {
   if (parsed.useLoop) {
     const parts = [
       `${parsed.amount ?? "?"} ${parsed.coin ?? "token"}`,
@@ -68,12 +68,13 @@ function buildSummary(parsed: ReturnType<typeof parsePrompt>, blockCount: number
   return `Built ${blockCount}-block flow: ${parts.join(" → ")}.`;
 }
 
+/** One-shot regex flow generation — heuristic only. */
 export function generateFlowFromPrompt(prompt: string): BuilderAgentResult {
   const parsed = parsePrompt(prompt);
   const { nodes, edges } = createFlowFromParsed(parsed);
   const warnings = collectWarnings(parsed);
 
-  if (parsed.coin && !isActiveToken(parsed.coin) && !warnings.some((w) => w.includes("isn't active"))) {
+  if (parsed.coin && !isActiveToken(parsed.coin) && !warnings.some((w) => w.includes("is not active"))) {
     warnings.unshift(`${parsed.coin} is not active yet — switch to ETH or USDC before running.`);
   }
 

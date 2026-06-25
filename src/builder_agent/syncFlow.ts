@@ -4,13 +4,31 @@ import {
   connectFlowNodes,
   createBlockNodeForType,
   createRecurringFlowFromParsed,
-  getDesiredBlockTypes,
+  createScheduleNode,
+  getDesiredFlowSegments,
+  isScheduleControlNode,
+  type FlowSegment,
 } from "./createNodes";
-import type { BlockType, ParsedPrompt } from "./types";
+import type { ParsedPrompt } from "./types";
 import { updateFlowNodes } from "./updateFlow";
 
-function findNodeByType(nodes: Node[], type: BlockType): Node | undefined {
-  return nodes.find((node) => node.data.type === type);
+function findNodeForSegment(nodes: Node[], segment: FlowSegment): Node | undefined {
+  if (segment === "schedule") {
+    return nodes.find(isScheduleControlNode);
+  }
+  return nodes.find((node) => node.data.type === segment);
+}
+
+function createNodeForSegment(
+  segment: FlowSegment,
+  parsed: ParsedPrompt,
+  position: { x: number; y: number },
+  runId: string
+): Node {
+  if (segment === "schedule") {
+    return createScheduleNode(parsed, position, `schedule-${runId}`);
+  }
+  return createBlockNodeForType(segment, parsed, position, `${runId}-${segment}`);
 }
 
 export function syncFlowStructure(
@@ -22,19 +40,19 @@ export function syncFlowStructure(
     return createRecurringFlowFromParsed(parsed);
   }
 
-  const desired = getDesiredBlockTypes(parsed);
+  const segments = getDesiredFlowSegments(parsed);
   const baseY = nodes[0]?.position.y ?? BUILDER_NODE_ROW_Y;
-  const runId = Date.now();
+  const runId = String(Date.now());
 
-  const ordered: Node[] = desired.map((type, index) => {
+  const ordered: Node[] = segments.map((segment, index) => {
     const position = { x: 120 + index * 280, y: baseY };
-    const existing = findNodeByType(nodes, type);
+    const existing = findNodeForSegment(nodes, segment);
 
     if (existing) {
       return { ...existing, position };
     }
 
-    return createBlockNodeForType(type, parsed, position, `${runId}-${type}`);
+    return createNodeForSegment(segment, parsed, position, runId);
   });
 
   const updatedNodes = updateFlowNodes(ordered, parsed);
