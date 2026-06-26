@@ -375,7 +375,7 @@ export default function Build({
     } else if (type === 'control') {
       label = chainOrDexOrStrategy ? chainOrDexOrStrategy : 'Control';
     } else {
-      label = chainOrDexOrStrategy ? `Deposit from ${chainOrDexOrStrategy}` : 'Deposit';
+      label = 'Deposit';
     }
 
     const isControl = type === 'control';

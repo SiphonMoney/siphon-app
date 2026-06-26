@@ -142,7 +142,17 @@
   width: 100%;
   padding: 0 0.5rem;
   margin-bottom: 0.75rem;
-  transition: opacity 0.45s ease, transform 0.45s ease, max-height 0.45s ease;
+  opacity: 0;
+  animation: build-ai-tagline-fade-in 0.65s ease 0.12s forwards;
+}
+
+@keyframes build-ai-tagline-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .build-ai-tagline-welcome {
@@ -404,6 +414,11 @@
 @media (prefers-reduced-motion: reduce) {
   .build-ai-marquee-track {
     animation: none;
+  }
+
+  .build-ai-tagline-block {
+    animation: none;
+    opacity: 1;
   }
 }
 

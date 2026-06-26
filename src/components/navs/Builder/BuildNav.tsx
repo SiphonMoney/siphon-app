@@ -138,7 +138,7 @@ export default function BuildNav({
   const addMenuTitle = (menu: AddMenuState) => {
     if (menu.step === "categories") return "Add node";
     if (menu.category === "wallet") {
-      if (menu.walletAction === "deposit") return "Deposit from";
+      if (menu.walletAction === "deposit") return "Deposit";
       if (menu.walletAction === "withdraw") return "Withdraw to";
       return "Wallet";
     }
@@ -589,7 +589,7 @@ export default function BuildNav({
             <div className="blueprint-mobile-modal-header">
               <h3>{!mobilePicker ? 'Add Node' :
                 mobilePicker === 'wallet' ? 'Wallet:' :
-                mobilePicker === 'wallet-deposit' ? 'Deposit from:' :
+                mobilePicker === 'wallet-deposit' ? 'Deposit:' :
                 mobilePicker === 'wallet-withdraw' ? 'Withdraw to:' :
                 mobilePicker === 'triggers' ? 'Triggers:' :
                 mobilePicker === 'control' ? 'Control:' : 'DeFi:'}</h3>

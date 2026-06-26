@@ -112,7 +112,7 @@ function swapAmountForParsed(parsed: ParsedPrompt): string | null {
 export function buildBlockData(type: BlockType, parsed: ParsedPrompt): BlockNodeData {
   if (type === "deposit") {
     return {
-      label: `Deposit from ${parsed.depositChain}`,
+      label: "Deposit",
       type,
       chain: parsed.depositChain,
       dex: null,

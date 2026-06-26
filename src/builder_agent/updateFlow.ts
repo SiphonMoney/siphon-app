@@ -20,7 +20,7 @@ export function updateFlowNodes(nodes: Node[], parsed: ParsedPrompt): Node[] {
     if (type === "deposit") {
       data.coin = parsed.coin ?? data.coin;
       if (parsed.amount != null) data.amount = parsed.amount;
-      data.label = `Deposit from ${parsed.depositChain}`;
+      data.label = "Deposit";
       data.chain = parsed.depositChain;
     }
 
