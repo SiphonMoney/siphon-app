@@ -95,6 +95,11 @@ export interface StrategyInput {
   zk_proof: unknown;
   to_chain?: string;
   from_chain?: string;
+  // Swap output routing. 'vault' re-deposits the swap output into the asset_out vault as a
+  // private note owned by output_precommitment (user withdraws it later themselves). 'address'
+  // (default) sends the output to recipient_address.
+  output_mode?: "vault" | "address";
+  output_precommitment?: string;
   // Plaintext bounds (used when there's no condition tree). Encrypted here, never sent raw.
   upper_bound?: number;
   lower_bound?: number;

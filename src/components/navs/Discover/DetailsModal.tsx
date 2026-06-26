@@ -10,6 +10,7 @@ import { getRunStepFieldValue, buildRunModeValuesFromNodes } from "../../../lib/
 import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
+import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
@@ -66,7 +67,7 @@ function getStepHint(nodeData: NodeData, coin: string): string | null {
     case 'swap':
       return `The trade executed when the trigger hits (sells/buys via the chosen DEX).`;
     case 'withdraw':
-      return 'Where the swap output is sent — destination chain + address.';
+      return 'Swap output stays private in your Siphon vault — withdraw it anytime from your wallet. (Your address = note owner.)';
     default:
       return null;
   }
@@ -558,6 +559,21 @@ export default function DetailsModal({
       addLog('ZK proof generated');
       const { withdrawalTxData, newDeposit, newDepositKey, spentDepositKey } = zkResult;
 
+      // Vault-mode output: same-chain asset-changing swap keeps the output shielded as a
+      // private note in the asset_out vault (user withdraws later) instead of an external send.
+      const outToken = getTokens(fromChainId)[(assetOut || '').toUpperCase()];
+      const isSameChainSwap =
+        (assetIn || 'USDC').toUpperCase() !== (assetOut || '').toUpperCase() &&
+        String(toChainId ?? fromChainId) === String(fromChainId);
+      let outputMode: 'vault' | 'address' = 'address';
+      let outputPrecommitment: string | undefined;
+      if (isSameChainSwap && outToken) {
+        const out = await createVaultOutputNote(fromChainId, outToken);
+        outputMode = 'vault';
+        outputPrecommitment = out.precommitment;
+        addLog(`Vault-output note prepared (stays private in ${(assetOut || '').toUpperCase()} vault)`);
+      }
+
       addLog('Building strategy payload...');
       const strategyPayload = {
         user_id: recipient,
@@ -577,6 +593,8 @@ export default function DetailsModal({
         ...(bounds.max_slippage_bps != null ? { max_slippage_bps: bounds.max_slippage_bps } : {}),
         from_chain: String(fromChainId),
         to_chain: String(toChainId ?? fromChainId),
+        output_mode: outputMode,
+        output_precommitment: outputPrecommitment,
         zk_proof: {
           pA: withdrawalTxData.pA,
           pB: withdrawalTxData.pB,

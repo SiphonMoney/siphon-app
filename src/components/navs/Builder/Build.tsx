@@ -72,6 +72,7 @@ import { showAppToast } from "@/lib/appToast";
 import { getSelectedChainId, getTokens, getZkWithdrawRecipient } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
+import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { validateRecipientAddress, chainLabelToId, createDefaultLimitOrderTree } from "./BuildNodes";
 import {
   resolveLimitOrderConditionTree,
@@ -783,6 +784,21 @@ export default function Build({
 
     console.log('[Strategy] ZK proof generated:', { stateRoot: txData.stateRoot, nullifierHash: txData.nullifierHash });
 
+    // Vault-mode output: for a same-chain asset-changing swap, keep the output shielded — the
+    // executor re-deposits it into the asset_out vault as a private note the user withdraws
+    // later, instead of sending it to an external address. Generate that note's secret now and
+    // share only its precommitment with the executor.
+    const outToken = TOKEN_CONFIG[assetOut];
+    const isSameChainSwap = assetIn !== assetOut && String(toChain) === String(getSelectedChainId());
+    let outputMode: 'vault' | 'address' = 'address';
+    let outputPrecommitment: string | undefined;
+    if (isSameChainSwap && outToken) {
+      const out = await createVaultOutputNote(CHAIN_ID, outToken);
+      outputMode = 'vault';
+      outputPrecommitment = out.precommitment;
+      console.log('[Strategy] Vault-output note prepared, precommitment:', outputPrecommitment);
+    }
+
     const strategyData = {
       user_id:           recipient,
       strategy_type:     useTree ? 'CUSTOM_STRATEGY' : payloadBounds.strategy_type,
@@ -801,6 +817,8 @@ export default function Build({
       condition_tree:    useTree ? conditionTree : null,
       to_chain:          toChain,
       from_chain:        String(getSelectedChainId()),
+      output_mode:       outputMode,
+      output_precommitment: outputPrecommitment,
     };
 
     console.log('[Strategy] Encrypting client-side and submitting to trade-executor:', strategyData);

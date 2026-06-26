@@ -794,7 +794,7 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
               <input
                 type="text"
                 className="node-input node-input--wallet"
-                placeholder="Wallet address"
+                placeholder="Your wallet (note owner — stays in vault)"
                 value={data.wallet || ''}
                 onChange={(e) => handleChange('wallet', e.target.value)}
                 onMouseDown={(e) => e.stopPropagation()}

@@ -276,6 +276,46 @@ async function getOnChainLeaves(tokenAddress: string, chainId?: number): Promise
   return leaves;
 }
 
+// --------- Resolve a pending "output note" from a vault-mode swap ----------
+// When a vault-mode swap strategy is submitted, the browser pre-generates an output note's
+// secret/precommitment but the amount + commitment aren't known until the swap actually runs
+// (slippage). The executor re-deposits the realized output and emits Deposited(...). We learn
+// the final amount + commitment by reading that on-chain event for our precommitment.
+// Returns { amount, commitment } (decimal strings) or null if the deposit isn't on-chain yet.
+export async function resolveOutputNote(
+  tokenAddress: string,
+  precommitment: string,
+  chainId?: number,
+): Promise<{ amount: string; commitment: string } | null> {
+  const net = getNetwork(chainId ?? getSelectedChainId());
+  const provider = getReadProvider(net.chainId);
+  const { vault } = await resolveVault(tokenAddress, net.chainId);
+  const vaultAddress = vault.target as string;
+
+  // Deposited(address indexed depositor, uint256 amount, uint256 commitment, uint256 precommitment)
+  const DEPOSITED_TOPIC = ethers.id("Deposited(address,uint256,uint256,uint256)");
+  const latest = await provider.getBlockNumber();
+  const logs = await getLogsChunked(
+    provider,
+    { address: vaultAddress, topics: [DEPOSITED_TOPIC] },
+    vaultDeployBlock(net.chainId),
+    latest,
+  );
+
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+  const target = BigInt(precommitment).toString();
+  for (const log of logs) {
+    const [amount, commitment, pre] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+    if (BigInt(pre.toString()).toString() === target) {
+      return {
+        amount: BigInt(amount.toString()).toString(),
+        commitment: BigInt(commitment.toString()).toString(),
+      };
+    }
+  }
+  return null;
+}
+
 // --------- True (on-chain-reconciled) vault balance ----------
 // The naive balance sums every localStorage note, which over-counts: strategy "change" notes
 // are saved as spendable before the withdrawal that creates them confirms, so an un-executed
