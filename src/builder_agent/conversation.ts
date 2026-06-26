@@ -1,13 +1,19 @@
 import type { Edge, Node } from "@xyflow/react";
 import { createFlowFromParsed } from "./createNodes";
-import { llmParse, type BuilderChatTurn, type BuilderMarketContext } from "./llmParse";
+import { llmParse, type BuilderChatTurn, type BuilderMarketContext, type LlmParseFailure } from "./llmParse";
 import { createDefaultParsed } from "./parsedDefaults";
 import { getNextQuestion } from "./questions";
 import { syncFlowStructure } from "./syncFlow";
 import type { BuilderAgentSession, BuilderAgentTurnResult, ParsedPrompt } from "./types";
 
-const LLM_UNAVAILABLE_MESSAGE =
-  "Builder AI is unavailable. Add OPENROUTER_API_KEY to .env.local and restart the dev server.";
+const LLM_MESSAGES: Record<LlmParseFailure["reason"], string> = {
+  unconfigured:
+    "Builder AI is not configured. Set OPENROUTER_API_KEY in Vercel (Production env) and redeploy — .env.local only works locally.",
+  openrouter_error:
+    "OpenRouter rejected the request. Check OPENROUTER_API_KEY on Vercel (exact name, Production scope), redeploy, and verify the key at openrouter.ai/keys.",
+  bad_response: "Builder AI returned an invalid response. Try again or use a different OPENROUTER_MODEL.",
+  network: "Could not reach the builder API. Check your connection and try again.",
+};
 
 function buildSession(parsed: ParsedPrompt, transcript: string[]): BuilderAgentSession {
   const next = getNextQuestion(parsed);
@@ -42,12 +48,12 @@ export async function processBuilderTurn(
   const transcript = [...(session?.transcript ?? []), trimmed];
 
   const result = await llmParse(trimmed, chatHistory, session?.parsed ?? null, market);
-  if (!result) {
+  if ("ok" in result && result.ok === false) {
     return {
       nodes: existingNodes,
       edges: existingEdges,
       session: session ?? buildSession(createDefaultParsed(trimmed), [trimmed]),
-      botMessage: LLM_UNAVAILABLE_MESSAGE,
+      botMessage: LLM_MESSAGES[result.reason],
     };
   }
 

@@ -24,22 +24,27 @@ export interface LlmParseResult {
   message: string | null;
 }
 
+export type LlmParseFailure =
+  | { ok: false; reason: "unconfigured" }
+  | { ok: false; reason: "openrouter_error" }
+  | { ok: false; reason: "bad_response" }
+  | { ok: false; reason: "network" };
+
 /**
  * Calls /api/builder-agent (OpenRouter) and merges JSON onto prior session state.
- * Returns null when the route is unavailable or errors — no regex/heuristic fallback.
  */
 export async function llmParse(
   prompt: string,
   chatHistory: BuilderChatTurn[],
   previousParsed?: ParsedPrompt | null,
   market?: BuilderMarketContext
-): Promise<LlmParseResult | null> {
+): Promise<LlmParseResult | LlmParseFailure> {
   const base =
     previousParsed ?? createDefaultParsed(chatHistory.map((t) => t.content).join("\n") || prompt);
 
   const ethUsd = market?.ethUsd ?? null;
 
-  let data: { parsed?: Record<string, unknown>; message?: string | null };
+  let data: { parsed?: Record<string, unknown>; message?: string | null; error?: string };
   try {
     const res = await fetch("/api/builder-agent", {
       method: "POST",
@@ -51,10 +56,18 @@ export async function llmParse(
         marketPrices: { ETH: ethUsd, USDC: 1 },
       }),
     });
-    if (!res.ok) return null;
-    data = await res.json();
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 501 || data.error === "llm_unconfigured") {
+        return { ok: false, reason: "unconfigured" };
+      }
+      if (data.error === "openrouter_error") {
+        return { ok: false, reason: "openrouter_error" };
+      }
+      return { ok: false, reason: "bad_response" };
+    }
   } catch {
-    return null;
+    return { ok: false, reason: "network" };
   }
 
   const llm = data.parsed ?? {};
