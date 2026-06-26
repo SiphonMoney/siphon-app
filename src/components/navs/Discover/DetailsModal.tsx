@@ -6,13 +6,13 @@ import type { Node, Edge } from '@xyflow/react';
 import "./Discover.css";
 import StrategyPreviewFlow from "../Builder/StrategyPreviewFlow";
 import { getModalStepNodes } from "../../../lib/builderLayout";
-import { getRunStepFieldValue } from "../../../lib/runModeValues";
+import { getRunStepFieldValue, buildRunModeValuesFromNodes } from "../../../lib/runModeValues";
 import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
 import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
-import { getSelectedChainId, getTokens, getNetwork } from "../../../lib/networks";
+import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
 import StrategyChart, { type ChartOverlay } from "../../charts/StrategyChart";
@@ -219,7 +219,7 @@ export default function DetailsModal({
   const getStepTags = (nodeData: NodeData, isRunModeView: boolean): StepTag[] => {
     const tags: StepTag[] = [];
     if (nodeData?.type === 'deposit') {
-      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Base'] : undefined });
+      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? [...RUN_MODE_CHAIN_LABELS] : undefined });
       tags.push({ label: 'Token A', field: 'tokenA', options: isRunModeView ? ['USDC', 'ETH'] : undefined });
       tags.push({ label: 'Amount', field: 'amount' });
       return tags;
@@ -255,7 +255,7 @@ export default function DetailsModal({
     }
 
     if (nodeData?.type === 'withdraw') {
-      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? ['Base'] : undefined });
+      tags.push({ label: 'Chain', field: 'chain', options: isRunModeView ? [...RUN_MODE_CHAIN_LABELS] : undefined });
       if (isRunModeView) {
         // The withdrawn asset is whatever the swap outputs — not a free choice. Show it
         // read-only (derived from the swap's "To" coin, honouring any run-mode override)
@@ -475,7 +475,7 @@ export default function DetailsModal({
       setIsFading(true);
       setTimeout(() => {
         setIsRunMode(true);
-        setRunModeValues({});
+        setRunModeValues(buildRunModeValuesFromNodes(modalStrategyNodes));
         setIsFading(false);
       }, 200);
       return;
@@ -509,6 +509,19 @@ export default function DetailsModal({
     };
 
     const amountStr = getValue(depositNode?.id, 'amount', String(amount));
+    const depositChainLabel = depositNode
+      ? getRunStepFieldValue(runModeValues, depositNode.id, 'chain', depositNode.data as NodeData)
+      : getRunModeChainLabel(activeChainId);
+    const withdrawChainLabel = withdrawNode
+      ? getRunStepFieldValue(runModeValues, withdrawNode.id, 'chain', withdrawNode.data as NodeData)
+      : depositChainLabel;
+    const fromChainId = resolveRunModeChainId(depositChainLabel);
+    const toChainId = resolveRunModeChainId(withdrawChainLabel) ?? fromChainId;
+    if (fromChainId == null) {
+      showToast('Please select a deposit chain (Base or Ethereum Sepolia).', 'error');
+      setIsExecuting(false);
+      return;
+    }
 
     setIsFading(true);
 
@@ -517,15 +530,22 @@ export default function DetailsModal({
       
       // Small delay to show the scanning message
       await new Promise(resolve => setTimeout(resolve, 300));
+
+      addLog(`Switching to ${getNetwork(fromChainId).name}...`);
+      const switchResult = await selectChainAndSwitchWallet(fromChainId);
+      if (!switchResult.ok) {
+        throw new Error(switchResult.error || 'Failed to switch wallet to deposit chain');
+      }
+      setActiveChainId(fromChainId);
       
-      const tokenMap = getTokens(activeChainId);
+      const tokenMap = getTokens(fromChainId);
       const tokenInfo = tokenMap[(assetIn || 'USDC').toUpperCase()];
       if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
 
       // Generate ZK proof for strategy execution using full deposit amount
-      addLog(`Generating ZK proof on ${getNetwork(activeChainId).name}...`);
+      addLog(`Generating ZK proof on ${getNetwork(fromChainId).name}...`);
       const zkResult = await generateZKData(
-        activeChainId,
+        fromChainId,
         tokenInfo,
         amountStr,
         recipient
@@ -555,8 +575,8 @@ export default function DetailsModal({
           ? { start_delay_sec: bounds.start_delay_sec }
           : {}),
         ...(bounds.max_slippage_bps != null ? { max_slippage_bps: bounds.max_slippage_bps } : {}),
-        from_chain: String(activeChainId),
-        to_chain: String(activeChainId),
+        from_chain: String(fromChainId),
+        to_chain: String(toChainId ?? fromChainId),
         zk_proof: {
           pA: withdrawalTxData.pA,
           pB: withdrawalTxData.pB,

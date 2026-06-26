@@ -1,4 +1,5 @@
 import type { Node } from "@xyflow/react";
+import { getSelectedChainId, normalizeRunModeChainLabel, getRunModeChainLabel } from "./networks";
 
 type NodeData = Record<string, unknown>;
 
@@ -18,7 +19,11 @@ export function buildRunModeValuesFromNodes(nodes: Node[]): Record<string, Recor
     const step: Record<string, string> = {};
 
     if (type === "deposit") {
-      setIfPresent(step, "chain", d.chain || "Base");
+      setIfPresent(
+        step,
+        "chain",
+        normalizeRunModeChainLabel(String(d.chain || getRunModeChainLabel(getSelectedChainId())))
+      );
       setIfPresent(step, "tokenA", d.coin);
       setIfPresent(step, "amount", d.amount);
     } else if (type === "swap") {
@@ -42,7 +47,11 @@ export function buildRunModeValuesFromNodes(nodes: Node[]): Record<string, Recor
         setIfPresent(step, field, d[field]);
       }
     } else if (type === "withdraw") {
-      setIfPresent(step, "chain", d.chain || "Base");
+      setIfPresent(
+        step,
+        "chain",
+        normalizeRunModeChainLabel(String(d.chain || getRunModeChainLabel(getSelectedChainId())))
+      );
       setIfPresent(step, "coin", d.coin);
       setIfPresent(step, "amount", d.amount);
       setIfPresent(step, "address", d.wallet);
@@ -78,6 +87,13 @@ export function getRunStepFieldValue(
   if (field === "coinB") return String(nodeData.toCoin || "");
   if (field === "address") return String(nodeData.wallet || "");
   if (field === "dexType") return String(nodeData.dex || "Uniswap");
+  if (field === "chain") {
+    const raw = nodeData.chain;
+    if (raw != null && String(raw).trim() !== "") {
+      return normalizeRunModeChainLabel(String(raw));
+    }
+    return getRunModeChainLabel(getSelectedChainId());
+  }
 
   const raw = nodeData[field];
   return raw != null ? String(raw) : "";

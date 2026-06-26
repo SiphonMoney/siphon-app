@@ -75,6 +75,41 @@ export const NETWORKS: Record<number, NetworkConfig> = {
 export const SUPPORTED_CHAIN_IDS = [8453, 11155111];
 export const DEFAULT_CHAIN_ID = 8453;
 
+/** Labels for Pay & Run deposit / withdraw chain dropdowns. */
+export const RUN_MODE_CHAIN_LABELS: string[] = [
+  NETWORKS[11155111].name,
+  NETWORKS[8453].name,
+];
+
+const RUN_MODE_CHAIN_ALIASES: Record<string, number> = {
+  base: 8453,
+  'ethereum sepolia': 11155111,
+  sepolia: 11155111,
+  ethereum: 11155111,
+};
+
+export function getRunModeChainLabel(chainId?: number): string {
+  return getNetwork(chainId).name;
+}
+
+export function resolveRunModeChainId(label: string): number | null {
+  const key = label.trim().toLowerCase();
+  if (!key) return null;
+  if (RUN_MODE_CHAIN_ALIASES[key] != null) return RUN_MODE_CHAIN_ALIASES[key];
+  for (const id of SUPPORTED_CHAIN_IDS) {
+    if (NETWORKS[id].name.toLowerCase() === key) return id;
+  }
+  return null;
+}
+
+/** Map builder / legacy labels (e.g. "Sepolia") to canonical run-mode names. */
+export function normalizeRunModeChainLabel(label: string): string {
+  const trimmed = label.trim();
+  if (!trimmed) return getRunModeChainLabel(getSelectedChainId());
+  const id = resolveRunModeChainId(trimmed);
+  return id != null ? NETWORKS[id].name : trimmed;
+}
+
 const STORAGE_KEY = 'siphon.selectedChainId';
 
 /** The chain the dapp is currently operating on (persisted in localStorage). */

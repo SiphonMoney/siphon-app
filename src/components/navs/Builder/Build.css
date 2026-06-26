@@ -120,9 +120,38 @@
 .build-page-layout--focus {
   justify-content: flex-end;
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: auto;
   padding-top: clamp(3.5rem, 8vh, 5rem);
-  padding-bottom: max(3.25rem, calc(env(safe-area-inset-bottom) + 2rem));
+  padding-bottom: max(9.5rem, calc(env(safe-area-inset-bottom) + 8rem));
+}
+
+/* Fixed chat input sits above the page footer when dashboard is open */
+.blueprint-view--chat-active.blueprint-view--dash-front .build-ai-prompt-dock--anchored {
+  bottom: max(2.85rem, calc(env(safe-area-inset-bottom) + 2.35rem));
+}
+
+.blueprint-view--chat-active.blueprint-view--dash-front .build-hero-chat--anchored .build-ai-thread-fade-wrap {
+  bottom: calc(max(2.85rem, env(safe-area-inset-bottom) + 2.35rem) + 8.75rem);
+}
+
+.blueprint-view--chat-active .build-page-layout--focus {
+  padding-bottom: max(9.5rem, calc(env(safe-area-inset-bottom) + 8rem));
+}
+
+.blueprint-view--chat-active.blueprint-view--dash-front .build-page-layout {
+  padding-bottom: max(10.5rem, calc(env(safe-area-inset-bottom) + 9rem));
+}
+
+/* Chat active: only occupy the bottom strip so the canvas stays interactive */
+.blueprint-view--chat-active .build-page-layout {
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  justify-content: flex-end;
 }
 
 .build-page-content {
@@ -683,7 +712,25 @@
   }
 
   .build-page-layout--focus {
-    padding-bottom: max(2.75rem, calc(env(safe-area-inset-bottom) + 1.75rem));
+    padding-bottom: max(9rem, calc(env(safe-area-inset-bottom) + 7.5rem));
+  }
+
+  .blueprint-view--chat-active .build-ai-prompt-dock--anchored {
+    width: min(656px, calc(100vw - 2rem));
+    bottom: max(0.85rem, env(safe-area-inset-bottom));
+  }
+
+  .blueprint-view--chat-active .build-hero-chat--anchored .build-ai-thread-fade-wrap {
+    width: min(600px, calc(100vw - 2rem));
+    bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 8.75rem);
+  }
+
+  .blueprint-view--chat-active.blueprint-view--dash-front .build-ai-prompt-dock--anchored {
+    bottom: max(2.65rem, calc(env(safe-area-inset-bottom) + 2.1rem));
+  }
+
+  .blueprint-view--chat-active.blueprint-view--dash-front .build-hero-chat--anchored .build-ai-thread-fade-wrap {
+    bottom: calc(max(2.65rem, env(safe-area-inset-bottom) + 2.1rem) + 8.75rem);
   }
 
   .build-hero-band {

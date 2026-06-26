@@ -49,11 +49,15 @@ export async function processBuilderTurn(
 
   const result = await llmParse(trimmed, chatHistory, session?.parsed ?? null, market);
   if ("ok" in result && result.ok === false) {
+    const botMessage =
+      result.reason === "openrouter_error" && result.detail
+        ? result.detail
+        : LLM_MESSAGES[result.reason];
     return {
       nodes: existingNodes,
       edges: existingEdges,
       session: session ?? buildSession(createDefaultParsed(trimmed), [trimmed]),
-      botMessage: LLM_MESSAGES[result.reason],
+      botMessage,
     };
   }
 

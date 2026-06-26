@@ -988,7 +988,7 @@ export default function Build({
   }, [nodes, edges, normalizeNode]);
   
   return (
-    <div className={`blueprint-view blueprint-view--fullscreen ${isLoaded ? 'loaded' : ''} ${widgetsVisible ? 'blueprint-view--dash-front' : ''}`}>
+    <div className={`blueprint-view blueprint-view--fullscreen ${isLoaded ? 'loaded' : ''} ${widgetsVisible ? 'blueprint-view--dash-front' : ''} ${chatFocus ? 'blueprint-view--chat-active' : ''}`}>
       <ReactFlowProvider>
         <div className="blueprint-workspace">
           <BuildNav
@@ -1043,7 +1043,7 @@ export default function Build({
 
             <RunningStrategiesProvider runningStrategies={runningStrategies ?? new Map()}>
             <DashboardCustomizeProvider>
-            <div className={`build-page-layout ${chatFocus && !widgetsVisible ? "build-page-layout--focus" : ""}`}>
+            <div className={`build-page-layout ${chatFocus ? "build-page-layout--focus" : ""}`}>
               <div className="build-page-content">
                 <div className="build-hero-band">
                   <BuildAiPrompt
