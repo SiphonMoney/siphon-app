@@ -17,7 +17,8 @@ export type WidgetKind =
   | "dominance"
   | "news"
   | "swap"
-  | "runs";
+  | "runs"
+  | "chart";
 
 export type SizePreset = "1x1" | "1x2" | "2x1" | "2x2" | "4x2" | "6x1" | "6x2";
 

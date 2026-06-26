@@ -10,7 +10,6 @@ import {
 } from "@/components/widgets/config/widgetPages";
 import { renderWidget } from "@/components/widgets/WidgetFactory";
 import {
-  DashboardCustomizePanel,
   useDashboardCustomize,
 } from "@/components/landing/dashboard-customize-context";
 import { canResizeKind } from "@/components/widgets/config/widgetLibrary";
@@ -356,8 +355,6 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
           </div>
         </div>
 
-        {isMobileLayout ? <DashboardCustomizePanel variant="mobile" /> : null}
-
         {showDesktopToolbar ? (
           <div className="build-widget-grid-toolbar">
             {!hideCollapseControl ? (
@@ -387,12 +384,14 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
                     className={`build-widget-tool-btn ${panelOpen ? "build-widget-tool-btn--active" : ""}`}
                     aria-expanded={panelOpen}
                     aria-controls="dashboard-customize-panel"
-                    title="Customize dashboard"
+                    title={panelOpen ? "Done customizing" : "Customize dashboard"}
+                    aria-label={panelOpen ? "Done customizing" : "Customize dashboard"}
                   >
                     <Settings className="size-4" strokeWidth={1.75} aria-hidden />
-                    <span className="sr-only">Customize dashboard</span>
+                    <span className="sr-only">
+                      {panelOpen ? "Done customizing" : "Customize dashboard"}
+                    </span>
                   </button>
-                  <DashboardCustomizePanel />
                 </div>
                 {pageCount > 1 ? (
                   <nav

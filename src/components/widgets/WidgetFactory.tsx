@@ -11,6 +11,7 @@ import { NewsGlance } from "@/components/widgets/news";
 import { RunsPanel } from "@/components/widgets/primitives/RunsPanel";
 import { StrategiesPanel } from "@/components/widgets/primitives/StrategiesPanel";
 import { SwapPanel } from "@/components/widgets/primitives/SwapPanel";
+import { TradingViewWidget } from "@/components/widgets/chart";
 import { TopCoinsPanel } from "@/components/widgets/coins";
 import { WalletPanel } from "@/components/widgets/primitives/WalletPanel";
 
@@ -52,6 +53,8 @@ export function renderWidget(p: PlacedWidget) {
       return <SwapPanel compact={compact} />;
     case "runs":
       return <RunsPanel compact={compact} />;
+    case "chart":
+      return <TradingViewWidget sectionId={sectionId} />;
     default:
       return null;
   }

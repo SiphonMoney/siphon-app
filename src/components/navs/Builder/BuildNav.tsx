@@ -423,7 +423,8 @@ export default function BuildNav({
               aria-label="Scene file name"
             />
           </div>
-          <button 
+          <button
+            type="button"
             className={`blueprint-save-btn blueprint-save-btn--labeled ${saveSuccess ? 'save-success' : ''}`}
             onClick={(e) => {
               e.preventDefault();
@@ -453,7 +454,8 @@ export default function BuildNav({
               </>
             )}
           </button>
-          <button 
+          <button
+            type="button"
             className="blueprint-run-btn blueprint-run-btn--labeled"
             onClick={(e) => {
               e.preventDefault();
@@ -471,6 +473,7 @@ export default function BuildNav({
             <span className="blueprint-toolbar-label">Run</span>
           </button>
           <button
+            type="button"
             className="blueprint-execute-btn blueprint-execute-btn--labeled"
             onClick={(e) => {
               e.preventDefault();
@@ -488,6 +491,7 @@ export default function BuildNav({
             <span className="blueprint-toolbar-label">{isSimulating ? "Smoking" : "Smoke"}</span>
           </button>
           <button
+            type="button"
             className="blueprint-restart-btn blueprint-restart-btn--icon"
             onClick={(e) => {
               e.preventDefault();

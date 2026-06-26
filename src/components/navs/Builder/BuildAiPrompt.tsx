@@ -145,6 +145,8 @@ export interface BuildAiPromptProps {
   /** Dashboard widget band visibility — toggle sits right of Send in the input row. */
   widgetsVisible?: boolean;
   onToggleWidgets?: () => void;
+  /** Canvas/build mode — hide hero title and anchor chat (e.g. after picking a strategy). */
+  buildViewActive?: boolean;
 }
 
 export default function BuildAiPrompt({
@@ -162,6 +164,7 @@ export default function BuildAiPrompt({
   onChatActiveChange,
   widgetsVisible = true,
   onToggleWidgets,
+  buildViewActive = false,
 }: BuildAiPromptProps) {
   const [internalValue, setInternalValue] = useState(defaultValue);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -201,8 +204,9 @@ export default function BuildAiPrompt({
 
   const isEmpty = displayMessages.length === 0 && !isLoading;
   const chatActive = !isEmpty || isLoading;
-  /** Fixed bottom strip only when chat is expanded without the widget dashboard */
-  const chatAnchored = chatActive && !widgetsVisible;
+  const promptExpanded = chatActive || buildViewActive;
+  /** Fixed bottom strip when widgets are collapsed and chat/build mode is active */
+  const chatAnchored = !widgetsVisible && promptExpanded;
 
   useEffect(() => {
     onChatActiveChange?.(chatActive);
@@ -314,8 +318,8 @@ export default function BuildAiPrompt({
         chatAnchored ? "build-hero-chat--anchored" : "build-hero-chat--centered"
       }`}
     >
-      <div className={`build-ai-centered-column ${chatActive ? "build-ai-centered-column--active" : ""}`}>
-        {isEmpty && !chatActive && (
+      <div className={`build-ai-centered-column ${promptExpanded ? "build-ai-centered-column--active" : ""}`}>
+        {isEmpty && !promptExpanded && (
           <div className="build-ai-tagline-block" aria-hidden={false}>
             <p className="build-ai-tagline-welcome">Welcome to the Siphon</p>
             <h2 className="build-ai-tagline">Fully  Confidential Execution Layer for the DeFi</h2>

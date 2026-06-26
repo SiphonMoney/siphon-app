@@ -289,6 +289,75 @@
   pointer-events: none;
 }
 
+.build-hero-swap {
+  position: relative;
+  width: min(920px, 94vw);
+  max-width: 920px;
+  margin: 0 auto;
+  min-height: clamp(7.25rem, 17vh, 10.5rem);
+  pointer-events: none;
+  transition:
+    min-height 0.38s ease,
+    max-width 0.38s ease,
+    width 0.38s ease;
+}
+
+.build-hero-band--customizing {
+  width: 100%;
+  padding-inline: clamp(1rem, 2vw, 1.5rem);
+  box-sizing: border-box;
+}
+
+.build-hero-band--customizing .build-hero-swap {
+  width: 100%;
+  max-width: 100%;
+  min-height: clamp(11rem, 28vh, 16rem);
+}
+
+.build-hero-swap-pane {
+  transition: opacity 0.38s ease;
+}
+
+.build-hero-swap-pane--chat {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.build-hero-swap-pane--library {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.build-hero-band.build-dashboard-theme {
+  pointer-events: none;
+}
+
+.build-hero-band.build-dashboard-theme.build-hero-band--customizing {
+  pointer-events: none;
+}
+
+.build-hero-band--library-visible.build-dashboard-theme .build-widget-customize-panel--hero,
+.build-hero-band--library-visible.build-dashboard-theme .build-widget-customize-panel--hero * {
+  pointer-events: auto;
+}
+
+.build-hero-band--library-visible .build-hero-swap-pane--chat {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.build-hero-band--library-visible .build-hero-swap-pane--library {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 .build-page-layout--focus .build-hero-band {
   flex: 0 1 auto;
   min-height: 0;
@@ -350,6 +419,22 @@
   min-height: 0;
 }
 
+/* Sticky app nav is z-index 10050 — pass clicks through its empty center when build toolbar is open */
+body.build-view-expanded .dapp-main-container nav {
+  pointer-events: none;
+}
+
+body.build-view-expanded .dapp-main-container nav .logo,
+body.build-view-expanded .dapp-main-container nav .logo-link,
+body.build-view-expanded .dapp-main-container nav .nav-wallet,
+body.build-view-expanded .dapp-main-container nav .nav-wallet *,
+body.build-view-expanded .dapp-main-container nav .nav-center,
+body.build-view-expanded .dapp-main-container nav .nav-right,
+body.build-view-expanded .dapp-main-container nav a,
+body.build-view-expanded .dapp-main-container nav button {
+  pointer-events: auto;
+}
+
 .blueprint-view--fullscreen .blueprint-top-bar--mid {
   position: fixed;
   top: calc(4.25rem + env(safe-area-inset-top, 0px));
@@ -363,7 +448,7 @@
   display: inline-flex;
   box-sizing: border-box;
   transform: translateX(-50%) translateY(-10px);
-  z-index: 25;
+  z-index: 10055;
   margin: 0;
   width: auto;
   max-width: min(96vw, 800px);
@@ -603,7 +688,22 @@
   gap: 0.35rem;
   height: 34px;
   padding: 0 0.65rem;
-  min-width: auto;
+  min-width: max-content;
+  width: auto;
+  flex-shrink: 0;
+  position: relative;
+  overflow: visible;
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.blueprint-top-bar--expanded .blueprint-save-btn--labeled svg,
+.blueprint-top-bar--expanded .blueprint-run-btn--labeled svg,
+.blueprint-top-bar--expanded .blueprint-execute-btn--labeled svg,
+.blueprint-top-bar--expanded .blueprint-toolbar-label {
+  pointer-events: none;
+  user-select: none;
 }
 
 .blueprint-top-bar--expanded .blueprint-restart-btn--icon {
@@ -940,6 +1040,25 @@
 
   .blueprint-view--dash-front .build-hero-band {
     padding-top: clamp(1.15rem, 3.5vh, 1.85rem);
+  }
+
+  .build-hero-swap {
+    width: 100%;
+    max-width: 100%;
+    min-height: clamp(8rem, 22vh, 11rem);
+  }
+
+  .build-hero-band--customizing {
+    padding-inline: clamp(1.5rem, 8.5vw, 2.25rem);
+  }
+
+  .build-dashboard-theme .build-widget-customize-panel--hero {
+    min-height: clamp(9.5rem, 24vh, 13rem);
+    max-height: min(52vh, 420px);
+  }
+
+  .build-dashboard-theme .build-widget-customize-panel--hero .build-widget-customize-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .blueprint-view--dash-front .build-widget-band {

@@ -16,8 +16,6 @@ import { payExecutionFee } from "../../../lib/handler";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
-import StrategyChart, { type ChartOverlay } from "../../charts/StrategyChart";
-import "../../charts/charts.css";
 
 
 interface NodeData {
@@ -171,9 +169,8 @@ export default function DetailsModal({
     [modalStrategyNodes, modalStrategyEdges]
   );
 
-  // Derive a chart asset + strategy overlays (target price line, range band)
-  // from the strategy's nodes so the chart reflects what the user is building.
-  const chartConfig = useMemo(() => {
+  // Derive primary asset from strategy nodes for contextual step hints.
+  const strategyCoin = useMemo(() => {
     const VOLATILE = ['ETH', 'BTC', 'SOL'];
     const field = (node: Node, f: string): string | undefined => {
       const rm = getRunStepFieldValue(runModeValues, node.id, f, (node.data as NodeData) || {});
@@ -189,32 +186,7 @@ export default function DetailsModal({
       deposit && field(deposit, 'tokenA'),
       deposit && (deposit.data as NodeData)?.coin,
     ].filter(Boolean) as string[];
-    const coin = (candidates.find((c) => VOLATILE.includes(c.toUpperCase())) || 'ETH').toUpperCase();
-
-    const overlays: ChartOverlay[] = [];
-    for (const n of modalStrategyNodes) {
-      const d = n.data as NodeData;
-      if (d?.type !== 'strategy') continue;
-      const kind = d.strategy || '';
-      if (kind === 'Limit Order' || kind === 'Take Profit') {
-        const p = parseFloat(field(n, 'priceGoal') || '');
-        if (isFinite(p)) overlays.push({ kind: 'line', price: p, color: '#26a69a', title: kind });
-      } else if (kind === 'Stop Loss') {
-        const p = parseFloat(field(n, 'priceGoal') || '');
-        if (isFinite(p)) overlays.push({ kind: 'line', price: p, color: '#ef5350', title: 'Stop' });
-      } else if (kind === 'Range') {
-        const lo = parseFloat(field(n, 'rangeLow') || '');
-        const hi = parseFloat(field(n, 'rangeHigh') || '');
-        overlays.push({
-          kind: 'band',
-          low: isFinite(lo) ? lo : undefined,
-          high: isFinite(hi) ? hi : undefined,
-          color: '#5b8def',
-          title: 'Range',
-        });
-      }
-    }
-    return { coin, overlays };
+    return (candidates.find((c) => VOLATILE.includes(c.toUpperCase())) || 'ETH').toUpperCase();
   }, [modalStrategyNodes, runModeValues]);
 
   const getStepTags = (nodeData: NodeData, isRunModeView: boolean): StepTag[] => {
@@ -880,8 +852,8 @@ export default function DetailsModal({
                             <div className="strategy-step-number">{index + 1}</div>
                             <div className="strategy-step-content">
                               <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
-                              {getStepHint(nodeData, chartConfig.coin) && (
-                                <div className="strategy-step-hint">{getStepHint(nodeData, chartConfig.coin)}</div>
+                              {getStepHint(nodeData, strategyCoin) && (
+                                <div className="strategy-step-hint">{getStepHint(nodeData, strategyCoin)}</div>
                               )}
                               <div className="strategy-step-details">
                                 {tags.map((tag, idx) => (
@@ -1021,24 +993,6 @@ export default function DetailsModal({
                 </div>
               </div>
 
-              {/* Contextual price chart with the strategy's targets overlaid */}
-              <div className="strategy-modal-chart">
-                <div className="strategy-modal-chart-head">
-                  <span className="strategy-modal-chart-pair">{chartConfig.coin} / USD</span>
-                  {chartConfig.overlays.length > 0 && (
-                    <span className="strategy-modal-chart-hint">targets overlaid</span>
-                  )}
-                </div>
-                <div className="strategy-modal-chart-body">
-                  <StrategyChart
-                    key={chartConfig.coin}
-                    coin={chartConfig.coin}
-                    days={7}
-                    overlays={chartConfig.overlays}
-                    showLegend
-                  />
-                </div>
-              </div>
               </div>
             </React.Fragment>
           ) : (
@@ -1147,8 +1101,8 @@ export default function DetailsModal({
                             <div className="strategy-step-number">{index + 1}</div>
                             <div className="strategy-step-content">
                               <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
-                              {getStepHint(nodeData, chartConfig.coin) && (
-                                <div className="strategy-step-hint">{getStepHint(nodeData, chartConfig.coin)}</div>
+                              {getStepHint(nodeData, strategyCoin) && (
+                                <div className="strategy-step-hint">{getStepHint(nodeData, strategyCoin)}</div>
                               )}
                               <div className="strategy-step-details">
                                 {tags.map((tag, idx) => (
