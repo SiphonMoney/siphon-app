@@ -509,16 +509,12 @@ export default function DetailsModal({
     };
 
     const amountStr = getValue(depositNode?.id, 'amount', String(amount));
-    const depositChainLabel = getValue(
-      depositNode?.id,
-      'chain',
-      getRunModeChainLabel(activeChainId)
-    );
-    const withdrawChainLabel = getValue(
-      withdrawNode?.id,
-      'chain',
-      depositChainLabel
-    );
+    const depositChainLabel = depositNode
+      ? getRunStepFieldValue(runModeValues, depositNode.id, 'chain', depositNode.data as NodeData)
+      : getRunModeChainLabel(activeChainId);
+    const withdrawChainLabel = withdrawNode
+      ? getRunStepFieldValue(runModeValues, withdrawNode.id, 'chain', withdrawNode.data as NodeData)
+      : depositChainLabel;
     const fromChainId = resolveRunModeChainId(depositChainLabel);
     const toChainId = resolveRunModeChainId(withdrawChainLabel) ?? fromChainId;
     if (fromChainId == null) {
