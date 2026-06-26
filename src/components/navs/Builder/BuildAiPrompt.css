@@ -12,7 +12,7 @@
   flex-direction: column;
   align-items: stretch;
   gap: 1.65rem;
-  pointer-events: auto;
+  pointer-events: none;
   transition: gap 0.45s ease, transform 0.45s ease, width 0.45s ease;
 }
 
@@ -66,6 +66,7 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 8px 28px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
@@ -113,6 +114,7 @@
   max-height: none;
   height: 100%;
   padding: 0.5rem 0.65rem 0.35rem;
+  pointer-events: auto;
 }
 
 .build-ai-conversation-column {
@@ -265,6 +267,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  pointer-events: auto;
 }
 
 .build-ai-prompt-dock--anchored {
@@ -288,17 +291,27 @@
     rgba(0, 0, 0, 0.35) 82%,
     transparent 100%
   );
+  pointer-events: none;
+}
+
+.build-hero-chat--anchored .build-ai-prompt-dock--anchored > * {
   pointer-events: auto;
 }
 
-.build-hero-chat--anchored .build-ai-centered-column--active {
-  padding-bottom: 7.75rem;
-}
-
+/* Pin chat thread above the input — never over the canvas center */
 .build-hero-chat--anchored .build-ai-thread-fade-wrap {
-  z-index: 1;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 8.75rem);
+  width: min(600px, calc(100vw - 3rem));
+  z-index: 49;
   flex-shrink: 1;
   min-height: 0;
+}
+
+.build-hero-chat--anchored .build-ai-centered-column--active {
+  padding-bottom: 0;
 }
 
 /* Suggestion marquee (neogen-style) */
