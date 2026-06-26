@@ -72,21 +72,21 @@
       "label": "Swap",
       "hint": "Quick token swap",
       "tier": "core",
-      "defaultSize": "1x1",
+      "defaultSize": "1x2",
       "allowedSizes": ["1x1", "1x2", "2x2", "4x2"],
       "resizable": true,
       "component": "SwapPanel",
-      "description": "Compact pay / receive swap. Default 1×1 glance tile."
+      "description": "Compact pay / receive swap. Default 1×2 tall tile."
     },
     "runs": {
       "label": "Runs",
       "hint": "Active strategies",
       "tier": "core",
-      "defaultSize": "1x1",
+      "defaultSize": "1x2",
       "allowedSizes": ["1x1", "1x2", "2x1", "2x2"],
       "resizable": true,
       "component": "RunsPanel",
-      "description": "Live running strategies with elapsed time."
+      "description": "Live running strategies with elapsed time. Default 1×2 tall tile."
     },
     "coins": {
       "label": "Coins",
@@ -127,8 +127,8 @@
     { "kind": "news", "size": "2x1" },
     { "kind": "coins", "size": "2x2", "anchorId": "movers" },
     { "kind": "opportunities", "size": "2x2", "anchorId": "strategies" },
-    { "kind": "swap", "size": "1x1" },
-    { "kind": "runs", "size": "1x1" }
+    { "kind": "swap", "size": "1x2" },
+    { "kind": "runs", "size": "1x2" }
   ],
   "starterKinds": ["fear-greed", "market-cap", "market-volume", "dominance"]
 }

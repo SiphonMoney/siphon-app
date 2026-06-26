@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDownUp } from "lucide-react";
+import { resolveWalletAddress } from "@/lib/walletAddress";
 
 const PAIRS = ["ETH", "USDC"] as const;
+const WALLET_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 type SwapPanelProps = {
   compact?: boolean;
@@ -13,11 +15,30 @@ export function SwapPanel({ compact = false }: SwapPanelProps) {
   const [from, setFrom] = useState<(typeof PAIRS)[number]>("ETH");
   const [to, setTo] = useState<(typeof PAIRS)[number]>("USDC");
   const [amount, setAmount] = useState("");
+  const [destinationWallet, setDestinationWallet] = useState("");
+
+  useEffect(() => {
+    const syncWallet = () => {
+      const connected = resolveWalletAddress();
+      setDestinationWallet((prev) => (prev.trim() ? prev : connected ?? ""));
+    };
+    syncWallet();
+    window.addEventListener("walletConnected", syncWallet);
+    window.addEventListener("walletDisconnected", syncWallet);
+    return () => {
+      window.removeEventListener("walletConnected", syncWallet);
+      window.removeEventListener("walletDisconnected", syncWallet);
+    };
+  }, []);
 
   const flip = () => {
     setFrom(to);
     setTo(from);
   };
+
+  const walletValid =
+    !destinationWallet.trim() || WALLET_PATTERN.test(destinationWallet.trim());
+  const canSubmit = amount.trim().length > 0 && walletValid;
 
   if (compact) {
     return (
@@ -65,8 +86,19 @@ export function SwapPanel({ compact = false }: SwapPanelProps) {
               ))}
             </select>
           </div>
+          <input
+            type="text"
+            className="widget-swap-compact-wallet"
+            placeholder="Destination wallet"
+            value={destinationWallet}
+            onChange={(e) => setDestinationWallet(e.target.value)}
+            spellCheck={false}
+            autoComplete="off"
+            aria-label="Destination wallet address"
+            aria-invalid={!walletValid}
+          />
         </div>
-        <button type="button" className="widget-swap-compact-submit" disabled={!amount.trim()}>
+        <button type="button" className="widget-swap-compact-submit" disabled={!canSubmit}>
           Swap
         </button>
       </div>
@@ -131,10 +163,21 @@ export function SwapPanel({ compact = false }: SwapPanelProps) {
                 ))}
               </select>
             </div>
+            <input
+              type="text"
+              className="widget-swap-wallet"
+              placeholder="0x… destination wallet"
+              value={destinationWallet}
+              onChange={(e) => setDestinationWallet(e.target.value)}
+              spellCheck={false}
+              autoComplete="off"
+              aria-label="Destination wallet address"
+              aria-invalid={!walletValid}
+            />
           </div>
         </div>
       </div>
-      <button type="button" className="widget-swap-submit" disabled={!amount.trim()}>
+      <button type="button" className="widget-swap-submit" disabled={!canSubmit}>
         Swap {from} → {to}
       </button>
     </div>

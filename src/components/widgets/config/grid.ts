@@ -29,7 +29,7 @@ export type PlacedWidget = {
   anchorId?: string;
 };
 
-export const STORAGE_KEY = "siphon-build-dashboard-widgets-v7";
+export const STORAGE_KEY = "siphon-build-dashboard-widgets-v8";
 
 export const SIZE_TO_GRID: Record<SizePreset, { col: number; row: number }> = {
   "1x1": { col: 1, row: 1 },
@@ -125,13 +125,21 @@ export const DEFAULT_PLACED: PlacedWidget[] = [
     size: "2x2",
     anchorId: "strategies",
   },
-  { id: "default-swap", kind: "swap", size: "1x1" },
-  { id: "default-runs", kind: "runs", size: "1x1" },
+  { id: "default-swap", kind: "swap", size: "1x2" },
+  { id: "default-runs", kind: "runs", size: "1x2" },
 ];
 
 export function cycleSize(size: SizePreset): SizePreset {
   const i = SIZE_ORDER.indexOf(size);
   return SIZE_ORDER[(i + 1) % SIZE_ORDER.length];
+}
+
+function migrateSwapRunsToTall(placed: PlacedWidget[]): PlacedWidget[] {
+  return placed.map((p) =>
+    (p.kind === "swap" || p.kind === "runs") && p.size === "1x1"
+      ? { ...p, size: "1x2" as SizePreset }
+      : p,
+  );
 }
 
 export function loadPlacedFromStorage(): PlacedWidget[] {
@@ -170,7 +178,7 @@ export function loadPlacedFromStorage(): PlacedWidget[] {
             ? freshDefaultPlaced()
             : key === "siphon-build-dashboard-widgets-v6" && isLegacyV6DefaultLayout(valid)
               ? freshDefaultPlaced()
-              : valid;
+              : migrateSwapRunsToTall(valid);
         if (key !== STORAGE_KEY) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         }

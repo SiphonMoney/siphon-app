@@ -859,6 +859,37 @@
   font-variant-numeric: tabular-nums;
 }
 
+.build-dashboard-theme .widget-swap-wallet {
+  width: 100%;
+  margin-top: 0.35rem;
+  min-height: 1.85rem;
+  border: none;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0 0.5rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--defi-text-muted);
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.build-dashboard-theme .widget-swap-wallet::placeholder {
+  color: var(--defi-text-subtle);
+}
+
+.build-dashboard-theme .widget-swap-wallet:focus {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--defi-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.build-dashboard-theme .widget-swap-wallet[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.45);
+}
+
 .build-dashboard-theme .widget-swap-token {
   flex-shrink: 0;
   min-width: 4.75rem;
@@ -1651,6 +1682,34 @@
 .build-dashboard-theme .widget-swap-compact-flip .widget-swap-flip-icon {
   width: 0.75rem;
   height: 0.75rem;
+}
+
+.build-dashboard-theme .widget-swap-compact-wallet {
+  width: 100%;
+  height: 1.45rem;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0 0.35rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 7px;
+  font-weight: 500;
+  color: var(--defi-text-muted);
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.build-dashboard-theme .widget-swap-compact-wallet::placeholder {
+  color: var(--defi-text-subtle);
+}
+
+.build-dashboard-theme .widget-swap-compact-wallet:focus {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--defi-text);
+}
+
+.build-dashboard-theme .widget-swap-compact-wallet[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.45);
 }
 
 .build-dashboard-theme .widget-swap-compact-submit {
