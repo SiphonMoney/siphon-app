@@ -125,7 +125,7 @@
   padding-bottom: max(9.5rem, calc(env(safe-area-inset-bottom) + 8rem));
 }
 
-/* Fixed chat input sits above the page footer when dashboard is open */
+/* Fixed chat input sits above the page footer when dashboard is open (collapsed-chat mode only) */
 .blueprint-view--chat-active.blueprint-view--dash-front .build-ai-prompt-dock--anchored {
   bottom: max(2.85rem, calc(env(safe-area-inset-bottom) + 2.35rem));
 }
@@ -140,10 +140,31 @@
 
 .blueprint-view--chat-active.blueprint-view--dash-front .build-page-layout {
   padding-bottom: max(10.5rem, calc(env(safe-area-inset-bottom) + 9rem));
+  top: 0;
+  bottom: 0;
+  height: auto;
+  inset: 0;
+  justify-content: center;
+  padding-top: clamp(5.25rem, 13vh, 6.75rem);
+}
+
+.blueprint-view--chat-active.blueprint-view--dash-front .build-page-content {
+  max-width: 1400px;
+  justify-content: center;
+  gap: clamp(0.85rem, 2.5vh, 1.5rem);
+}
+
+.blueprint-view--chat-active.blueprint-view--dash-front .build-hero-band {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.blueprint-view--chat-active.blueprint-view--dash-front .build-widget-band {
+  margin-top: clamp(1rem, 3vh, 2rem);
 }
 
 /* Chat active: only occupy the bottom strip so the canvas stays interactive */
-.blueprint-view--chat-active .build-page-layout {
+.blueprint-view--chat-active:not(.blueprint-view--dash-front) .build-page-layout {
   top: auto;
   bottom: 0;
   left: 0;
@@ -173,7 +194,7 @@
 }
 
 .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
-  margin-top: clamp(0.85rem, 2.5vh, 1.5rem);
+  margin-top: clamp(1.5rem, 4vh, 2.75rem);
   padding-bottom: 1.5rem;
 }
 
@@ -768,7 +789,7 @@
   }
 
   .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
-    margin-top: 1.75rem;
+    margin-top: 2.25rem;
   }
 
   .build-ai-centered-column {

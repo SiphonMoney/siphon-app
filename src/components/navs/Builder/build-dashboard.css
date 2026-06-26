@@ -51,6 +51,13 @@
   align-items: stretch;
   gap: 0.5rem;
   width: 2.65rem;
+  position: relative;
+  z-index: 2;
+}
+
+.build-dashboard-theme .build-widget-settings-slot {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .build-dashboard-theme.widgets-collapsed .build-widget-grid-shell {
@@ -64,12 +71,14 @@
   outline-offset: 4px;
 }
 
-.build-dashboard-theme.widgets-editing .build-widget-cell--editing .widget-card {
-  outline: 1.5px solid rgba(255, 255, 255, 0.28);
+.build-dashboard-theme.widgets-editing .build-widget-cell--editing .widget-card,
+.build-dashboard-theme.widgets-editing .build-widget-cell--editing .glass-card {
+  outline: 2px solid rgba(255, 255, 255, 0.92);
   outline-offset: 2px;
   box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.15),
     var(--glass-shadow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .build-dashboard-theme .build-widget-grid {
@@ -117,9 +126,11 @@
   margin-top: 0.2rem;
   padding: 0.5rem 0.35rem;
   border-radius: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.38);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  position: relative;
+  z-index: 1;
 }
 
 .build-dashboard-theme .build-widget-page-label {
@@ -147,19 +158,17 @@
   height: 1.5rem;
   padding: 0;
   border-radius: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: none;
   background: rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.72);
   cursor: pointer;
   transition:
-    border-color 0.15s ease,
     background 0.15s ease,
     color 0.15s ease,
     opacity 0.15s ease;
 }
 
 .build-dashboard-theme .build-widget-page-step-btn:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.24);
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.95);
 }
@@ -1074,21 +1083,40 @@
   -webkit-backdrop-filter: blur(8px);
 }
 
+.build-dashboard-theme .build-widget-grid--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.build-dashboard-theme .build-widget-grid--exiting {
+  pointer-events: none;
+  animation: build-dashboard-grid-fade-out 0.24s ease forwards;
+}
+
+.build-dashboard-theme .build-widget-grid--entering {
+  pointer-events: none;
+  opacity: 0;
+  animation: build-dashboard-grid-fade-in 0.38s ease forwards;
+}
+
 /* ── Animations ──────────────────────────────────────── */
 
-@keyframes build-dashboard-widget-enter {
+@keyframes build-dashboard-grid-fade-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
-.build-dashboard-theme .dashboard-widget-enter {
-  animation: build-dashboard-widget-enter 0.5s ease forwards;
+@keyframes build-dashboard-grid-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes build-marquee-slide {
@@ -1150,12 +1178,16 @@
 }
 
 .build-dashboard-theme .build-widget-customize-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 120;
   width: min(220px, 42vw);
   max-height: min(52vh, 360px);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border: 1px solid var(--defi-border);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   background: linear-gradient(
     160deg,
@@ -1163,9 +1195,13 @@
     rgba(0, 0, 0, 0.55) 100%
   );
   padding: 0.55rem;
-  box-shadow: var(--glass-shadow), var(--glass-inset);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   overflow: hidden;
+  pointer-events: auto;
 }
 
 .build-dashboard-theme .build-widget-customize-title {
@@ -1655,7 +1691,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .build-dashboard-theme .dashboard-widget-enter,
+  .build-dashboard-theme .build-widget-grid--entering,
+  .build-dashboard-theme .build-widget-grid--exiting,
   .build-dashboard-theme .marquee-track,
   .build-dashboard-theme .animate-news-fade,
   .build-dashboard-theme .widget-hover:hover,

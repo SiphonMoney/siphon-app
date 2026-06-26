@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronsDown, ChevronsUp, ChevronUp, Settings, Trash2, LayoutGrid } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SIZE_TO_GRID, WIDGET_META } from "@/components/widgets/config/grid";
 import {
   DESKTOP_WIDGET_GRID,
@@ -19,6 +19,11 @@ import { canResizeKind } from "@/components/widgets/config/widgetLibrary";
 function mobileGridColumnSpan(sixColSpan: number): number {
   return sixColSpan >= 4 ? 2 : 1;
 }
+
+const PAGE_EXIT_MS = 240;
+const PAGE_FADE_MS = 380;
+
+type WidgetPhase = "idle" | "exit" | "enter";
 
 type DashboardWidgetGridProps = {
   /** Hide collapse — build page toggles the whole band from the chat input. */
@@ -38,13 +43,39 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
   const [collapsed, setCollapsed] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
-  const prevPageCountRef = useRef(1);
+  const [visiblePageIndex, setVisiblePageIndex] = useState(0);
+  const [widgetPhase, setWidgetPhase] = useState<WidgetPhase>("idle");
+  const pendingPageRef = useRef(0);
+  const hasPlayedInitialEnterRef = useRef(false);
+  const [hasEnteredOnce, setHasEnteredOnce] = useState(false);
 
   const gridSpec = isMobileLayout ? MOBILE_WIDGET_GRID : DESKTOP_WIDGET_GRID;
   const pages = useMemo(() => paginateWidgets(placed, gridSpec), [placed, gridSpec]);
   const pageCount = pages.length;
   const safePageIndex = Math.min(pageIndex, Math.max(0, pageCount - 1));
-  const pageWidgets = pages[safePageIndex] ?? [];
+  const pageWidgets = pages[visiblePageIndex] ?? [];
+
+  const requestPage = useCallback(
+    (next: number) => {
+      const clamped = Math.min(Math.max(0, next), Math.max(0, pageCount - 1));
+      pendingPageRef.current = clamped;
+      setPageIndex(clamped);
+
+      if (!hydrated) {
+        setVisiblePageIndex(clamped);
+        return;
+      }
+
+      if (clamped === visiblePageIndex && widgetPhase === "idle") return;
+      if (widgetPhase === "exit") {
+        pendingPageRef.current = clamped;
+        return;
+      }
+
+      setWidgetPhase("exit");
+    },
+    [hydrated, pageCount, visiblePageIndex, widgetPhase],
+  );
 
   const handleTogglePanel = () => {
     if (!panelOpen && !hideCollapseControl) setCollapsed(false);
@@ -60,13 +91,43 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
   }, []);
 
   useEffect(() => {
-    if (pageCount > prevPageCountRef.current) {
-      setPageIndex(pageCount - 1);
-    } else if (safePageIndex !== pageIndex) {
+    if (!hydrated || hasPlayedInitialEnterRef.current) return;
+    hasPlayedInitialEnterRef.current = true;
+    setWidgetPhase("enter");
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (widgetPhase !== "exit") return;
+    const timer = window.setTimeout(() => {
+      setVisiblePageIndex(pendingPageRef.current);
+      setWidgetPhase("enter");
+    }, PAGE_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [widgetPhase]);
+
+  useEffect(() => {
+    if (widgetPhase !== "enter") return;
+    const timer = window.setTimeout(() => {
+      setWidgetPhase("idle");
+      setHasEnteredOnce(true);
+    }, PAGE_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [widgetPhase, visiblePageIndex]);
+
+  useEffect(() => {
+    if (safePageIndex !== pageIndex) {
       setPageIndex(safePageIndex);
+      pendingPageRef.current = safePageIndex;
+      if (hydrated && safePageIndex !== visiblePageIndex && widgetPhase === "idle") {
+        setWidgetPhase("exit");
+      } else if (!hydrated) {
+        setVisiblePageIndex(safePageIndex);
+      }
     }
-    prevPageCountRef.current = pageCount;
-  }, [pageCount, pageIndex, safePageIndex]);
+  }, [pageCount, pageIndex, safePageIndex, hydrated, visiblePageIndex, widgetPhase]);
+
+  const gridReady = hydrated && (widgetPhase !== "idle" || hasEnteredOnce);
+  const pageTransitioning = widgetPhase === "exit" || widgetPhase === "enter";
 
   return (
     <div
@@ -84,24 +145,26 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
           className={`build-widget-grid-main min-w-0 overflow-x-hidden ${collapsed ? "hidden" : ""}`}
         >
           <div
-            className={`build-widget-grid build-widget-grid--paged build-widget-grid--rows-${gridSpec.rows}`}
+            className={[
+              `build-widget-grid build-widget-grid--paged build-widget-grid--rows-${gridSpec.rows}`,
+              widgetPhase === "exit" ? "build-widget-grid--exiting" : "",
+              widgetPhase === "enter" ? "build-widget-grid--entering" : "",
+              !gridReady ? "build-widget-grid--hidden" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
           >
-            {pageWidgets.map((p, index) => {
+            {gridReady
+              ? pageWidgets.map((p) => {
               const { col, row } = SIZE_TO_GRID[p.size];
               const colSpan = isMobileLayout ? mobileGridColumnSpan(col) : col;
-              const staggerMs = 105;
               return (
                 <div
-                  key={p.id}
-                  className={
-                    hydrated
-                      ? `dashboard-widget-enter build-widget-cell relative min-h-0 min-w-0${panelOpen ? " build-widget-cell--editing" : ""}`
-                      : `relative min-h-0 min-w-0 opacity-0${panelOpen ? " build-widget-cell--editing" : ""}`
-                  }
+                  key={`${visiblePageIndex}-${p.id}`}
+                  className={`build-widget-cell relative min-h-0 min-w-0${panelOpen ? " build-widget-cell--editing" : ""}`}
                   style={{
                     gridColumn: `span ${colSpan}`,
                     gridRow: `span ${row}`,
-                    ...(hydrated ? { animationDelay: `${index * staggerMs}ms` } : undefined),
                   }}
                 >
                   <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -132,7 +195,8 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
                   ) : null}
                 </div>
               );
-            })}
+            })
+              : null}
           </div>
         </div>
 
@@ -155,18 +219,20 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
               </span>
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={handleTogglePanel}
-            className={`build-widget-tool-btn ${panelOpen ? "build-widget-tool-btn--active" : ""}`}
-            aria-expanded={panelOpen}
-            aria-controls="dashboard-customize-panel"
-            title="Customize dashboard"
-          >
-            <Settings className="size-4" strokeWidth={1.75} aria-hidden />
-            <span className="sr-only">Customize dashboard</span>
-          </button>
-          <DashboardCustomizePanel />
+          <div className="build-widget-settings-slot">
+            <button
+              type="button"
+              onClick={handleTogglePanel}
+              className={`build-widget-tool-btn ${panelOpen ? "build-widget-tool-btn--active" : ""}`}
+              aria-expanded={panelOpen}
+              aria-controls="dashboard-customize-panel"
+              title="Customize dashboard"
+            >
+              <Settings className="size-4" strokeWidth={1.75} aria-hidden />
+              <span className="sr-only">Customize dashboard</span>
+            </button>
+            <DashboardCustomizePanel />
+          </div>
           {pageCount > 1 ? (
             <nav
               className="build-widget-page-nav build-widget-page-nav--toolbar"
@@ -177,8 +243,8 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
                 <button
                   type="button"
                   className="build-widget-page-step-btn"
-                  onClick={() => setPageIndex((i) => Math.max(0, i - 1))}
-                  disabled={safePageIndex === 0}
+                  onClick={() => requestPage(safePageIndex - 1)}
+                  disabled={safePageIndex === 0 || pageTransitioning}
                   aria-label="Previous page"
                 >
                   <ChevronUp className="size-3.5" strokeWidth={2} aria-hidden />
@@ -190,17 +256,18 @@ export function DashboardWidgetGrid({ hideCollapseControl = false }: DashboardWi
                       type="button"
                       role="tab"
                       className={`build-widget-page-dot${i === safePageIndex ? " build-widget-page-dot--active" : ""}`}
-                      onClick={() => setPageIndex(i)}
+                      onClick={() => requestPage(i)}
                       aria-label={`Page ${i + 1}`}
                       aria-selected={i === safePageIndex}
+                      disabled={pageTransitioning}
                     />
                   ))}
                 </div>
                 <button
                   type="button"
                   className="build-widget-page-step-btn"
-                  onClick={() => setPageIndex((i) => Math.min(pageCount - 1, i + 1))}
-                  disabled={safePageIndex >= pageCount - 1}
+                  onClick={() => requestPage(safePageIndex + 1)}
+                  disabled={safePageIndex >= pageCount - 1 || pageTransitioning}
                   aria-label="Next page"
                 >
                   <ChevronDown className="size-3.5" strokeWidth={2} aria-hidden />

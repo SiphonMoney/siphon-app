@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -276,6 +276,7 @@ export default function Build({
   const [chatFocus, setChatFocus] = useState(false);
   const [widgetsVisible, setWidgetsVisible] = useState(true);
   const [builderPrompt, setBuilderPrompt] = useState("");
+  const pageLayoutRef = useRef<HTMLDivElement>(null);
   const ethUsd = useEthPrice();
   const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
 
@@ -288,17 +289,26 @@ export default function Build({
   }, []);
 
   const handleToggleWidgets = useCallback(() => {
-    setWidgetsVisible((visible) => !visible);
+    setWidgetsVisible((visible) => {
+      const next = !visible;
+      if (next) {
+        requestAnimationFrame(() => {
+          if (pageLayoutRef.current) pageLayoutRef.current.scrollTop = 0;
+        });
+      }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent("build-view-expanded", { detail: chatFocus }));
-    document.body.classList.toggle("build-view-expanded", chatFocus);
+    const expandedCanvas = chatFocus && !widgetsVisible;
+    window.dispatchEvent(new CustomEvent("build-view-expanded", { detail: expandedCanvas }));
+    document.body.classList.toggle("build-view-expanded", expandedCanvas);
     return () => {
       document.body.classList.remove("build-view-expanded");
     };
-  }, [chatFocus]);
+  }, [chatFocus, widgetsVisible]);
   
   useEffect(() => {
     initializeLimitOrderStrategy();
@@ -375,7 +385,7 @@ export default function Build({
     } else if (type === 'control') {
       label = chainOrDexOrStrategy ? chainOrDexOrStrategy : 'Control';
     } else {
-      label = chainOrDexOrStrategy ? `Deposit from ${chainOrDexOrStrategy}` : 'Deposit';
+      label = 'Deposit';
     }
 
     const isControl = type === 'control';
@@ -1043,7 +1053,10 @@ export default function Build({
 
             <RunningStrategiesProvider runningStrategies={runningStrategies ?? new Map()}>
             <DashboardCustomizeProvider>
-            <div className={`build-page-layout ${chatFocus ? "build-page-layout--focus" : ""}`}>
+            <div
+              ref={pageLayoutRef}
+              className={`build-page-layout ${chatFocus && !widgetsVisible ? "build-page-layout--focus" : ""}`}
+            >
               <div className="build-page-content">
                 <div className="build-hero-band">
                   <BuildAiPrompt
