@@ -201,6 +201,8 @@ export default function BuildAiPrompt({
 
   const isEmpty = displayMessages.length === 0 && !isLoading;
   const chatActive = !isEmpty || isLoading;
+  /** Fixed bottom strip only when chat is expanded without the widget dashboard */
+  const chatAnchored = chatActive && !widgetsVisible;
 
   useEffect(() => {
     onChatActiveChange?.(chatActive);
@@ -252,7 +254,7 @@ export default function BuildAiPrompt({
   );
 
   const inputDock = (
-    <div className={`build-ai-prompt-dock ${chatActive ? "build-ai-prompt-dock--anchored" : ""} ${className}`.trim()}>
+    <div className={`build-ai-prompt-dock ${chatAnchored ? "build-ai-prompt-dock--anchored" : ""} ${className}`.trim()}>
       <SuggestionMarquee
         disabled={disabled || isLoading}
         onPickPrompt={setValue}
@@ -309,7 +311,7 @@ export default function BuildAiPrompt({
   return (
     <div
       className={`build-hero-chat ${
-        chatActive ? "build-hero-chat--anchored" : "build-hero-chat--centered"
+        chatAnchored ? "build-hero-chat--anchored" : "build-hero-chat--centered"
       }`}
     >
       <div className={`build-ai-centered-column ${chatActive ? "build-ai-centered-column--active" : ""}`}>
