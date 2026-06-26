@@ -12,7 +12,7 @@ import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
 import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
-import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet } from "../../../lib/networks";
+import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
 import StrategyChart, { type ChartOverlay } from "../../charts/StrategyChart";
@@ -548,7 +548,7 @@ export default function DetailsModal({
         fromChainId,
         tokenInfo,
         amountStr,
-        recipient
+        getZkWithdrawRecipient(fromChainId),
       );
 
       if ('error' in zkResult) {
