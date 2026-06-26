@@ -76,7 +76,10 @@ export const SUPPORTED_CHAIN_IDS = [8453, 11155111];
 export const DEFAULT_CHAIN_ID = 8453;
 
 /** Labels for Pay & Run deposit / withdraw chain dropdowns. */
-export const RUN_MODE_CHAIN_LABELS: string[] = SUPPORTED_CHAIN_IDS.map((id) => NETWORKS[id].name);
+export const RUN_MODE_CHAIN_LABELS: string[] = [
+  NETWORKS[11155111].name,
+  NETWORKS[8453].name,
+];
 
 const RUN_MODE_CHAIN_ALIASES: Record<string, number> = {
   base: 8453,
