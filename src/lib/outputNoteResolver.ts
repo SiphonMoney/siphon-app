@@ -104,7 +104,7 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
           nullifierHash: rec.nullifierHash,
           amount: humanAmount,
           commitment: hit.commitment,
-          spent: 'false',
+          spent: false,
         }),
       );
 

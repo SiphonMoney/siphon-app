@@ -381,7 +381,9 @@ export async function getSpendableVaultBalance(
     const sym = parts[1].toUpperCase();
     try {
       const d = JSON.parse(localStorage.getItem(key) || '{}');
-      if (!d || !d.amount || d.spent) continue;
+      // Only skip notes that are explicitly spent. Note: `spent` may be the boolean false OR the
+      // string 'false' (older/output notes) — the string is truthy, so check the values directly.
+      if (!d || !d.amount || d.spent === true || d.spent === 'true') continue;
 
       let nullifierHash = d.nullifierHash != null ? String(d.nullifierHash) : undefined;
       if (!nullifierHash && d.nullifier) {
