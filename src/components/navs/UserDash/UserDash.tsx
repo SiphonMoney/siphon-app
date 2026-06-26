@@ -5,6 +5,7 @@ import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
 import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
 import { getSpendableVaultBalance } from '../../../lib/zkHandler';
+import { resolvePendingOutputNotes } from '../../../lib/outputNoteResolver';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
 import { getNetwork, DEFAULT_CHAIN_ID } from '../../../lib/networks';
 import { showAppToast } from '../../../lib/appToast';
@@ -32,6 +33,9 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
   useEffect(() => {
     const fetchBalances = async () => {
+      // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
+      // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
+      try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
       const { details } = await getSpendableVaultBalance(vaultChainId, TOKEN_MAP);
       setSiphonVaultBalances(details);
       console.log("Siphon Vault spendable balances (on-chain reconciled):", details);
