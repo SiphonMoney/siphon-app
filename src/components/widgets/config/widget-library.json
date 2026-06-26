@@ -117,6 +117,16 @@
       "resizable": true,
       "component": "WalletPanel",
       "description": "Connected wallet with ETH / USDC vault balances."
+    },
+    "chart": {
+      "label": "Chart",
+      "hint": "TradingView",
+      "tier": "core",
+      "defaultSize": "2x2",
+      "allowedSizes": ["2x2", "4x2", "6x2"],
+      "resizable": true,
+      "component": "TradingViewWidget",
+      "description": "Live TradingView advanced chart with symbol switcher."
     }
   },
   "defaultLayout": [

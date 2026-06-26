@@ -20,11 +20,10 @@ import '@xyflow/react/dist/style.css';
 import "./Build.css";
 import "./build-dashboard.css";
 import BuildNav from "./BuildNav";
-import BuildAiPrompt, { type BuildChatMessage } from "./BuildAiPrompt";
-import {
-  DashboardCustomizeProvider,
-} from "@/components/landing/dashboard-customize-context";
+import { type BuildChatMessage } from "./BuildAiPrompt";
 import { BuildWidgetSection } from "@/components/landing/BuildWidgetSection";
+import { BuildHeroBand } from "@/components/landing/BuildHeroBand";
+import { DashboardCustomizeProvider } from "@/components/landing/dashboard-customize-context";
 import { RunningStrategiesProvider } from "@/components/widgets/running-strategies-context";
 import BuildPageFooter from "./BuildPageFooter";
 import BuildNodeContextMenu from "./BuildNodeContextMenu";
@@ -274,6 +273,7 @@ export default function Build({
   const [builderSession, setBuilderSession] = useState<BuilderAgentSession | null>(null);
   const [builderMessages, setBuilderMessages] = useState<BuildChatMessage[]>([]);
   const [chatFocus, setChatFocus] = useState(false);
+  const [buildViewActive, setBuildViewActive] = useState(false);
   const [widgetsVisible, setWidgetsVisible] = useState(true);
   const [builderPrompt, setBuilderPrompt] = useState("");
   const pageLayoutRef = useRef<HTMLDivElement>(null);
@@ -292,6 +292,7 @@ export default function Build({
     setWidgetsVisible((visible) => {
       const next = !visible;
       if (next) {
+        setBuildViewActive(false);
         requestAnimationFrame(() => {
           if (pageLayoutRef.current) pageLayoutRef.current.scrollTop = 0;
         });
@@ -300,16 +301,26 @@ export default function Build({
     });
   }, []);
 
+  const canvasExpanded = !widgetsVisible && (chatFocus || buildViewActive);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const expandedCanvas = chatFocus && !widgetsVisible;
-    window.dispatchEvent(new CustomEvent("build-view-expanded", { detail: expandedCanvas }));
-    document.body.classList.toggle("build-view-expanded", expandedCanvas);
+    window.dispatchEvent(new CustomEvent("build-view-expanded", { detail: canvasExpanded }));
+    document.body.classList.toggle("build-view-expanded", canvasExpanded);
     return () => {
       document.body.classList.remove("build-view-expanded");
     };
-  }, [chatFocus, widgetsVisible]);
+  }, [canvasExpanded]);
   
+  useEffect(() => {
+    const onCustomizeOpen = () => {
+      setWidgetsVisible(true);
+      setBuildViewActive(false);
+    };
+    window.addEventListener("build-dashboard-customize-open", onCustomizeOpen);
+    return () => window.removeEventListener("build-dashboard-customize-open", onCustomizeOpen);
+  }, []);
+
   useEffect(() => {
     initializeLimitOrderStrategy();
     initializeDiscoverStrategies();
@@ -356,6 +367,8 @@ export default function Build({
     setBuilderMessages([]);
     setBuilderPrompt("");
     setNodeContextMenu(null);
+    setWidgetsVisible(false);
+    setBuildViewActive(true);
   }, [setNodes, setEdges, setCurrentFileName, normalizeNode]);
 
   useEffect(() => {
@@ -975,7 +988,7 @@ export default function Build({
   }, [nodes, edges, normalizeNode]);
   
   return (
-    <div className={`blueprint-view blueprint-view--fullscreen ${isLoaded ? 'loaded' : ''} ${widgetsVisible ? 'blueprint-view--dash-front' : ''} ${chatFocus ? 'blueprint-view--chat-active' : ''}`}>
+    <div className={`blueprint-view blueprint-view--fullscreen ${isLoaded ? 'loaded' : ''} ${widgetsVisible ? 'blueprint-view--dash-front' : ''} ${chatFocus || buildViewActive ? 'blueprint-view--chat-active' : ''}`}>
       <ReactFlowProvider>
         <div className="blueprint-workspace">
           <BuildNav
@@ -991,7 +1004,7 @@ export default function Build({
             isSimulating={isSimulating}
             onOpenRun={openRunModal}
             setCurrentFileName={setCurrentFileName}
-            expandedToolbar={chatFocus && !widgetsVisible}
+            expandedToolbar={canvasExpanded}
           />
 
           {simToast && (
@@ -1032,21 +1045,20 @@ export default function Build({
             <DashboardCustomizeProvider>
             <div
               ref={pageLayoutRef}
-              className={`build-page-layout ${chatFocus && !widgetsVisible ? "build-page-layout--focus" : ""}`}
+              className={`build-page-layout ${canvasExpanded ? "build-page-layout--focus" : ""}`}
             >
               <div className="build-page-content">
-                <div className="build-hero-band">
-                  <BuildAiPrompt
-                    value={builderPrompt}
-                    onChange={setBuilderPrompt}
-                    onSubmit={onBuilderPromptSubmit}
-                    isLoading={isBuilderAgentLoading}
-                    messages={builderMessages}
-                    onChatActiveChange={handleChatActiveChange}
-                    widgetsVisible={widgetsVisible}
-                    onToggleWidgets={handleToggleWidgets}
-                  />
-                </div>
+                <BuildHeroBand
+                  value={builderPrompt}
+                  onChange={setBuilderPrompt}
+                  onSubmit={onBuilderPromptSubmit}
+                  isLoading={isBuilderAgentLoading}
+                  messages={builderMessages}
+                  onChatActiveChange={handleChatActiveChange}
+                  widgetsVisible={widgetsVisible}
+                  onToggleWidgets={handleToggleWidgets}
+                  buildViewActive={buildViewActive}
+                />
 
                 <div
                   className={`build-widget-band${widgetsVisible ? "" : " build-widget-band--hidden"}`}

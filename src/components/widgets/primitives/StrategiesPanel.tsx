@@ -1,8 +1,18 @@
 "use client";
 
+import { useMemo } from "react";
 import { strategyList, type StrategyMetadata } from "@/components/navs/Discover/strategies";
 import type { SizePreset } from "@/components/widgets/config/grid";
 import { SIZE_TO_GRID } from "@/components/widgets/config/grid";
+
+function sortStrategies(strategies: StrategyMetadata[]): StrategyMetadata[] {
+  return [...strategies].sort((a, b) => {
+    const aRank = a.isActive ? 0 : 1;
+    const bRank = b.isActive ? 0 : 1;
+    if (aRank !== bRank) return aRank - bRank;
+    return 0;
+  });
+}
 
 function StrategyCard({ strategy, compact }: { strategy: StrategyMetadata; compact?: boolean }) {
   const load = () => {
@@ -48,19 +58,20 @@ export function StrategiesPanel({
 }) {
   const columns = gridColumnsForSize(size);
   const compact = columns === 2;
+  const strategies = useMemo(() => sortStrategies(strategyList), []);
 
   return (
-    <div {...(sectionId ? { id: sectionId } : {})} className="widget-hover widget-card">
+    <div {...(sectionId ? { id: sectionId } : {})} className="widget-hover widget-card widget-card--strategies">
       <div className="widget-card-header widget-card-header--compact">
         <div>
           <p className="widget-card-title">Strategies</p>
-          <p className="widget-card-subtitle">Library — tap to load on canvas</p>
+          <p className="widget-card-subtitle">Available first — scroll for more</p>
         </div>
       </div>
       <div
         className={`widget-strategies-list scrollbar-hide widget-strategies-list--cols-${columns}`}
       >
-        {strategyList.map((s) => (
+        {strategies.map((s) => (
           <StrategyCard key={s.name} strategy={s} compact={compact} />
         ))}
       </div>
