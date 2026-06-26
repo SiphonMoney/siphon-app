@@ -120,9 +120,22 @@
 .build-page-layout--focus {
   justify-content: flex-end;
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: auto;
   padding-top: clamp(3.5rem, 8vh, 5rem);
-  padding-bottom: max(3.25rem, calc(env(safe-area-inset-bottom) + 2rem));
+  padding-bottom: max(9.5rem, calc(env(safe-area-inset-bottom) + 8rem));
+}
+
+/* Fixed chat input sits above the page footer when dashboard is open */
+.blueprint-view--chat-active.blueprint-view--dash-front .build-ai-prompt-dock--anchored {
+  bottom: max(2.85rem, calc(env(safe-area-inset-bottom) + 2.35rem));
+}
+
+.blueprint-view--chat-active .build-page-layout--focus {
+  padding-bottom: max(9.5rem, calc(env(safe-area-inset-bottom) + 8rem));
+}
+
+.blueprint-view--chat-active.blueprint-view--dash-front .build-page-layout {
+  padding-bottom: max(10.5rem, calc(env(safe-area-inset-bottom) + 9rem));
 }
 
 .build-page-content {
@@ -697,7 +710,16 @@
   }
 
   .build-page-layout--focus {
-    padding-bottom: max(2.75rem, calc(env(safe-area-inset-bottom) + 1.75rem));
+    padding-bottom: max(9rem, calc(env(safe-area-inset-bottom) + 7.5rem));
+  }
+
+  .blueprint-view--chat-active .build-ai-prompt-dock--anchored {
+    width: min(656px, calc(100vw - 2rem));
+    bottom: max(0.85rem, env(safe-area-inset-bottom));
+  }
+
+  .blueprint-view--chat-active.blueprint-view--dash-front .build-ai-prompt-dock--anchored {
+    bottom: max(2.65rem, calc(env(safe-area-inset-bottom) + 2.1rem));
   }
 
   .build-hero-band {

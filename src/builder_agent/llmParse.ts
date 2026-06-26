@@ -26,7 +26,7 @@ export interface LlmParseResult {
 
 export type LlmParseFailure =
   | { ok: false; reason: "unconfigured" }
-  | { ok: false; reason: "openrouter_error" }
+  | { ok: false; reason: "openrouter_error"; detail?: string }
   | { ok: false; reason: "bad_response" }
   | { ok: false; reason: "network" };
 
@@ -44,7 +44,7 @@ export async function llmParse(
 
   const ethUsd = market?.ethUsd ?? null;
 
-  let data: { parsed?: Record<string, unknown>; message?: string | null; error?: string };
+  let data: { parsed?: Record<string, unknown>; message?: string | null; error?: string; detail?: string };
   try {
     const res = await fetch("/api/builder-agent", {
       method: "POST",
@@ -62,7 +62,7 @@ export async function llmParse(
         return { ok: false, reason: "unconfigured" };
       }
       if (data.error === "openrouter_error") {
-        return { ok: false, reason: "openrouter_error" };
+        return { ok: false, reason: "openrouter_error", detail: data.detail };
       }
       return { ok: false, reason: "bad_response" };
     }

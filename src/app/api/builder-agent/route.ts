@@ -6,15 +6,39 @@ export const runtime = "nodejs";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-/** Default free model on OpenRouter — override with OPENROUTER_MODEL. */
-const DEFAULT_MODEL = "qwen/qwen-2.5-7b-instruct:free";
+/** Default free model — override with OPENROUTER_MODEL on Vercel. */
+const DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 
 function getApiKey(): string | null {
-  return (
+  let key =
     process.env.OPENROUTER_API_KEY?.trim() ||
     process.env.OPENROUTER_KEY?.trim() ||
-    null
-  );
+    "";
+  if (!key) return null;
+  if (key.toLowerCase().startsWith("bearer ")) {
+    key = key.slice(7).trim();
+  }
+  return key || null;
+}
+
+function getReferer(): string {
+  return (
+    process.env.OPENROUTER_SITE_URL?.trim() ||
+    process.env.VERCEL_URL?.trim() ||
+    "https://siphon-app.vercel.app"
+  ).replace(/^(?!https?:\/\/)/, "https://");
+}
+
+function parseOpenRouterError(status: number, errText: string): string {
+  try {
+    const body = JSON.parse(errText) as { error?: { message?: string; code?: number } };
+    const msg = body.error?.message?.trim();
+    if (msg) return `OpenRouter ${status}: ${msg}`;
+  } catch {
+    /* not json */
+  }
+  const snippet = errText.trim().slice(0, 200);
+  return snippet ? `OpenRouter ${status}: ${snippet}` : `OpenRouter HTTP ${status}`;
 }
 
 function getModel(): string {
@@ -137,7 +161,7 @@ export async function POST(req: NextRequest) {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": process.env.OPENROUTER_SITE_URL?.trim() || "https://siphon.money",
+        "HTTP-Referer": getReferer(),
         "X-Title": process.env.OPENROUTER_APP_NAME?.trim() || "Siphon Builder",
       },
       body: JSON.stringify({
@@ -150,8 +174,9 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("[builder-agent] OpenRouter error:", response.status, errText);
-      return NextResponse.json({ error: "openrouter_error" }, { status: 502 });
+      const detail = parseOpenRouterError(response.status, errText);
+      console.error("[builder-agent]", detail);
+      return NextResponse.json({ error: "openrouter_error", detail }, { status: 502 });
     }
 
     const payload = (await response.json()) as {

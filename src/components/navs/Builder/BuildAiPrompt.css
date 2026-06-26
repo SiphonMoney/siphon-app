@@ -271,6 +271,36 @@
   margin-top: auto;
 }
 
+/* Keep input visible above the chat thread when messages appear */
+.build-hero-chat--anchored .build-ai-prompt-dock--anchored {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  width: min(656px, calc(100vw - 3rem));
+  z-index: 50;
+  margin-top: 0;
+  padding-top: 0.65rem;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.92) 0%,
+    rgba(0, 0, 0, 0.78) 55%,
+    rgba(0, 0, 0, 0.35) 82%,
+    transparent 100%
+  );
+  pointer-events: auto;
+}
+
+.build-hero-chat--anchored .build-ai-centered-column--active {
+  padding-bottom: 7.75rem;
+}
+
+.build-hero-chat--anchored .build-ai-thread-fade-wrap {
+  z-index: 1;
+  flex-shrink: 1;
+  min-height: 0;
+}
+
 /* Suggestion marquee (neogen-style) */
 @keyframes build-marquee-slide {
   from {
