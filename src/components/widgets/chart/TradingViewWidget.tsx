@@ -11,7 +11,6 @@ import {
 const SYMBOL_TABS = [
   { id: "BINANCE:BTCUSDT", label: "BTC" },
   { id: "BINANCE:ETHUSDT", label: "ETH" },
-  { id: "BINANCE:SOLUSDT", label: "SOL" },
 ] as const;
 
 export function TradingViewWidget({ sectionId }: { sectionId?: string }) {
