@@ -140,7 +140,7 @@ function MarqueeRow({
       <div className="relative flex min-h-0 min-w-0 flex-1 items-center overflow-hidden">
         <MarqueeEdgeFades />
         <div
-          className={`flex min-h-0 w-full items-center overflow-x-auto overflow-y-hidden px-4 py-1 sm:px-5 ${trackGap} [scrollbar-width:thin]`}
+          className={`flex min-h-0 w-full items-center overflow-x-auto overflow-y-hidden px-4 py-1 sm:px-5 ${trackGap} scrollbar-hide`}
         >
           {items.map((o) => (
             <OppCardRibbon key={o.id} o={o} />

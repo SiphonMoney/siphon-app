@@ -19,7 +19,7 @@ import { NewsGlance } from "@/components/widgets/news";
 import { Sparkline } from "@/components/widgets/primitives/Sparkline";
 import { OpportunityPanel } from "@/components/widgets/primitives/OpportunityPanel";
 import { StocksPanel } from "@/components/widgets/primitives/StocksPanel";
-import { TopCoinsPanel } from "@/components/widgets/primitives/TopCoinsPanel";
+import { TopCoinsPanel } from "@/components/widgets/coins";
 
 function LearnWidgetCompact() {
   const [progress, setProgress] = useState<LearnProgressState>(defaultLearnProgress);

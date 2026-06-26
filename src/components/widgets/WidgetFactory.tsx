@@ -11,7 +11,7 @@ import { NewsGlance } from "@/components/widgets/news";
 import { RunsPanel } from "@/components/widgets/primitives/RunsPanel";
 import { StrategiesPanel } from "@/components/widgets/primitives/StrategiesPanel";
 import { SwapPanel } from "@/components/widgets/primitives/SwapPanel";
-import { TopCoinsPanel } from "@/components/widgets/primitives/TopCoinsPanel";
+import { TopCoinsPanel } from "@/components/widgets/coins";
 import { WalletPanel } from "@/components/widgets/primitives/WalletPanel";
 
 function NewsWidget() {
