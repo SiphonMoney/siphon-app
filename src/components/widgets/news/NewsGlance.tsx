@@ -1,26 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mockNews } from "@/data/news-feed";
-import { useLiveWidget } from "@/lib/useLiveWidget";
+import { useNews } from "./useNews";
 
 const HOLD_MS = 5000;
-
-type ApiNewsItem = {
-  id: string;
-  title: string;
-  url: string;
-  source: string;
-  published_at: string;
-  summary?: string;
-};
-
-type DisplayNewsItem = {
-  id: string;
-  title: string;
-  source: string;
-  time: string;
-};
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -33,21 +16,14 @@ function formatRelativeTime(iso: string): string {
 }
 
 export function NewsGlance() {
-  const liveNews = useLiveWidget<ApiNewsItem[] | null>("news", null, 60_000);
-
-  const items: DisplayNewsItem[] = liveNews
-    ? liveNews.slice(0, 5).map((n) => ({
-        id: n.id,
-        title: n.title,
-        source: n.source,
-        time: formatRelativeTime(n.published_at),
-      }))
-    : mockNews.slice(0, 5).map((n) => ({
-        id: n.id,
-        title: n.title,
-        source: n.source,
-        time: n.time,
-      }));
+  const { data: liveNews, loading } = useNews();
+  const items = (liveNews ?? []).slice(0, 5).map((n) => ({
+    id: n.id,
+    title: n.title,
+    url: n.url,
+    source: n.source,
+    time: formatRelativeTime(n.published_at),
+  }));
 
   const [index, setIndex] = useState(0);
 
@@ -71,6 +47,14 @@ export function NewsGlance() {
 
   const n = items[index];
 
+  if (loading && !n) {
+    return (
+      <div className="build-news-empty flex min-h-[100px] flex-1 items-center justify-center px-3 text-xs">
+        Loading headlines…
+      </div>
+    );
+  }
+
   if (!n) {
     return (
       <div className="build-news-empty flex min-h-[100px] flex-1 items-center justify-center px-3 text-xs">
@@ -89,7 +73,14 @@ export function NewsGlance() {
       </div>
 
       <article key={n.id} className="build-news-article animate-news-fade" aria-live="polite">
-        <p className="build-news-title">{n.title}</p>
+        <a
+          href={n.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="build-news-title block hover:underline"
+        >
+          {n.title}
+        </a>
       </article>
 
       <div className="build-news-dots" role="tablist" aria-label="News headlines">

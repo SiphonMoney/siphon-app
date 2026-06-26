@@ -15,7 +15,7 @@ import {
 import { type PlacedWidget } from "@/components/widgets/config/grid";
 import { FearGreedGauge } from "@/components/widgets/primitives/FearGreedGauge";
 import { useLiveWidget } from "@/lib/useLiveWidget";
-import { NewsGlance } from "@/components/widgets/primitives/NewsGlance";
+import { NewsGlance } from "@/components/widgets/news";
 import { Sparkline } from "@/components/widgets/primitives/Sparkline";
 import { OpportunityPanel } from "@/components/widgets/primitives/OpportunityPanel";
 import { StocksPanel } from "@/components/widgets/primitives/StocksPanel";

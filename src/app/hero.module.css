@@ -93,8 +93,10 @@
 /* Mobile */
 @media (max-width: 768px) {
   .heroContainer {
-    padding: 3em 2em;
+    padding: 3em clamp(1.25rem, 5vw, 1.5em);
     padding-top: 70vh;
+    width: 100%;
+    max-width: 100%;
   }
 
   .heroTagline {
@@ -111,8 +113,8 @@
 /* Small mobile */
 @media (max-width: 480px) {
   .heroContainer {
-    padding: 2em 1.5em;
-    padding-top: 70vh; /* Increased by 40% from 20vh (20vh * 1.4 = 28vh) */
+    padding: 2em clamp(1.15rem, 4.5vw, 1.35em);
+    padding-top: 70vh;
   }
 
   .heroTagline {

@@ -1048,11 +1048,12 @@ export default function Build({
                   />
                 </div>
 
-                {widgetsVisible && (
-                  <div className="build-widget-band">
-                    <BuildWidgetSection />
-                  </div>
-                )}
+                <div
+                  className={`build-widget-band${widgetsVisible ? "" : " build-widget-band--hidden"}`}
+                  aria-hidden={!widgetsVisible}
+                >
+                  <BuildWidgetSection />
+                </div>
               </div>
             </div>
             </DashboardCustomizeProvider>

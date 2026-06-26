@@ -1,8 +1,14 @@
 /** Semi-circular gauge (0–100), theme-aware neutral scale */
-export function FearGreedGauge({ value = 79 }: { value?: number }) {
+export function FearGreedGauge({
+  value = 79,
+  label,
+}: {
+  value?: number;
+  label?: string;
+}) {
   const clamped = Math.min(100, Math.max(0, value));
   const angle = (clamped / 100) * 180;
-  const label =
+  const derivedLabel =
     clamped >= 75
       ? "Extreme Greed"
       : clamped >= 55
@@ -12,6 +18,7 @@ export function FearGreedGauge({ value = 79 }: { value?: number }) {
           : clamped >= 25
             ? "Fear"
             : "Extreme Fear";
+  const displayLabel = label ?? derivedLabel;
 
   return (
     <div className="flex flex-col items-center">
@@ -42,7 +49,7 @@ export function FearGreedGauge({ value = 79 }: { value?: number }) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-0.5 pt-4">
           <span className="text-xl font-bold text-[var(--defi-text)] sm:text-2xl">{clamped}</span>
-          <span className="text-[10px] font-medium text-[var(--defi-text-muted)]">{label}</span>
+          <span className="text-[10px] font-medium text-[var(--defi-text-muted)]">{displayLabel}</span>
         </div>
       </div>
     </div>

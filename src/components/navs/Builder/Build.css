@@ -304,6 +304,11 @@
   pointer-events: auto;
 }
 
+.build-widget-band--hidden {
+  display: none !important;
+  pointer-events: none;
+}
+
 @media (max-width: 768px) {
   .build-widget-band {
     width: 100%;

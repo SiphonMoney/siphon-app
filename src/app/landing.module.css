@@ -1,8 +1,11 @@
 .landingPage {
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
   background: #000000;
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;
+  box-sizing: border-box;
 }
 
 .landingPage::-webkit-scrollbar {
@@ -24,10 +27,12 @@
 .contentSections {
   position: relative;
   z-index: 2;
-  padding: 1.5em 2em 8em;
+  width: 100%;
   max-width: 1200px;
   margin-left: auto;
   margin-right: auto;
+  padding: 1.5em 2em 8em;
+  box-sizing: border-box;
   background: rgba(0, 0, 0, 0);
 }
 
@@ -78,6 +83,9 @@
   font-family: 'Source Code Pro', monospace;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .sectionContent.alignLeft {
@@ -271,7 +279,7 @@
 /* Mobile */
 @media (max-width: 768px) {
   .contentSections {
-    padding: 4em 1em;
+    padding: 4em clamp(1.25rem, 5vw, 1.5em);
   }
 
   .contentSection {
@@ -286,6 +294,7 @@
   .sectionDescription {
     font-size: 16px;
     margin-bottom: 2em;
+    max-width: 100%;
   }
 
   .featuresGrid {
@@ -320,7 +329,7 @@
 /* Small mobile */
 @media (max-width: 480px) {
   .contentSections {
-    padding: 3em 1em;
+    padding: 3em clamp(1.15rem, 4.5vw, 1.35em);
   }
 
   .sectionTitle {
@@ -442,7 +451,8 @@
   .simpleFooter {
     flex-direction: column;
     gap: 2em;
-    padding: 1.5em;
+    padding: 1.5em clamp(1.25rem, 5vw, 1.5em);
+    box-sizing: border-box;
   }
 
   .footerLeft,
