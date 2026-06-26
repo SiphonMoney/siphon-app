@@ -1,10 +1,10 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
 import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
-import { getSpendableVaultBalance } from '../../../lib/zkHandler';
+import { getSpendableVaultBalance, invalidateLeafCache } from '../../../lib/zkHandler';
 import { resolvePendingOutputNotes } from '../../../lib/outputNoteResolver';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
 import { getNetwork, DEFAULT_CHAIN_ID } from '../../../lib/networks';
@@ -28,23 +28,36 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDepositMode, setIsDepositMode] = useState(true);
   const [isNotesBusy, setIsNotesBusy] = useState(false);
+  const [isVaultRefreshing, setIsVaultRefreshing] = useState(false);
   const vaultChainId = DEFAULT_CHAIN_ID;
   const activeNetwork = getNetwork(vaultChainId);
 
+  const fetchVaultBalances = useCallback(async () => {
+    // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
+    // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
+    try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+    const { details } = await getSpendableVaultBalance(vaultChainId, TOKEN_MAP);
+    setSiphonVaultBalances(details);
+    console.log("Siphon Vault spendable balances (on-chain reconciled):", details);
+  }, [vaultChainId]);
+
+  // Manual refresh: bust the cached leaf scan first so a just-landed deposit is picked up
+  // immediately instead of waiting out the cache TTL / 60s poll.
+  const refreshVaultBalances = useCallback(async () => {
+    setIsVaultRefreshing(true);
+    try {
+      invalidateLeafCache();
+      await fetchVaultBalances();
+    } finally {
+      setIsVaultRefreshing(false);
+    }
+  }, [fetchVaultBalances]);
+
   useEffect(() => {
-    const fetchBalances = async () => {
-      // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
-      // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
-      try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
-      const { details } = await getSpendableVaultBalance(vaultChainId, TOKEN_MAP);
-      setSiphonVaultBalances(details);
-      console.log("Siphon Vault spendable balances (on-chain reconciled):", details);
-    };
-    
-    fetchBalances();
-    const interval = setInterval(fetchBalances, 60_000);
+    fetchVaultBalances();
+    const interval = setInterval(fetchVaultBalances, 60_000);
     return () => clearInterval(interval);
-  }, [wallet, vaultChainId]);
+  }, [wallet, fetchVaultBalances]);
 
   const [transactionInput, setTransactionInput] = useState({
     token: "ETH",
@@ -343,7 +356,29 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
               <h2 className="userdash-balance-title">Siphon Vault Balance</h2>
-              <span className="userdash-balance-network">{activeNetwork.badgeLabel}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={refreshVaultBalances}
+                  disabled={isVaultRefreshing}
+                  title="Refresh vault balance"
+                  aria-label="Refresh vault balance"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'inherit',
+                    cursor: isVaultRefreshing ? 'default' : 'pointer',
+                    opacity: isVaultRefreshing ? 0.5 : 0.8,
+                    fontSize: 13,
+                    padding: 0,
+                    lineHeight: 1,
+                    display: 'inline-flex',
+                  }}
+                >
+                  <span style={{ display: 'inline-block', animation: isVaultRefreshing ? 'spin 0.8s linear infinite' : 'none' }}>↻</span>
+                </button>
+                <span className="userdash-balance-network">{activeNetwork.badgeLabel}</span>
+              </div>
             </div>
             <div className="userdash-balance-content-multi">
               {siphonVaultBalances !== null && Object.keys(siphonVaultBalances).length > 0 ? (

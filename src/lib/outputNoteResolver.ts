@@ -16,7 +16,7 @@
  * so nothing here trusts the executor or server.
  */
 import { ethers, Signer } from 'ethers';
-import { generateCommitmentData, resolveOutputNote, type TokenInfo } from './zkHandler';
+import { generateCommitmentData, resolveOutputNote, invalidateLeafCache, type TokenInfo } from './zkHandler';
 import { postNote } from './noteStore';
 
 const PENDING_PREFIX = 'siphon-pending-output-';
@@ -123,6 +123,10 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
           console.warn('[OutputNote] server sync failed (localStorage still holds it):', e);
         }
       }
+
+      // Bust the cached leaf scan for this token so the spendable-balance scan re-reads the
+      // tree and includes the newly-deposited leaf (otherwise the note looks "not on-chain").
+      try { invalidateLeafCache(rec.tokenAddress); } catch { /* best-effort */ }
 
       localStorage.removeItem(k);
       resolved += 1;
