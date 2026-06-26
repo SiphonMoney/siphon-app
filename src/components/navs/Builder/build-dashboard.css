@@ -1453,7 +1453,7 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   overflow: hidden;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .build-dashboard-theme .build-widget-customize-panel--hero::after {

@@ -330,6 +330,7 @@
   align-items: stretch;
   justify-content: center;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 
@@ -341,8 +342,8 @@
   pointer-events: none;
 }
 
-.build-hero-band.build-dashboard-theme .build-widget-customize-panel--hero,
-.build-hero-band.build-dashboard-theme .build-widget-customize-panel--hero * {
+.build-hero-band--library-visible.build-dashboard-theme .build-widget-customize-panel--hero,
+.build-hero-band--library-visible.build-dashboard-theme .build-widget-customize-panel--hero * {
   pointer-events: auto;
 }
 
@@ -353,6 +354,7 @@
 
 .build-hero-band--library-visible .build-hero-swap-pane--library {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 

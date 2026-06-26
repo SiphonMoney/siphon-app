@@ -296,12 +296,22 @@ export default function Build({
         requestAnimationFrame(() => {
           if (pageLayoutRef.current) pageLayoutRef.current.scrollTop = 0;
         });
+      } else if (nodes.length > 0) {
+        setBuildViewActive(true);
       }
       return next;
     });
-  }, []);
+  }, [nodes.length]);
 
-  const canvasExpanded = !widgetsVisible && (chatFocus || buildViewActive);
+  const hasCanvasContent = nodes.length > 0;
+  const canvasExpanded =
+    !widgetsVisible && (chatFocus || buildViewActive || hasCanvasContent);
+
+  useEffect(() => {
+    if (!widgetsVisible && nodes.length > 0) {
+      setBuildViewActive(true);
+    }
+  }, [widgetsVisible, nodes.length]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -858,6 +868,7 @@ export default function Build({
     setBuilderSession(null);
     setBuilderMessages([]);
     setBuilderPrompt("");
+    setBuildViewActive(false);
   }, [setNodes, setEdges, setCurrentFileName]);
   
   const saveScene = useCallback((sceneName: string) => {
@@ -988,7 +999,7 @@ export default function Build({
   }, [nodes, edges, normalizeNode]);
   
   return (
-    <div className={`blueprint-view blueprint-view--fullscreen ${isLoaded ? 'loaded' : ''} ${widgetsVisible ? 'blueprint-view--dash-front' : ''} ${chatFocus || buildViewActive ? 'blueprint-view--chat-active' : ''}`}>
+    <div className={`blueprint-view blueprint-view--fullscreen ${isLoaded ? 'loaded' : ''} ${widgetsVisible ? 'blueprint-view--dash-front' : ''} ${chatFocus || buildViewActive || (!widgetsVisible && hasCanvasContent) ? 'blueprint-view--chat-active' : ''}`}>
       <ReactFlowProvider>
         <div className="blueprint-workspace">
           <BuildNav
@@ -1057,7 +1068,7 @@ export default function Build({
                   onChatActiveChange={handleChatActiveChange}
                   widgetsVisible={widgetsVisible}
                   onToggleWidgets={handleToggleWidgets}
-                  buildViewActive={buildViewActive}
+                  buildViewActive={buildViewActive || (!widgetsVisible && hasCanvasContent)}
                 />
 
                 <div
