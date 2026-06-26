@@ -160,7 +160,7 @@
 }
 
 .blueprint-view--chat-active.blueprint-view--dash-front .build-widget-band {
-  margin-top: 0;
+  margin-top: clamp(1rem, 3vh, 2rem);
 }
 
 /* Chat active: only occupy the bottom strip so the canvas stays interactive */
@@ -194,7 +194,7 @@
 }
 
 .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
-  margin-top: clamp(0.85rem, 2.5vh, 1.5rem);
+  margin-top: clamp(1.5rem, 4vh, 2.75rem);
   padding-bottom: 1.5rem;
 }
 
@@ -789,7 +789,7 @@
   }
 
   .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
-    margin-top: 1.75rem;
+    margin-top: 2.25rem;
   }
 
   .build-ai-centered-column {
