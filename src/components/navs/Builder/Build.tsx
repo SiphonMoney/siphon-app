@@ -69,7 +69,7 @@ import {
 import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
 import { useEthPrice } from "@/lib/useEthPrice";
-import { getSelectedChainId, getTokens } from "../../../lib/networks";
+import { getSelectedChainId, getTokens, getZkWithdrawRecipient } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 import { validateRecipientAddress, chainLabelToId, createDefaultLimitOrderTree } from "./BuildNodes";
@@ -766,7 +766,7 @@ export default function Build({
     alert(`Generating ZK proof for ${amountStr} ${assetIn}... this may take a moment.`);
     console.log('[Strategy] Generating ZK proof...');
 
-    const zkResult = await generateZKData(CHAIN_ID, token, amountStr, recipient);
+    const zkResult = await generateZKData(CHAIN_ID, token, amountStr, getZkWithdrawRecipient(CHAIN_ID));
     if ('error' in zkResult) {
       alert(`❌ ZK proof failed: ${zkResult.error}`);
       return;

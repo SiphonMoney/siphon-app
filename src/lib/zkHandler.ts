@@ -3,8 +3,8 @@ import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
 import { prepareWithdrawalTransaction } from "./generateProof";
 import { getProvider, getSigner } from './nexus';
-import { getEntrypointContract } from './handler';
-import { getNetwork, getReadProviderRpcUrl } from './networks';
+import { getNetwork, getReadProviderRpcUrl, getSelectedChainId } from './networks';
+import entrypointArtifact from './abi/Entrypoint.json';
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
 
@@ -15,7 +15,7 @@ const TREE_DEPTH = 32;
 
 // Per-chain read provider + deploy block come from the network registry so leaf scans always
 // hit the SELECTED chain (Eth Sepolia / Base Sepolia) regardless of the wallet's current network.
-const vaultDeployBlock = (): number => getNetwork().deployBlock;
+const vaultDeployBlock = (chainId?: number): number => getNetwork(chainId).deployBlock;
 // Initial getLogs window. Shrinks automatically when an RPC rejects the range (free tiers
 // cap this — Alchemy free is 10 blocks, others 50/2k/10k). Override per-RPC if needed.
 const GETLOGS_CHUNK = parseInt(process.env.NEXT_PUBLIC_GETLOGS_CHUNK || '2000', 10);
@@ -97,8 +97,8 @@ async function getLogsChunked(
 // Reuse one read provider per chain — avoids ethers spawning retry loops per call.
 const readProviderCache = new Map<number, ethers.Provider>();
 
-function getReadProvider(): ethers.Provider {
-  const net = getNetwork();
+function getReadProvider(chainId?: number): ethers.Provider {
+  const net = getNetwork(chainId ?? getSelectedChainId());
   const cached = readProviderCache.get(net.chainId);
   if (cached) return cached;
 
@@ -220,12 +220,20 @@ const zlog = (...args: unknown[]) => { if (ZK_DEBUG) console.log(...args); };
 
 // A token's vault + merkleTree addresses never change — resolve once per chain and cache.
 const vaultInfoCache = new Map<string, { vault: Contract; merkleTreeAddress: string }>();
-async function resolveVault(tokenAddress: string): Promise<{ vault: Contract; merkleTreeAddress: string }> {
-  const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
+async function resolveVault(
+  tokenAddress: string,
+  chainId?: number,
+): Promise<{ vault: Contract; merkleTreeAddress: string }> {
+  const net = getNetwork(chainId ?? getSelectedChainId());
+  const cacheKey = `${net.chainId}:${tokenAddress.toLowerCase()}`;
   const hit = vaultInfoCache.get(cacheKey);
   if (hit) return hit;
-  const provider = getReadProvider();
-  const entrypoint = await getEntrypointContract(provider);
+  const provider = getReadProvider(net.chainId);
+  const entrypoint = new Contract(
+    net.entrypoint,
+    entrypointArtifact.abi as ethers.InterfaceAbi,
+    provider,
+  );
   const vaultAddress = await entrypoint.getVault(tokenAddress);
   const vault = new Contract(vaultAddress, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
   const merkleTreeAddress = await vault.merkleTree();
@@ -235,10 +243,11 @@ async function resolveVault(tokenAddress: string): Promise<{ vault: Contract; me
 }
 
 // --------- Helper: Get on-chain leaves ----------
-async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
+async function getOnChainLeaves(tokenAddress: string, chainId?: number): Promise<bigint[]> {
   zlog("getOnChainLeaves() tokenAddress:", tokenAddress);
-  const provider = getReadProvider();
-  const { merkleTreeAddress } = await resolveVault(tokenAddress);
+  const net = getNetwork(chainId ?? getSelectedChainId());
+  const provider = getReadProvider(net.chainId);
+  const { merkleTreeAddress } = await resolveVault(tokenAddress, net.chainId);
   zlog("MerkleTree address:", merkleTreeAddress);
 
   // LeafInserted(uint256 _index, uint256 _leaf, uint256 _root) — all non-indexed
@@ -248,7 +257,7 @@ async function getOnChainLeaves(tokenAddress: string): Promise<bigint[]> {
   const rawLogs = await getLogsChunked(
     provider,
     { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
-    vaultDeployBlock(),
+    vaultDeployBlock(net.chainId),
     latest,
   );
   zlog("Fetched LeafInserted raw logs:", rawLogs.length);
@@ -291,8 +300,9 @@ export function invalidateLeafCache(tokenAddress?: string) {
   }
 }
 
-async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
-  const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
+async function getLeafSet(tokenAddress: string, chainId?: number): Promise<Set<string>> {
+  const net = getNetwork(chainId ?? getSelectedChainId());
+  const cacheKey = `${net.chainId}:${tokenAddress.toLowerCase()}`;
   const hit = leavesCache.get(cacheKey);
   if (hit && Date.now() - hit.ts < LEAVES_TTL_MS) return hit.leaves;
 
@@ -300,7 +310,7 @@ async function getLeafSet(tokenAddress: string): Promise<Set<string>> {
   if (pending) return pending;
 
   const task = (async () => {
-    const raw = await getOnChainLeaves(tokenAddress);
+    const raw = await getOnChainLeaves(tokenAddress, net.chainId);
     const set = new Set(raw.map((l) => l.toString()));
     leavesCache.set(cacheKey, { leaves: set, ts: Date.now() });
     return set;
@@ -421,7 +431,7 @@ export async function generateZKData(
   const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
   let leaves: bigint[] = [];
   try {
-      const leafSet = await getLeafSet(tokenAddress);
+      const leafSet = await getLeafSet(tokenAddress, _chainId);
       leaves = [...leafSet].map((s) => BigInt(s));
       console.log("Found leaves count:", leaves.length);
   } catch (err) {
@@ -460,7 +470,7 @@ export async function generateZKData(
 
   console.log("Scanning localStorage for spendable deposits...");
 
-  const { vault } = await resolveVault(tokenAddress);
+  const { vault } = await resolveVault(tokenAddress, _chainId);
   
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -556,8 +566,12 @@ export async function generateZKData(
   const tokenAddress5 = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
   // Read-only on-chain reads (root, filledSubtrees, zeros) — use the RPC fallback so this
   // works without the wallet provider initialized, same as getOnChainLeaves above.
-  const provider5 = getReadProvider();
-  const entrypoint5 = await getEntrypointContract(provider5);
+  const provider5 = getReadProvider(_chainId);
+  const entrypoint5 = new Contract(
+    getNetwork(_chainId).entrypoint,
+    entrypointArtifact.abi as ethers.InterfaceAbi,
+    provider5,
+  );
   const vaultAddr5 = await entrypoint5.getVault(tokenAddress5);
   const vault5 = new Contract(vaultAddr5, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider5);
   const merkleTreeAddr5 = await vault5.merkleTree();

@@ -75,6 +75,28 @@ export const NETWORKS: Record<number, NetworkConfig> = {
 export const SUPPORTED_CHAIN_IDS = [8453, 11155111];
 export const DEFAULT_CHAIN_ID = 8453;
 
+/** Hot-wallet addresses that pull funds from the vault during server-side execution. */
+const EXECUTOR_ADDRESSES: Record<number, string> = {
+  8453:
+    process.env.NEXT_PUBLIC_BASE_EXECUTOR_ADDRESS?.trim() ||
+    '0x5830A431E6866B8F8a605625b0713D8190FB06bA',
+  11155111:
+    process.env.NEXT_PUBLIC_ETH_SEPOLIA_EXECUTOR_ADDRESS?.trim() ||
+    '0xc5b7b574EE84A9B59B475FE32Eaf908C246d3859',
+};
+
+/**
+ * Recipient bound in the ZK withdraw proof for Pay & Run / builder strategies.
+ * Must match the trade-executor wallet on that chain (funds land there, then swap → user).
+ */
+export function getZkWithdrawRecipient(chainId: number): string {
+  const addr = EXECUTOR_ADDRESSES[chainId];
+  if (!addr) {
+    throw new Error(`No executor address configured for chain ${chainId}`);
+  }
+  return addr;
+}
+
 /** Labels for Pay & Run deposit / withdraw chain dropdowns. */
 export const RUN_MODE_CHAIN_LABELS: string[] = [
   NETWORKS[11155111].name,
