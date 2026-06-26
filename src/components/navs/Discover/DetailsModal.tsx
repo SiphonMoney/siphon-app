@@ -169,6 +169,13 @@ export default function DetailsModal({
     [modalStrategyNodes, modalStrategyEdges]
   );
 
+  // The swap output stays in the Siphon vault (private note) — there is no external withdrawal
+  // step, so hide the withdraw node from the displayed steps.
+  const displayStepNodes = useMemo(
+    () => stepNodes.filter((n) => (n.data as NodeData).type !== 'withdraw'),
+    [stepNodes]
+  );
+
   // Derive primary asset from strategy nodes for contextual step hints.
   const strategyCoin = useMemo(() => {
     const VOLATILE = ['ETH', 'BTC', 'SOL'];
@@ -460,7 +467,6 @@ export default function DetailsModal({
 
     const depositNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'deposit');
     const swapNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'swap');
-    const withdrawNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'withdraw');
 
     const runPlan = buildGraphRunPlan(modalStrategyNodes, modalStrategyEdges, runModeValues);
     if (!runPlan.ok) {
@@ -470,7 +476,16 @@ export default function DetailsModal({
     }
 
     const { plan } = runPlan;
-    const { assetIn, assetOut, amount, recipient, payload: bounds } = plan;
+    const { assetIn, assetOut, amount, payload: bounds } = plan;
+
+    // Vault-mode: the swap output stays in the Siphon vault as the user's private note — there's
+    // no external withdrawal step. The recipient/owner is simply the connected wallet.
+    const recipient = walletManager.getConnectedWallets()[0]?.address || plan.recipient || '';
+    if (!recipient) {
+      showToast('Connect your wallet to run this strategy.', 'error');
+      setIsExecuting(false);
+      return;
+    }
 
     const getValue = (nodeId: string | undefined, field: string, defaultVal: string = '') => {
       if (!nodeId) return defaultVal;
@@ -485,11 +500,9 @@ export default function DetailsModal({
     const depositChainLabel = depositNode
       ? getRunStepFieldValue(runModeValues, depositNode.id, 'chain', depositNode.data as NodeData)
       : getRunModeChainLabel(activeChainId);
-    const withdrawChainLabel = withdrawNode
-      ? getRunStepFieldValue(runModeValues, withdrawNode.id, 'chain', withdrawNode.data as NodeData)
-      : depositChainLabel;
     const fromChainId = resolveRunModeChainId(depositChainLabel);
-    const toChainId = resolveRunModeChainId(withdrawChainLabel) ?? fromChainId;
+    // Vault-mode keeps the output in the deposit chain's vault — always same-chain (no bridge).
+    const toChainId = fromChainId;
     if (fromChainId == null) {
       showToast('Please select a deposit chain (Base or Ethereum Sepolia).', 'error');
       setIsExecuting(false);
@@ -804,11 +817,11 @@ export default function DetailsModal({
                 {/* Steps Section for Run Mode */}
                 <div className="strategy-modal-steps-section">
                   <div className="strategy-modal-steps-header">
-                    <span className="strategy-modal-steps-label">Steps ({stepNodes.length})</span>
+                    <span className="strategy-modal-steps-label">Steps ({displayStepNodes.length})</span>
                   </div>
-                  {stepNodes.length > 0 && (
+                  {displayStepNodes.length > 0 && (
                     <div className="strategy-steps-list">
-                      {stepNodes.map((node, index) => {
+                      {displayStepNodes.map((node, index) => {
                         const nodeData = node.data as NodeData;
                         
                         const tags = getStepTags(nodeData, true);
@@ -1087,11 +1100,11 @@ export default function DetailsModal({
                 
                 <div className="strategy-modal-steps-section">
                   <div className="strategy-modal-steps-header">
-                    <span className="strategy-modal-steps-label">Steps ({stepNodes.length})</span>
+                    <span className="strategy-modal-steps-label">Steps ({displayStepNodes.length})</span>
                   </div>
-                  {stepNodes.length > 0 && (
+                  {displayStepNodes.length > 0 && (
                     <div className="strategy-steps-list">
-                      {stepNodes.map((node, index) => {
+                      {displayStepNodes.map((node, index) => {
                         const nodeData = node.data as NodeData;
                         
                         const tags = getStepTags(nodeData, false);

@@ -105,10 +105,10 @@ export function buildGraphRunPlan(
     fieldValue(nodes, runModeValues, swapNode, "coinB", "ETH") ||
     String(swapNode?.data?.toCoin ?? "ETH");
 
+  // Vault-mode keeps the swap output in the Siphon vault as the user's private note, so an
+  // external withdrawal address is no longer required — the caller uses the connected wallet as
+  // the note owner. Still surface any address the user did enter.
   const recipient = fieldValue(nodes, runModeValues, withdrawNode, "address");
-  if (withdrawNode && !recipient.trim()) {
-    return { ok: false, error: "Please enter a withdrawal wallet address." };
-  }
 
   const startDelaySec = scheduleNode
     ? resolveScheduleStartDelaySeconds(mergeNodeFields(nodes, runModeValues, scheduleNode)) ?? 0
