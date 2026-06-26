@@ -10,37 +10,39 @@ export interface BuildChatMessage {
   content: string;
 }
 
-type SuggestionItem =
-  | { label: string; kind: "prompt"; text: string }
-  | { label: string; kind: "strategy"; name: string };
+type SuggestionItem = { label: string; text: string };
 
 const BUILD_SUGGESTIONS: SuggestionItem[] = [
-  { label: "Limit order", kind: "strategy", name: "Limit Order" },
-  { label: "DCA loop", kind: "strategy", name: "DCA Accumulator" },
-  { label: "Stop-loss exit", kind: "strategy", name: "Stop-Loss Shield" },
+  {
+    label: "Limit order",
+    text: "Deposit USDC and place a limit buy for ETH at my target price",
+  },
+  {
+    label: "DCA loop",
+    text: "Deposit USDC once, then loop swap to ETH and withdraw on a daily cadence",
+  },
+  {
+    label: "Stop-loss exit",
+    text: "Deposit ETH, sell when price hits my stop, swap to USDC and withdraw",
+  },
   {
     label: "Loop until empty",
-    kind: "prompt",
     text: "Deposit 500 USDC on Base, loop swap to ETH and withdraw every 24 hours",
   },
   {
     label: "Scheduled entry",
-    kind: "prompt",
     text: "Deposit ETH, wait 1 hour, then limit buy when price dips",
   },
   {
     label: "Take profit chain",
-    kind: "prompt",
     text: "Limit buy ETH, take profit at 8%, swap to USDC, withdraw to wallet",
   },
   {
     label: "Recurring swap",
-    kind: "prompt",
     text: "Deposit USDC and swap to ETH on a daily loop until funds run out",
   },
   {
     label: "Exit to stables",
-    kind: "prompt",
     text: "When ETH hits my target, swap everything to USDC and withdraw",
   },
 ];
@@ -60,18 +62,15 @@ function usePrefersReducedMotion() {
 function SuggestionMarquee({
   disabled,
   onPickPrompt,
-  onPickStrategy,
 }: {
   disabled?: boolean;
   onPickPrompt: (text: string) => void;
-  onPickStrategy: (name: string) => void;
 }) {
   const reduced = usePrefersReducedMotion();
 
   const handlePick = (item: SuggestionItem) => {
     if (disabled) return;
-    if (item.kind === "strategy") onPickStrategy(item.name);
-    else onPickPrompt(item.text);
+    onPickPrompt(item.text);
   };
 
   const renderStrip = (suffix: string) => (
@@ -133,7 +132,6 @@ export interface BuildAiPromptProps {
   defaultValue?: string;
   onChange?: (value: string) => void;
   onSubmit?: (prompt: string) => void | Promise<void>;
-  onSelectStrategy?: (strategyName: string) => void;
   placeholder?: string;
   submitLabel?: string;
   isLoading?: boolean;
@@ -154,7 +152,6 @@ export default function BuildAiPrompt({
   defaultValue = "",
   onChange,
   onSubmit,
-  onSelectStrategy,
   placeholder = "Describe your flow — limits, loops, schedules…",
   submitLabel = "Send",
   isLoading = false,
@@ -259,7 +256,6 @@ export default function BuildAiPrompt({
       <SuggestionMarquee
         disabled={disabled || isLoading}
         onPickPrompt={setValue}
-        onPickStrategy={(name) => onSelectStrategy?.(name)}
       />
       <div className="build-ai-prompt-input-row">
         <div className="build-ai-prompt-inner">

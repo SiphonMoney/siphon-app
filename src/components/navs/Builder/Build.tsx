@@ -1050,7 +1050,6 @@ export default function Build({
                     value={builderPrompt}
                     onChange={setBuilderPrompt}
                     onSubmit={onBuilderPromptSubmit}
-                    onSelectStrategy={onLoadStrategyTemplate}
                     isLoading={isBuilderAgentLoading}
                     messages={builderMessages}
                     onChatActiveChange={handleChatActiveChange}

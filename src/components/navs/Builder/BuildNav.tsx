@@ -98,7 +98,6 @@ export default function BuildNav({
   const [addMenu, setAddMenu] = useState<AddMenuState | null>(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [sceneName, setSceneName] = useState('');
-  const [showSavedScenesDropdown, setShowSavedScenesDropdown] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showOpenModal, setShowOpenModal] = useState(false);
@@ -135,20 +134,6 @@ export default function BuildNav({
   useEffect(() => {
     if (!expandedToolbar) setAddMenu(null);
   }, [expandedToolbar]);
-  
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (target && !target.closest('.blueprint-saved-scenes')) {
-        setShowSavedScenesDropdown(false);
-      }
-    };
-    
-    if (showSavedScenesDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showSavedScenesDropdown]);
   
   const addMenuTitle = (menu: AddMenuState) => {
     if (menu.step === "categories") return "Add node";
@@ -191,11 +176,49 @@ export default function BuildNav({
     }, 1500);
   }, [sceneName, onSaveScene, setCurrentFileName]);
   
+  const handleOpenScenesPicker = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setShowOpenModal(true);
+  }, []);
+
   const handleLoadScene = useCallback((sceneName: string) => {
     onLoadScene(sceneName);
-    setShowSavedScenesDropdown(false);
     setShowOpenModal(false);
   }, [onLoadScene]);
+
+  const renderSavedScenesList = () => {
+    if (savedScenes.length === 0) {
+      return <div className="blueprint-scenes-picker-empty">No saved scenes</div>;
+    }
+
+    return savedScenes.map((scene) => (
+      <div key={scene.name} className="blueprint-scene-item">
+        <button
+          type="button"
+          className="blueprint-scene-load"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleLoadScene(scene.name);
+          }}
+        >
+          {scene.name}
+        </button>
+        <button
+          type="button"
+          className="blueprint-scene-delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteScene(scene.name);
+          }}
+          title="Delete scene"
+          aria-label={`Delete ${scene.name}`}
+        >
+          ×
+        </button>
+      </div>
+    ));
+  };
 
   const renderAddMenuPanel = () => {
     if (!addMenu) return null;
@@ -377,61 +400,13 @@ export default function BuildNav({
       >
         <div className="blueprint-toolbar-end blueprint-toolbar-end--scene">
           <div className="blueprint-file-group">
-            <div className="blueprint-saved-scenes desktop-only">
-              <button 
-                className="blueprint-icon-btn blueprint-folder-btn"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowSavedScenesDropdown(!showSavedScenesDropdown);
-                }}
-                title="Open scene"
-                aria-label="Open scene"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                </svg>
-              </button>
-              {showSavedScenesDropdown && (
-                <div className="blueprint-scenes-dropdown">
-                  {savedScenes.length === 0 ? (
-                    <div className="blueprint-scenes-empty">No saved scenes</div>
-                  ) : (
-                    savedScenes.map((scene) => (
-                      <div key={scene.name} className="blueprint-scene-item">
-                        <button
-                          className="blueprint-scene-load"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleLoadScene(scene.name);
-                          }}
-                        >
-                          {scene.name}
-                        </button>
-                        <button
-                          className="blueprint-scene-delete"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteScene(scene.name);
-                          }}
-                          title="Delete scene"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-            <button 
-              className="blueprint-icon-btn blueprint-folder-btn mobile-only"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowOpenModal(true);
-              }}
-              title="Open scene"
-              aria-label="Open scene"
+            <button
+              type="button"
+              className="blueprint-icon-btn blueprint-folder-btn"
+              onClick={handleOpenScenesPicker}
+              title="Open saved scene"
+              aria-label="Open saved scene"
+              aria-haspopup="dialog"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -752,53 +727,33 @@ export default function BuildNav({
         </div>
       )}
 
-      {/* Mobile: Open Scene Fullscreen Modal */}
       {showOpenModal && (
-        <div className="blueprint-mobile-modal-overlay" onClick={(e) => {
-          e.stopPropagation();
-          setShowOpenModal(false);
-        }}>
-          <div className="blueprint-mobile-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="blueprint-mobile-modal-header">
-              <h3>Open Scene</h3>
-              <button 
-                className="blueprint-mobile-modal-close"
+        <div
+          className="blueprint-scenes-picker-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Open saved scene"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowOpenModal(false);
+          }}
+        >
+          <div className="blueprint-scenes-picker" onClick={(e) => e.stopPropagation()}>
+            <div className="blueprint-scenes-picker-header">
+              <h3>Saved scenes</h3>
+              <button
+                type="button"
+                className="blueprint-scenes-picker-close"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowOpenModal(false);
                 }}
+                aria-label="Close"
               >
                 ×
               </button>
             </div>
-            <div className="blueprint-mobile-modal-content blueprint-mobile-modal-scenes">
-              {savedScenes.length === 0 ? (
-                <div className="blueprint-mobile-modal-empty">No saved scenes</div>
-              ) : (
-                savedScenes.map((scene) => (
-                  <button
-                    key={scene.name}
-                    className="blueprint-mobile-modal-scene-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLoadScene(scene.name);
-                    }}
-                  >
-                    <span>{scene.name}</span>
-                    <button
-                      className="blueprint-mobile-modal-scene-delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteScene(scene.name);
-                      }}
-                      title="Delete scene"
-                    >
-                      ×
-                    </button>
-                  </button>
-                ))
-              )}
-            </div>
+            <div className="blueprint-scenes-picker-list">{renderSavedScenesList()}</div>
           </div>
         </div>
       )}

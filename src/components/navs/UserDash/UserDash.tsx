@@ -3,11 +3,10 @@ import { useState, useEffect } from 'react';
 import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
-import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner, refreshProvider } from '../../../lib/nexus';
-import { getSpendableVaultBalance, resetReadProvider } from '../../../lib/zkHandler';
+import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
+import { getSpendableVaultBalance } from '../../../lib/zkHandler';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
-import { getNetwork, getSelectedChainId } from '../../../lib/networks';
-import ChainToggle from '../../ChainToggle';
+import { getNetwork, DEFAULT_CHAIN_ID } from '../../../lib/networks';
 
 interface UnifiedBalance {
   symbol: string;
@@ -27,43 +26,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDepositMode, setIsDepositMode] = useState(true);
   const [isNotesBusy, setIsNotesBusy] = useState(false);
-  const [vaultChainId, setVaultChainId] = useState(getSelectedChainId);
+  const vaultChainId = DEFAULT_CHAIN_ID;
   const activeNetwork = getNetwork(vaultChainId);
-  
-  const refetchWalletBalances = async (chainId: number) => {
-    if (!window.ethereum) return;
-    try {
-      if (isInitialized()) {
-        await refreshProvider(window.ethereum);
-      } else {
-        await initializeWithProvider(window.ethereum);
-      }
-      const balances = await getUnifiedBalances(chainId);
-      setWalletBalances(balances);
-    } catch (error) {
-      console.error('Error refreshing wallet balances after chain switch:', error);
-    }
-  };
-
-  useEffect(() => {
-    setVaultChainId(getSelectedChainId());
-    const onChain = (e: Event) => {
-      const id = (e as CustomEvent<{ chainId: number }>).detail?.chainId;
-      if (id) {
-        setVaultChainId(id);
-        resetReadProvider();
-        void refetchWalletBalances(id);
-      }
-    };
-    window.addEventListener('siphon:chainChanged', onChain);
-    window.addEventListener('siphon:walletChainChanged', onChain);
-    window.addEventListener('siphon:networkReady', onChain);
-    return () => {
-      window.removeEventListener('siphon:chainChanged', onChain);
-      window.removeEventListener('siphon:walletChainChanged', onChain);
-      window.removeEventListener('siphon:networkReady', onChain);
-    };
-  }, []);
 
   useEffect(() => {
     const fetchBalances = async () => {
@@ -190,6 +154,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       // Navigate back to discover view
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'blueprint' }));
+        window.dispatchEvent(new CustomEvent('pro-view-mode-change', { detail: 'blueprint' }));
       }
     }
   };
@@ -305,7 +270,6 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         <div className="userdash-header">
           <div className="userdash-header-top">
             <h1 className="userdash-title">User Dashboard</h1>
-            <ChainToggle className="userdash-chain-toggle" />
             <button
               className="userdash-logout-button"
               onClick={handleLogout}

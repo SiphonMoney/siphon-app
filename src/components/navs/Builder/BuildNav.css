@@ -872,6 +872,200 @@
   cursor: not-allowed;
 }
 
+/* Saved scenes picker (folder button) */
+.blueprint-scenes-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(5.25rem + env(safe-area-inset-top, 0px)) 1rem 1rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.blueprint-scenes-picker {
+  width: min(100%, 360px);
+  max-height: min(60vh, 420px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(8, 8, 10, 0.96);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.blueprint-scenes-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.blueprint-scenes-picker-header h3 {
+  margin: 0;
+  font-family: var(--font-source-code), monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.blueprint-scenes-picker-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.blueprint-scenes-picker-close:hover {
+  color: #fff;
+}
+
+.blueprint-scenes-picker-list {
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.blueprint-scenes-picker-empty {
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-family: var(--font-source-code), monospace;
+}
+
+@media (max-width: 768px) {
+  .blueprint-scenes-picker-overlay {
+    align-items: flex-end;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .blueprint-scenes-picker {
+    width: 100%;
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+  }
+}
+
+/* Saved scenes picker — compact modal on desktop, sheet on mobile */
+.blueprint-scenes-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(5rem + env(safe-area-inset-top, 0px)) 1rem 1rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.blueprint-scenes-picker {
+  width: min(100%, 360px);
+  max-height: min(50vh, 420px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(8, 8, 10, 0.96);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.blueprint-scenes-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.blueprint-scenes-picker-header h3 {
+  margin: 0;
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.blueprint-scenes-picker-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.blueprint-scenes-picker-close:hover {
+  color: #fff;
+}
+
+.blueprint-scenes-picker-list {
+  overflow-y: auto;
+  padding: 0.35rem;
+}
+
+.blueprint-scenes-picker-empty {
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-family: var(--font-source-code), monospace;
+}
+
+@media (max-width: 768px) {
+  .blueprint-scenes-picker-overlay {
+    align-items: flex-end;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.85);
+  }
+
+  .blueprint-scenes-picker {
+    width: 100%;
+    max-width: 100%;
+    max-height: 78vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+  }
+
+  .blueprint-scenes-picker-header h3 {
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+  }
+}
+
 /* Mobile Fullscreen Modals */
 .blueprint-mobile-modal-overlay {
   position: fixed;
