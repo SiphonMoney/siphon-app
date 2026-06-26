@@ -10,9 +10,9 @@ const LLM_MESSAGES: Record<LlmParseFailure["reason"], string> = {
   unconfigured:
     "Builder AI is not configured. Set OPENROUTER_API_KEY in Vercel (Production env) and redeploy — .env.local only works locally.",
   openrouter_error:
-    "OpenRouter rejected the request. Check OPENROUTER_API_KEY on Vercel (exact name, Production scope), redeploy, and verify the key at openrouter.ai/keys.",
-  bad_response: "Builder AI returned an invalid response. Try again or use a different OPENROUTER_MODEL.",
-  network: "Could not reach the builder API. Check your connection and try again.",
+    "Ai rejected the request. Check, and try again.",
+  bad_response: "Something went wrong, please try again.",
+  network: "Could not reach the Server. Check your connection and try again.",
 };
 
 function buildSession(parsed: ParsedPrompt, transcript: string[]): BuilderAgentSession {

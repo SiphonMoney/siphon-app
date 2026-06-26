@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Node, Edge } from '@xyflow/react';
+import { showAppToast } from "@/lib/appToast";
 import "./BuildNav.css";
 
 type ActionCategory = 'wallet' | 'triggers' | 'control' | 'defi';
@@ -161,7 +162,7 @@ export default function BuildNav({
   
   const handleSaveScene = useCallback(() => {
     if (!sceneName.trim()) {
-      alert('Please enter a scene name');
+      showAppToast('Please enter a scene name', 'error');
       return;
     }
     

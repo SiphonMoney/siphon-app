@@ -155,9 +155,13 @@ export function useDashboardCustomize() {
   return ctx;
 }
 
-/** Inline add-widget panel — lives in the dashboard toolbar column (not a bottom portal). */
-export function DashboardCustomizePanel() {
-  const { panelOpen, addable, addWidget, resetDefault } = useDashboardCustomize();
+/** Inline add-widget panel — toolbar column on desktop; fixed sheet on mobile. */
+export function DashboardCustomizePanel({
+  variant = "default",
+}: {
+  variant?: "default" | "mobile";
+}) {
+  const { panelOpen, addable, addWidget, resetDefault, closePanel } = useDashboardCustomize();
 
   if (!panelOpen) return null;
 
@@ -166,9 +170,25 @@ export function DashboardCustomizePanel() {
       id="dashboard-customize-panel"
       role="dialog"
       aria-label="Add dashboard widgets"
-      className="build-widget-customize-panel"
+      className={[
+        "build-widget-customize-panel",
+        variant === "mobile" ? "build-widget-customize-panel--mobile" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
-      <p className="build-widget-customize-title">Add widgets</p>
+      <div className="build-widget-customize-panel-head">
+        <p className="build-widget-customize-title">Add widgets</p>
+        {variant === "mobile" ? (
+          <button
+            type="button"
+            onClick={closePanel}
+            className="build-widget-customize-done"
+          >
+            Done
+          </button>
+        ) : null}
+      </div>
       <ul className="build-widget-customize-list">
         {addable.length === 0 ? (
           <li className="build-widget-customize-empty">All widgets are on the board.</li>

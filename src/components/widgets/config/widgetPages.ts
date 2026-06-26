@@ -1,4 +1,4 @@
-import { SIZE_TO_GRID, type PlacedWidget } from "./grid";
+import { gridSpanForLayout, type PlacedWidget } from "./grid";
 
 export type WidgetGridSpec = { cols: number; rows: number };
 
@@ -68,7 +68,7 @@ export function paginateWidgets(
   let grid = createOccupancy(spec.cols, spec.rows);
 
   for (const widget of placed) {
-    const { col: colSpan, row: rowSpan } = SIZE_TO_GRID[widget.size];
+    const { col: colSpan, row: rowSpan } = gridSpanForLayout(widget.size, spec);
     let placement = findPlacement(grid, colSpan, rowSpan, spec.cols, spec.rows);
 
     if (!placement) {

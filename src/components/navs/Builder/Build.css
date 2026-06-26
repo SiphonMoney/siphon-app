@@ -103,6 +103,21 @@
 }
 
 /* Neogen-style page shell: hero band + scrollable widget dashboard */
+.blueprint-view--dash-front {
+  --build-page-footer-offset: 2.85rem;
+  --build-page-top-offset: clamp(5.25rem, 13vh, 6.75rem);
+  --build-page-hero-band-est: clamp(10.5rem, 26vh, 14.5rem);
+  --build-widget-row-height: min(
+    clamp(108px, 11vw, 138px),
+    max(
+      76px,
+      calc(
+        (100dvh - var(--build-page-top-offset) - var(--build-page-hero-band-est) - var(--build-page-footer-offset) - 2.75rem) / 3
+      )
+    )
+  );
+}
+
 .build-page-layout {
   position: fixed;
   inset: 0;
@@ -115,6 +130,20 @@
   pointer-events: none;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+/* Dashboard open: reserve footer space and center only when content fits */
+.blueprint-view--dash-front .build-page-layout:not(.build-page-layout--focus) {
+  justify-content: flex-start;
+  padding-top: var(--build-page-top-offset);
+  padding-bottom: max(var(--build-page-footer-offset), calc(env(safe-area-inset-bottom) + 2.35rem));
+}
+
+.blueprint-view--dash-front .build-page-layout:not(.build-page-layout--focus) .build-page-content {
+  margin-top: auto;
+  margin-bottom: auto;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .build-page-layout--focus {
@@ -195,7 +224,12 @@
 
 .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
   margin-top: clamp(1.5rem, 4vh, 2.75rem);
-  padding-bottom: 1.5rem;
+  padding-bottom: 0.35rem;
+}
+
+.blueprint-view--dash-front .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
+  margin-top: clamp(1rem, 2.8vh, 2rem);
+  padding-bottom: 0;
 }
 
 /* Fixed footer — terms, privacy, about */
@@ -270,6 +304,25 @@
   pointer-events: auto;
 }
 
+@media (max-width: 768px) {
+  .build-widget-band {
+    width: 100%;
+    max-width: 100%;
+    padding-inline: clamp(1.5rem, 8.5vw, 2.25rem);
+    box-sizing: border-box;
+  }
+
+  .build-page-footer {
+    padding: 0.7rem clamp(1.5rem, 8.5vw, 2.25rem) max(0.2rem, env(safe-area-inset-bottom));
+  }
+
+  .build-page-content {
+    width: 100%;
+    max-width: 100%;
+    align-items: stretch;
+  }
+}
+
 .build-hero-chat {
   width: min(656px, 100%);
   max-width: 656px;
@@ -298,6 +351,12 @@
   bottom: auto;
   left: 50%;
   right: auto;
+  height: auto;
+  max-height: none;
+  width: max-content;
+  max-width: min(96vw, 800px);
+  display: inline-flex;
+  box-sizing: border-box;
   transform: translateX(-50%) translateY(-10px);
   z-index: 25;
   margin: 0;
@@ -696,7 +755,7 @@
 }
 
 .blueprint-view--fullscreen:has(.blueprint-top-bar--visible) .build-sim-toast {
-  top: calc(8.5rem + env(safe-area-inset-top, 0px));
+  top: calc(9.5rem + env(safe-area-inset-top, 0px));
 }
 
 .blueprint-stage .build-node-context-menu {
@@ -718,6 +777,46 @@
   opacity: 1;
 }
 
+@keyframes build-dash-hero-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes build-dash-widgets-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Short viewports: tighten hero so widgets + footer stay in frame */
+@media (max-height: 780px) and (min-width: 769px) {
+  .blueprint-view--dash-front {
+    --build-page-hero-band-est: clamp(8.5rem, 22vh, 11.5rem);
+  }
+
+  .blueprint-view--dash-front .build-ai-tagline {
+    font-size: clamp(1.75rem, 3.6vw, 2.55rem);
+  }
+
+  .blueprint-view--dash-front .build-ai-tagline-sub {
+    margin-top: 0.65rem;
+    font-size: clamp(0.9rem, 1.9vw, 1.05rem);
+  }
+
+  .blueprint-view--dash-front .build-ai-centered-column {
+    gap: 1.15rem;
+  }
+}
+
 /* Mobile: full-screen build + chat offset */
 @media (max-width: 768px) {
   .blueprint-view {
@@ -728,8 +827,31 @@
     margin: 0;
   }
 
+  .blueprint-view--dash-front.blueprint-view--fullscreen {
+    opacity: 1;
+    transition: none;
+  }
+
+  .blueprint-view--dash-front {
+    --build-page-top-offset: clamp(5.85rem, 12.5vh, 7rem);
+    --build-page-hero-band-est: clamp(9rem, 22vh, 12rem);
+    --build-page-footer-offset: 3.15rem;
+    --build-widget-row-height: clamp(
+      72px,
+      calc(
+        (100dvh - var(--build-page-top-offset) - var(--build-page-hero-band-est) - var(--build-page-footer-offset) - 2.75rem) / 4
+      ),
+      21dvh
+    );
+  }
+
   .build-page-layout {
     padding: clamp(4.5rem, 10vh, 5.5rem) 0 max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .blueprint-view--dash-front .build-page-layout:not(.build-page-layout--focus) {
+    padding-top: var(--build-page-top-offset);
+    padding-bottom: max(var(--build-page-footer-offset), calc(env(safe-area-inset-bottom) + 2.65rem));
   }
 
   .build-page-layout--focus {
@@ -755,14 +877,14 @@
   }
 
   .build-hero-band {
-    padding: 0 1rem;
+    padding: 0 clamp(1.5rem, 8.5vw, 2.25rem);
   }
 
   .build-page-content {
     gap: 1rem;
   }
 
-  .blueprint-view--fullscreen .blueprint-top-bar {
+  .blueprint-view--fullscreen .blueprint-top-bar:not(.blueprint-top-bar--mid) {
     bottom: max(1.25rem, env(safe-area-inset-bottom));
     right: 0.5rem;
     left: auto;
@@ -771,33 +893,128 @@
   }
 
   .blueprint-view--fullscreen .blueprint-top-bar--mid {
-    top: calc(3.85rem + env(safe-area-inset-top, 0px));
-    max-width: calc(100vw - 1rem);
-    padding: 0.4rem 0.5rem;
+    top: calc(4.85rem + env(safe-area-inset-top, 0px));
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    height: auto;
+    max-height: none;
+    width: max-content;
+    max-width: calc(100vw - 1.25rem);
+    display: inline-flex;
+    box-sizing: border-box;
+    padding: 0.45rem 0.5rem;
+    transform: translateX(-50%);
+  }
+
+  .blueprint-view--fullscreen .blueprint-top-bar--mid.blueprint-top-bar--visible {
+    transform: translateX(-50%);
+  }
+
+  .blueprint-top-bar--expanded .blueprint-toolbar-end--scene {
+    width: max-content;
+    max-width: 100%;
   }
 
   .build-sim-toast {
-    top: calc(5.35rem + env(safe-area-inset-top, 0px));
+    top: calc(6.35rem + env(safe-area-inset-top, 0px));
   }
 
   .blueprint-view--fullscreen:has(.blueprint-top-bar--visible) .build-sim-toast {
-    top: calc(7.75rem + env(safe-area-inset-top, 0px));
+    top: calc(8.75rem + env(safe-area-inset-top, 0px));
   }
 
   .blueprint-top-bar--expanded .blueprint-toolbar-label {
     display: none;
   }
 
+  .blueprint-view--dash-front .build-page-layout:not(.build-page-layout--focus) .build-page-content {
+    margin-top: auto;
+    margin-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .blueprint-view--dash-front .build-hero-band {
+    padding-top: clamp(1.15rem, 3.5vh, 1.85rem);
+  }
+
+  .blueprint-view--dash-front .build-widget-band {
+    min-height: calc(4 * var(--build-widget-row-height) + 3 * 0.55rem);
+  }
+
+  .blueprint-view--dash-front:not(.loaded) .build-ai-tagline-block {
+    opacity: 0;
+    animation: none;
+  }
+
+  .blueprint-view--dash-front.loaded .build-ai-tagline-block {
+    opacity: 0;
+    animation: build-dash-hero-fade-in 0.72s ease 0.12s forwards;
+  }
+
+  .blueprint-view--dash-front:not(.loaded) .build-widget-band {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .blueprint-view--dash-front.loaded .build-widget-band {
+    opacity: 0;
+    visibility: visible;
+    animation: build-dash-widgets-reveal 0.48s ease 0.78s forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .blueprint-view--dash-front.loaded .build-ai-tagline-block {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+
+    .blueprint-view--dash-front.loaded .build-widget-band {
+      animation: none;
+      opacity: 1;
+    }
+  }
+
   .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
-    margin-top: 2.25rem;
+    margin-top: 1.5rem;
+  }
+
+  .blueprint-view--dash-front .build-page-layout:not(.build-page-layout--focus) .build-widget-band {
+    margin-top: clamp(2rem, 5.5vh, 2.85rem);
+  }
+
+  .blueprint-view--dash-front .build-ai-centered-column {
+    gap: 2.5rem;
+  }
+
+  .blueprint-view--dash-front .build-ai-tagline-block {
+    margin-bottom: 0.5rem;
+  }
+
+  .blueprint-view--dash-front .build-ai-prompt-dock .build-ai-marquee {
+    margin-top: 0.65rem;
+  }
+
+  .blueprint-view--dash-front .build-ai-tagline-welcome {
+    margin-bottom: 0.65rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+  }
+
+  .blueprint-view--dash-front .build-hero-chat--centered .build-ai-tagline {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: clamp(2.05rem, 9.2vw, 2.85rem);
+    line-height: 1.12;
+  }
+
+  .blueprint-view--dash-front .build-ai-tagline-sub {
+    margin-top: 0.75rem;
+    font-size: clamp(0.88rem, 3.6vw, 1rem);
   }
 
   .build-ai-centered-column {
     gap: 1.75rem;
-  }
-
-  .build-ai-tagline {
-    font-size: clamp(1.85rem, 8vw, 2.5rem);
   }
 
   .build-ai-marquee-chip {

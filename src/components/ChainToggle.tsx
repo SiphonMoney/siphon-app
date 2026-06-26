@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { showAppToast } from '../lib/appToast';
 import {
   SUPPORTED_CHAIN_IDS,
   DEFAULT_CHAIN_ID,
@@ -40,7 +41,7 @@ export default function ChainToggle({ className, badgeClassName = 'strategy-moda
     try {
       const result = await selectChainAndSwitchWallet(id);
       if (!result.ok) {
-        alert(`Could not switch network: ${result.error}`);
+        showAppToast(`Could not switch network: ${result.error}`, 'error');
         setChainId(result.chainId);
         return;
       }

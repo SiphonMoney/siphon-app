@@ -7,6 +7,7 @@ import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, d
 import { getSpendableVaultBalance } from '../../../lib/zkHandler';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
 import { getNetwork, DEFAULT_CHAIN_ID } from '../../../lib/networks';
+import { showAppToast } from '../../../lib/appToast';
 
 interface UnifiedBalance {
   symbol: string;
@@ -163,21 +164,21 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     if (isProcessing) return;
 
     if (!walletConnected) {
-      alert('Please connect wallet first');
+      showAppToast('Please connect wallet first', 'error');
       return;
     }
 
     // Validate inputs
     if (!transactionInput.amount || parseFloat(transactionInput.amount) <= 0) {
-      alert('Please enter a valid amount');
+      showAppToast('Please enter a valid amount', 'error');
       return;
     }
     if (!transactionInput.token) {
-      alert('Please select a token');
+      showAppToast('Please select a token', 'error');
       return;
     }
     if (!isDepositMode && !transactionInput.recipient) {
-      alert('Please enter a recipient address');
+      showAppToast('Please enter a recipient address', 'error');
       return;
     }
 
@@ -189,25 +190,25 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         const result = await deposit(transactionInput.token, transactionInput.amount);
         
         if (result.success) {
-          alert(`Successfully deposited ${transactionInput.amount} ${transactionInput.token}`);
+          showAppToast(`Deposited ${transactionInput.amount} ${transactionInput.token}`, 'success');
           setTransactionInput(prev => ({...prev, amount: ""}));
         } else {
-          alert(`Deposit failed: ${result.error}`);
+          showAppToast(`Deposit failed: ${result.error}`, 'error');
         }
       } else {
         console.log('Withdrawing from Siphon Vault');
         const result = await withdraw(transactionInput.token, transactionInput.amount, transactionInput.recipient);
         
         if (result.success) {
-          alert(`Successfully withdrawn ${transactionInput.amount} ${transactionInput.token}`);
+          showAppToast(`Withdrew ${transactionInput.amount} ${transactionInput.token}`, 'success');
           setTransactionInput(prev => ({...prev, amount: ""}));
         } else {
-          alert(`Withdraw failed: ${result.error}`);
+          showAppToast(`Withdraw failed: ${result.error}`, 'error');
         }
       }
     } catch (error: unknown) {
       console.error('Transaction failed:', error);
-      alert(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showAppToast(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
 
     setIsProcessing(false);
@@ -216,7 +217,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const handleExportNotes = async () => {
     const signer = getSigner();
     if (!signer) {
-      alert('Please connect wallet first');
+      showAppToast('Please connect wallet first', 'error');
       return;
     }
     setIsNotesBusy(true);
@@ -224,7 +225,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       await exportNotes(signer);
     } catch (error) {
       console.error('Failed to export notes:', error);
-      alert('Failed to export notes');
+      showAppToast('Failed to export notes', 'error');
     } finally {
       setIsNotesBusy(false);
     }
@@ -235,16 +236,16 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     if (!file) return;
     const signer = getSigner();
     if (!signer) {
-      alert('Please connect wallet first');
+      showAppToast('Please connect wallet first', 'error');
       return;
     }
     setIsNotesBusy(true);
     try {
       await importNotes(signer, file);
-      alert('Notes imported successfully');
+      showAppToast('Notes imported successfully', 'success');
     } catch (error) {
       console.error('Failed to import notes:', error);
-      alert('Failed to import notes');
+      showAppToast('Failed to import notes', 'error');
     } finally {
       setIsNotesBusy(false);
       e.target.value = '';
@@ -290,7 +291,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               className="userdash-copy-button"
               onClick={() => {
                 navigator.clipboard.writeText(wallet.address);
-                alert('Address copied to clipboard!');
+                showAppToast('Address copied to clipboard', 'success');
               }}
               title="Copy address"
             >

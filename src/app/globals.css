@@ -122,6 +122,15 @@ nav {
   }
 }
 
+/* Dapp shell — align header + content to the same max column */
+.dapp-main-container {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
 /* Override nav positioning when inside dapp-main-container */
 .dapp-main-container nav {
   position: sticky;
@@ -137,12 +146,14 @@ nav {
   overflow: visible;
 }
 
-/* Make nav-container use full width inside dapp-main-container */
+/* Nav lines up with content column inside the dapp shell */
 .dapp-main-container nav .nav-container {
   max-width: 100%;
   width: 100%;
   padding-left: 0;
   padding-right: 0;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .nav-center {
@@ -420,6 +431,11 @@ footer h1 {
 
 /* Footer responsive styles */
 @media (max-width: 768px) {
+  .dapp-main-container {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
   nav {
     display: grid;
     grid-template-columns: 1fr;
@@ -431,6 +447,13 @@ footer h1 {
     max-width: 100vw;
     box-sizing: border-box;
     overflow: visible;
+  }
+
+  .dapp-main-container nav {
+    padding-top: max(1.75rem, calc(env(safe-area-inset-top, 0px) + 1.15rem));
+    padding-bottom: 0.85em;
+    padding-left: clamp(1.5rem, 8.5vw, 2.25rem);
+    padding-right: clamp(1.5rem, 8.5vw, 2.25rem);
   }
 
   /* Ensure nav-container doesn't interfere with grid */
@@ -641,6 +664,16 @@ canvas {
 /* Wallet Connect Button - Simplified Styles */
 .wallet-selector {
   position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: auto;
+  z-index: 2;
+}
+
+.nav-wallet {
+  position: relative;
+  overflow: visible;
 }
 
 .wallet-selector-trigger {
@@ -684,20 +717,20 @@ canvas {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
+  left: auto;
+  min-width: 100%;
+  width: max-content;
   background: rgba(0, 0, 0, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   padding: 0.4rem;
-  min-width: 0;
   z-index: 1000;
   backdrop-filter: blur(10px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .wallet-dropdown-portal {
-  position: fixed;
-  z-index: 100003;
-  pointer-events: auto;
+  /* legacy — dropdown is anchored to trigger */
 }
 
 .wallet-options {

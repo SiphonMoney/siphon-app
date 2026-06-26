@@ -41,6 +41,24 @@ export const SIZE_TO_GRID: Record<SizePreset, { col: number; row: number }> = {
   "6x2": { col: 6, row: 2 },
 };
 
+/** 2-column mobile dashboard: wide desktop tiles become full-width rows. */
+export const MOBILE_SIZE_TO_GRID: Record<SizePreset, { col: number; row: number }> = {
+  "1x1": { col: 1, row: 1 },
+  "1x2": { col: 1, row: 2 },
+  "2x1": { col: 2, row: 1 },
+  "2x2": { col: 2, row: 2 },
+  "4x2": { col: 2, row: 2 },
+  "6x1": { col: 2, row: 1 },
+  "6x2": { col: 2, row: 2 },
+};
+
+export function gridSpanForLayout(
+  size: SizePreset,
+  spec: { cols: number },
+): { col: number; row: number } {
+  return spec.cols <= 2 ? MOBILE_SIZE_TO_GRID[size] : SIZE_TO_GRID[size];
+}
+
 export const SIZE_ORDER: SizePreset[] = [
   "1x1",
   "1x2",

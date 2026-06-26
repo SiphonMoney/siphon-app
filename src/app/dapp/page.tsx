@@ -82,8 +82,6 @@ export default function DappPage() {
       }}>
         {/* Common container for nav and content with same width */}
         <div className="dapp-main-container" style={{
-          width: '98vw',
-          maxWidth: 'none',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',

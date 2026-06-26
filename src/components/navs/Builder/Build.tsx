@@ -54,7 +54,6 @@ import {
   resolveScheduleStartDelaySeconds,
   normalizeStrategyKind,
   buildStrategyPayload,
-  computeRangeGridLegs,
   validateStrategyFields,
 } from "../../../lib/strategySpec";
 import { layoutStrategyNodes, getModalStepNodes, randomBuilderNodePosition } from "../../../lib/builderLayout";
@@ -69,6 +68,7 @@ import {
 import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
 import { useEthPrice } from "@/lib/useEthPrice";
+import { showAppToast } from "@/lib/appToast";
 import { getSelectedChainId, getTokens, getZkWithdrawRecipient } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
@@ -688,8 +688,8 @@ export default function Build({
     const swapNode     = nodes.find(n => n.data.type === 'swap');
     const withdrawNode = nodes.find(n => n.data.type === 'withdraw');
 
-    if (!depositNode)  { alert('Add a Deposit node with a coin and amount first.'); return; }
-    if (!strategyNode) { alert('Add a Strategy node first.'); return; }
+    if (!depositNode)  { showAppToast('Add a Deposit node with a coin and amount first.', 'error'); return; }
+    if (!strategyNode) { showAppToast('Add a Strategy node first.', 'error'); return; }
 
     const strategyKind = normalizeStrategyKind(strategyNode.data.strategy as string);
     const strategyFields = {
@@ -722,30 +722,30 @@ export default function Build({
       );
       const treeValidation = validatePriceConditionTreeRaw(rawTree);
       if (!treeValidation.valid) {
-        alert(treeValidation.error ?? 'Please build your Limit Order price conditions.');
+        showAppToast(treeValidation.error ?? 'Please build your Limit Order price conditions.', 'error');
         return;
       }
       try {
         conditionTree = JSON.parse(rawTree!);
       } catch {
-        alert('Invalid price condition tree.'); return;
+        showAppToast('Invalid price condition tree.', 'error'); return;
       }
     } else {
       const validation = validateStrategyFields(strategyKind, strategyFields);
-      if (!validation.valid) { alert(validation.error ?? 'Strategy parameters are incomplete.'); return; }
+      if (!validation.valid) { showAppToast(validation.error ?? 'Strategy parameters are incomplete.', 'error'); return; }
     }
 
     const recipient = (withdrawNode?.data.wallet as string || '').trim();
     const toChain = chainLabelToId(withdrawNode?.data.chain as string);
     const payloadBounds = buildStrategyPayload(strategyKind, strategyFields);
 
-    if (!amount || amount <= 0) { alert('Deposit node needs a valid amount.'); return; }
-    if (!recipient) { alert('Withdraw node needs a recipient wallet address.'); return; }
+    if (!amount || amount <= 0) { showAppToast('Deposit node needs a valid amount.', 'error'); return; }
+    if (!recipient) { showAppToast('Withdraw node needs a recipient wallet address.', 'error'); return; }
 
     // Validate recipient address against destination chain format
     const validationError = validateRecipientAddress(recipient, toChain);
     if (validationError) {
-      alert(`❌ Recipient Address Validation Failed: ${validationError}`);
+      showAppToast(`Recipient address validation failed: ${validationError}`, 'error');
       return;
     }
 
@@ -760,15 +760,14 @@ export default function Build({
       USDT: { symbol: 'USDT', decimals: 6,  address: '0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0' },
     };
     const token = TOKEN_CONFIG[assetIn];
-    if (!token) { alert(`Unsupported asset: ${assetIn}`); return; }
+    if (!token) { showAppToast(`Unsupported asset: ${assetIn}`, 'error'); return; }
 
-    // Generate ZK withdrawal proof now (frontend is the only place with the secret)
-    alert(`Generating ZK proof for ${amountStr} ${assetIn}... this may take a moment.`);
+    showAppToast(`Generating ZK proof for ${amountStr} ${assetIn}...`, 'info', 5000);
     console.log('[Strategy] Generating ZK proof...');
 
     const zkResult = await generateZKData(CHAIN_ID, token, amountStr, getZkWithdrawRecipient(CHAIN_ID));
     if ('error' in zkResult) {
-      alert(`❌ ZK proof failed: ${zkResult.error}`);
+      showAppToast(`ZK proof failed: ${zkResult.error}`, 'error');
       return;
     }
 
@@ -807,7 +806,7 @@ export default function Build({
     console.log('[Strategy] Encrypting client-side and submitting to trade-executor:', strategyData);
 
     const result = await submitEncryptedStrategy(strategyData, {
-      onKeygen:    () => alert('Generating your FHE encryption keys (one-time, ~5s)...'),
+      onKeygen:    () => showAppToast('Generating your FHE encryption keys (one-time, ~5s)...', 'info', 5000),
       onUploadKey: () => console.log('[Strategy] Uploading FHE server key (one-time)...'),
       onUploadClientKey: () => console.log('[Strategy] Uploading client key to confidential VM...'),
       onEncrypt:   () => console.log('[Strategy] Encrypting price conditions locally...'),
@@ -830,34 +829,12 @@ export default function Build({
       }
 
       if (useTree) {
-        alert(`✅ Composable Strategy registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when your custom multi-asset conditions are met.`);
+        showAppToast(`Composable strategy registered (ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'})`, 'success', 5000);
       } else {
-        const triggerLabel =
-          strategyKind === 'Range'
-            ? `$${payloadBounds.lower_bound} – $${payloadBounds.upper_bound} (${payloadBounds.grid_levels} grid levels)`
-            : payloadBounds.upper_bound > 0
-              ? `$${payloadBounds.upper_bound}`
-              : `$${payloadBounds.lower_bound}`;
-        const rangeDetail =
-          strategyKind === 'Range' && payloadBounds.grid_levels
-            ? `\n\nGrid legs (buy/sell alternating):\n${computeRangeGridLegs(
-                payloadBounds.lower_bound,
-                payloadBounds.upper_bound,
-                payloadBounds.grid_levels
-              )
-                .map((leg) => `  • ${leg.legType === 'LIMIT_BUY' ? 'Buy' : 'Sell'} @ $${leg.price.toFixed(2)}`)
-                .join('\n')}`
-            : '';
-        const scheduleDetail =
-          strategyKind === 'TWAP'
-            ? `\n\nTWAP schedule: ${payloadBounds.slices} slices, every ${payloadBounds.interval_sec}s.`
-            : strategyKind === 'DCA'
-              ? `\n\nDCA schedule: recurring every ${payloadBounds.interval_sec}s.`
-              : '';
-        alert(`✅ ${strategyKind} registered! ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'}\n\nThe ZK proof is locked in. Your trade will execute privately when price hits ${triggerLabel}.${rangeDetail}${scheduleDetail}`);
+        showAppToast(`${strategyKind} registered (ID: ${result.data?.strategy_id || result.data?.payload_id || 'ok'})`, 'success', 5000);
       }
     } else {
-      alert(`❌ Strategy failed: ${result.error}`);
+      showAppToast(`Strategy failed: ${result.error}`, 'error');
     }
   }, [nodes]);
   

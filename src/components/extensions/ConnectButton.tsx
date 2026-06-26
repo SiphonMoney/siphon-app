@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import WalletSelector from './WalletSelector';
 import { walletManager, WalletInfo } from './walletManager';
+import { showAppToast } from '@/lib/appToast';
 import { initializeWithProvider, deinit, TOKEN_MAP, refreshProvider, isInitialized } from '../../lib/nexus';
 import { getSpendableVaultBalance } from '../../lib/zkHandler';
 import { getSelectedChainId } from '../../lib/networks';
@@ -153,12 +154,12 @@ export default function ConnectButton({ className, onConnected }: { className?: 
         window.dispatchEvent(new Event('walletConnected'));
       } else {
         console.error(`Failed to connect ${walletId} wallet:`, result.error);
-        alert(`MetaMask connection failed: ${result.error}`);
+        showAppToast(`MetaMask connection failed: ${result.error}`, 'error');
       }
     } catch (error: unknown) {
       console.error(`Connection error for ${walletId}:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Connection error: ${errorMessage}`);
+      showAppToast(`Connection error: ${errorMessage}`, 'error');
     }
   };
 

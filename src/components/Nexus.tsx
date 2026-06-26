@@ -73,7 +73,7 @@ export default function Nexus({
   }, []);
 
   return (
-    <div className="pro-mode-wrapper" style={{ height: '100%', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div className="pro-mode-wrapper" style={{ height: '100%', maxHeight: '100dvh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div
         className="pro-mode-content"
         style={{
