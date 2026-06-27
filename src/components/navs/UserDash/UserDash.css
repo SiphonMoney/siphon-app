@@ -107,6 +107,42 @@
   color: white;
 }
 
+.userdash-network-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.userdash-network-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.userdash-network-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.userdash-network-btn.active {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.95);
+  color: #000;
+  font-weight: 600;
+}
+
+.userdash-network-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .userdash-address {
   display: flex;
   align-items: center;

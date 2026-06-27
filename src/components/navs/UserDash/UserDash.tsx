@@ -7,7 +7,14 @@ import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, d
 import { getSpendableVaultBalance, invalidateLeafCache } from '../../../lib/zkHandler';
 import { resolvePendingOutputNotes } from '../../../lib/outputNoteResolver';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
-import { getNetwork, DEFAULT_CHAIN_ID } from '../../../lib/networks';
+import {
+  getNetwork,
+  DEFAULT_CHAIN_ID,
+  getSelectedChainId,
+  SUPPORTED_CHAIN_IDS,
+  selectChainAndSwitchWallet,
+  installWalletChainSync,
+} from '../../../lib/networks';
 import { showAppToast } from '../../../lib/appToast';
 
 interface UnifiedBalance {
@@ -29,17 +36,50 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [isDepositMode, setIsDepositMode] = useState(true);
   const [isNotesBusy, setIsNotesBusy] = useState(false);
   const [isVaultRefreshing, setIsVaultRefreshing] = useState(false);
-  const vaultChainId = DEFAULT_CHAIN_ID;
-  const activeNetwork = getNetwork(vaultChainId);
+  const [activeChainId, setActiveChainId] = useState<number>(DEFAULT_CHAIN_ID);
+  const [switchingChain, setSwitchingChain] = useState(false);
+  const activeNetwork = getNetwork(activeChainId);
+
+  // Keep the dashboard in sync with the globally-selected EVM network + wallet chain changes.
+  useEffect(() => {
+    installWalletChainSync();
+    setActiveChainId(getSelectedChainId());
+    const onChain = (e: Event) => {
+      const id = (e as CustomEvent<{ chainId: number }>).detail?.chainId;
+      if (id) setActiveChainId(id);
+    };
+    window.addEventListener('siphon:chainChanged', onChain);
+    window.addEventListener('siphon:walletChainChanged', onChain);
+    window.addEventListener('siphon:networkReady', onChain);
+    return () => {
+      window.removeEventListener('siphon:chainChanged', onChain);
+      window.removeEventListener('siphon:walletChainChanged', onChain);
+      window.removeEventListener('siphon:networkReady', onChain);
+    };
+  }, []);
+
+  const handleSelectChain = useCallback(async (id: number) => {
+    if (id === activeChainId || switchingChain) return;
+    setSwitchingChain(true);
+    setSiphonVaultBalances(null);
+    setWalletBalances(null);
+    try {
+      const result = await selectChainAndSwitchWallet(id);
+      setActiveChainId(result.chainId);
+      if (!result.ok) showAppToast(`Could not switch network: ${result.error}`, 'error');
+    } finally {
+      setSwitchingChain(false);
+    }
+  }, [activeChainId, switchingChain]);
 
   const fetchVaultBalances = useCallback(async () => {
     // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
     // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
     try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
-    const { details } = await getSpendableVaultBalance(vaultChainId, TOKEN_MAP);
+    const { details } = await getSpendableVaultBalance(activeChainId, TOKEN_MAP);
     setSiphonVaultBalances(details);
     console.log("Siphon Vault spendable balances (on-chain reconciled):", details);
-  }, [vaultChainId]);
+  }, [activeChainId]);
 
   // Manual refresh: bust the cached leaf scan first so a just-landed deposit is picked up
   // immediately instead of waiting out the cache TTL / 60s poll.
@@ -58,6 +98,24 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     const interval = setInterval(fetchVaultBalances, 60_000);
     return () => clearInterval(interval);
   }, [wallet, fetchVaultBalances]);
+
+  // Refresh the (public) wallet balances whenever the wallet or selected chain changes.
+  useEffect(() => {
+    if (!wallet) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!isInitialized() && typeof window !== 'undefined' && window.ethereum) {
+          try { await initializeWithProvider(window.ethereum); } catch (e) { console.error('init ethers failed', e); }
+        }
+        const balances = await getUnifiedBalances(activeChainId);
+        if (!cancelled) setWalletBalances(balances);
+      } catch (e) {
+        console.error('Error fetching wallet balances:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [wallet, activeChainId]);
 
   const [transactionInput, setTransactionInput] = useState({
     token: "ETH",
@@ -100,8 +158,6 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
             }
           }
           
-          const balances = await getUnifiedBalances(vaultChainId);
-          setWalletBalances(balances);
         }
       } catch (error) {
         console.error('Error fetching wallet data:', error);
@@ -145,7 +201,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           }
         }
         
-        const balances = await getUnifiedBalances(vaultChainId);
+        const balances = await getUnifiedBalances(activeChainId);
         setWalletBalances(balances);
       } catch (error) {
         console.error('Error refreshing wallet balances:', error);
@@ -153,7 +209,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [wallet, vaultChainId]);
+  }, [wallet, activeChainId]);
 
   const formatAddress = (address: string) => {
     if (address.length <= 10) return address;
@@ -300,6 +356,24 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               </svg>
               Logout
             </button>
+          </div>
+          <div className="userdash-network-toggle" role="group" aria-label="EVM network">
+            {SUPPORTED_CHAIN_IDS.map((id) => {
+              const net = getNetwork(id);
+              const active = id === activeChainId;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`userdash-network-btn${active ? ' active' : ''}`}
+                  onClick={() => handleSelectChain(id)}
+                  disabled={switchingChain}
+                  title={net.name}
+                >
+                  {net.name}
+                </button>
+              );
+            })}
           </div>
           <div className="userdash-address">
             <span className="userdash-address-label">Address:</span>
