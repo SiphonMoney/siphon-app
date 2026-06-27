@@ -145,15 +145,28 @@ export const strategyList: StrategyMetadata[] = [
     activeNetworks: [],
     isActive: false
   },
-  { 
-    name: 'Stop-Loss Shield', 
-    author: 'Siphon Team', 
-    nodes: 4, 
-    usage: 7, 
-    profit: '+1.9%', 
-    description: 'Sell when price drops to your stop level — deposit ETH, trigger exit, swap to stablecoin, withdraw.', 
-    category: 'trading', 
-    chains: [...DISCOVER_STRATEGY_CHAINS], 
+  {
+    name: 'Stop-Loss Shield',
+    author: 'Siphon Team',
+    nodes: 4,
+    usage: 7,
+    profit: '+1.9%',
+    description: 'Sell when price drops to your stop level — deposit ETH, trigger exit, swap to stablecoin, withdraw.',
+    category: 'trading',
+    chains: [...DISCOVER_STRATEGY_CHAINS],
+    networks: [...DISCOVER_STRATEGY_NETWORKS],
+    activeNetworks: [DISCOVER_ACTIVE_NETWORK],
+    isActive: true
+  },
+  {
+    name: 'Take-Profit Lock',
+    author: 'Siphon Team',
+    nodes: 4,
+    usage: 6,
+    profit: '+2.4%',
+    description: 'Sell when price rises to your target — deposit ETH, trigger exit, swap to stablecoin, lock in gains.',
+    category: 'trading',
+    chains: [...DISCOVER_STRATEGY_CHAINS],
     networks: [...DISCOVER_STRATEGY_NETWORKS],
     activeNetworks: [DISCOVER_ACTIVE_NETWORK],
     isActive: true
@@ -365,6 +378,19 @@ const STRATEGY_LIBRARY_SPECS: Record<string, StrategyTemplateSpec> = {
       { source: 'swap', target: 'withdraw' },
     ],
   },
+  'Take-Profit Lock': {
+    nodes: [
+      { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'ETH', amount: '0.5' } },
+      { id: 'strategy', x: 400, y: 200, data: { label: 'Take Profit', type: 'strategy', strategy: 'Take Profit', priceGoal: '3000', positionPct: '100' } },
+      { id: 'swap', x: 700, y: 200, data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'ETH', toCoin: 'USDC', amount: '0.5' } },
+      { id: 'withdraw', x: 1000, y: 200, data: { label: 'Withdraw', type: 'withdraw', chain: 'Sepolia', coin: 'USDC', amount: '', amountSource: 'output', linkedFromNodeId: 'swap', wallet: '0x...' } },
+    ],
+    edges: [
+      { source: 'deposit', target: 'strategy' },
+      { source: 'strategy', target: 'swap' },
+      { source: 'swap', target: 'withdraw' },
+    ],
+  },
 };
 
 function composeStrategyGraph(name: string): { nodes: Node[]; edges: Edge[] } {
@@ -493,6 +519,7 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
     'DCA Accumulator': { name: 'DCA Accumulator', ...composeStrategyGraph('DCA Accumulator') },
     'Grid Trading': { name: 'Grid Trading', ...composeStrategyGraph('Grid Trading') },
     'Stop-Loss Shield': { name: 'Stop-Loss Shield', ...composeStrategyGraph('Stop-Loss Shield') },
+    'Take-Profit Lock': { name: 'Take-Profit Lock', ...composeStrategyGraph('Take-Profit Lock') },
   };
 };
 
