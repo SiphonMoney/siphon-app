@@ -47,6 +47,11 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
+        // HTTP-level failure (e.g. 401/403 from a restricted key, 5xx) — don't surface it to
+        // the client; fall through to the next upstream RPC. A 2xx (even one carrying a
+        // JSON-RPC error like an eth_call revert) is a legitimate response and is returned.
+        if (!res.ok) break;
+
         return new NextResponse(text, {
           status: res.status,
           headers: { 'Content-Type': 'application/json' },
