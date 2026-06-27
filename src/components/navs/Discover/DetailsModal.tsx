@@ -11,6 +11,7 @@ import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
+import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
 import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
@@ -497,6 +498,24 @@ export default function DetailsModal({
     };
 
     const amountStr = getValue(depositNode?.id, 'amount', String(amount));
+
+    // Stop Loss / Take Profit can act on a fraction of the deposit (Position %). Apply it to the
+    // amount actually withdrawn + swapped; the remainder stays as a shielded change note. Other
+    // kinds use the full deposit (positionPct resolves to 100).
+    const strategyNode = modalStrategyNodes.find(n => (n.data as NodeData).type === 'strategy');
+    const strategyKind = normalizeStrategyKind((strategyNode?.data as NodeData)?.strategy as string | undefined);
+    let effectiveAmountStr = amountStr;
+    let effectiveAmount = amount;
+    if (strategyKind === 'Stop Loss' || strategyKind === 'Take Profit') {
+      const pct = resolvePositionPct({ positionPct: getValue(strategyNode?.id, 'positionPct') });
+      if (pct < 100) {
+        const full = parseFloat(amountStr) || 0;
+        effectiveAmount = full * pct / 100;
+        effectiveAmountStr = String(effectiveAmount);
+        addLog(`Position ${pct}% → ${strategyKind} acts on ${effectiveAmountStr} of ${full} ${assetIn}`);
+      }
+    }
+
     const depositChainLabel = depositNode
       ? getRunStepFieldValue(runModeValues, depositNode.id, 'chain', depositNode.data as NodeData)
       : getRunModeChainLabel(activeChainId);
@@ -533,7 +552,7 @@ export default function DetailsModal({
       const zkResult = await generateZKData(
         fromChainId,
         tokenInfo,
-        amountStr,
+        effectiveAmountStr,
         getZkWithdrawRecipient(fromChainId),
       );
 
@@ -565,7 +584,7 @@ export default function DetailsModal({
         strategy_type: bounds.strategy_type,
         asset_in: assetIn || "USDC",
         asset_out: assetOut,
-        amount,
+        amount: effectiveAmount,
         upper_bound: bounds.upper_bound,
         lower_bound: bounds.lower_bound,
         recipient_address: recipient,

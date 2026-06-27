@@ -54,6 +54,7 @@ import {
   normalizeStrategyKind,
   buildStrategyPayload,
   validateStrategyFields,
+  resolvePositionPct,
 } from "../../../lib/strategySpec";
 import { layoutStrategyNodes, getModalStepNodes, randomBuilderNodePosition } from "../../../lib/builderLayout";
 import { formatGraphForPreview } from "../../../lib/repeatGraph";
@@ -727,6 +728,7 @@ export default function Build({
       intervalSeconds: strategyNode.data.intervalSeconds as string,
       intervals: strategyNode.data.intervals as string,
       maxSlippageBps: strategyNode.data.maxSlippageBps as string,
+      positionPct: strategyNode.data.positionPct as string,
     };
 
     const assetIn   = (depositNode.data.coin  as string || 'ETH').toUpperCase();
@@ -786,10 +788,22 @@ export default function Build({
     const token = TOKEN_CONFIG[assetIn];
     if (!token) { showAppToast(`Unsupported asset: ${assetIn}`, 'error'); return; }
 
-    showAppToast(`Generating ZK proof for ${amountStr} ${assetIn}...`, 'info', 5000);
+    // Stop Loss / Take Profit can act on a fraction of the deposit (Position %). Apply it to the
+    // withdrawn + swapped amount; the rest stays as a shielded change note.
+    let effectiveAmountStr = amountStr;
+    let effectiveAmount = amount;
+    if (strategyKind === 'Stop Loss' || strategyKind === 'Take Profit') {
+      const pct = resolvePositionPct(strategyFields);
+      if (pct < 100) {
+        effectiveAmount = amount * pct / 100;
+        effectiveAmountStr = String(effectiveAmount);
+      }
+    }
+
+    showAppToast(`Generating ZK proof for ${effectiveAmountStr} ${assetIn}...`, 'info', 5000);
     console.log('[Strategy] Generating ZK proof...');
 
-    const zkResult = await generateZKData(CHAIN_ID, token, amountStr, getZkWithdrawRecipient(CHAIN_ID));
+    const zkResult = await generateZKData(CHAIN_ID, token, effectiveAmountStr, getZkWithdrawRecipient(CHAIN_ID));
     if ('error' in zkResult) {
       showAppToast(`ZK proof failed: ${zkResult.error}`, 'error');
       return;
@@ -828,7 +842,7 @@ export default function Build({
       side:              payloadBounds.side,
       asset_in:          assetIn,
       asset_out:         assetOut,
-      amount,
+      amount:            effectiveAmount,
       upper_bound:       useTree ? 0 : payloadBounds.upper_bound,
       lower_bound:       useTree ? 0 : payloadBounds.lower_bound,
       grid_levels:       payloadBounds.grid_levels,
