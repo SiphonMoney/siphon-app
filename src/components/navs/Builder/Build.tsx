@@ -73,6 +73,7 @@ import { getSelectedChainId, getTokens, getZkWithdrawRecipient } from "../../../
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
+import { getSigner } from "../../../lib/nexus";
 import { validateRecipientAddress, chainLabelToId, createDefaultLimitOrderTree } from "./BuildNodes";
 import {
   resolveLimitOrderConditionTree,
@@ -830,7 +831,7 @@ export default function Build({
     let outputMode: 'vault' | 'address' = 'address';
     let outputPrecommitment: string | undefined;
     if (isSameChainSwap && outToken) {
-      const out = await createVaultOutputNote(CHAIN_ID, outToken);
+      const out = await createVaultOutputNote(CHAIN_ID, outToken, getSigner());
       outputMode = 'vault';
       outputPrecommitment = out.precommitment;
       console.log('[Strategy] Vault-output note prepared, precommitment:', outputPrecommitment);

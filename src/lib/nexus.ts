@@ -62,6 +62,11 @@ export async function initializeWithProvider(eip1193Provider: Eip1193Provider, f
     provider = new ethers.BrowserProvider(eip1193Provider);
     signer = await provider.getSigner();
     console.log("Ethers initialized with signer:", await signer.getAddress());
+
+    // Recover any deposit temp hints left from a page refresh between mining and writeNote.
+    import('./localNoteStore').then(m => m.recoverPendingHints(signer!)).catch(e =>
+      console.warn('[recovery] recoverPendingHints failed (best-effort):', e)
+    );
   } catch (error) {
     console.error("Failed to initialize ethers provider:", error);
     provider = null;

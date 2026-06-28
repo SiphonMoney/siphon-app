@@ -102,6 +102,58 @@ export async function verifyProofLocally(proof, publicSignals) {
 }
 
 /**
+ * Multi-note withdrawal proof (N=1..6).
+ * Loads wasm + zkey from /zk/w{N}/. G2 coordinates are swapped per BN254 convention.
+ */
+export async function prepareWithdrawalTransactionMulti(circuitInput, N) {
+  console.log(`[generateProof] Running W${N} fullProve...`);
+  const t0 = Date.now();
+  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+    circuitInput,
+    `/zk/w${N}/main_w${N}.wasm`,
+    `/zk/w${N}/zkey_final.zkey`
+  );
+  console.log(`[generateProof] W${N} proof in ${Date.now() - t0}ms`);
+  return {
+    proof: {
+      pA: [proof.pi_a[0].toString(), proof.pi_a[1].toString()],
+      pB: [
+        [proof.pi_b[0][1].toString(), proof.pi_b[0][0].toString()],
+        [proof.pi_b[1][1].toString(), proof.pi_b[1][0].toString()],
+      ],
+      pC: [proof.pi_c[0].toString(), proof.pi_c[1].toString()],
+    },
+    publicSignals,
+  };
+}
+
+/**
+ * Merge proof (N=2..6).
+ * Loads wasm + zkey from /zk/m{N}/. G2 coordinates are swapped per BN254 convention.
+ */
+export async function prepareMergeTransaction(circuitInput, N) {
+  console.log(`[generateProof] Running M${N} fullProve...`);
+  const t0 = Date.now();
+  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+    circuitInput,
+    `/zk/m${N}/main_m${N}.wasm`,
+    `/zk/m${N}/zkey_final.zkey`
+  );
+  console.log(`[generateProof] M${N} proof in ${Date.now() - t0}ms`);
+  return {
+    proof: {
+      pA: [proof.pi_a[0].toString(), proof.pi_a[1].toString()],
+      pB: [
+        [proof.pi_b[0][1].toString(), proof.pi_b[0][0].toString()],
+        [proof.pi_b[1][1].toString(), proof.pi_b[1][0].toString()],
+      ],
+      pC: [proof.pi_c[0].toString(), proof.pi_c[1].toString()],
+    },
+    publicSignals,
+  };
+}
+
+/**
  * Full pipeline: generate Groth16 proof and return everything handler.ts needs
  * to call withdraw() on-chain.
  */

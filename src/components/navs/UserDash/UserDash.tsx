@@ -7,6 +7,7 @@ import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, d
 import { getSpendableVaultBalance, invalidateLeafCache } from '../../../lib/zkHandler';
 import { resolvePendingOutputNotes } from '../../../lib/outputNoteResolver';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
+import { exportCommitments } from '../../../lib/commitmentStore';
 import {
   getNetwork,
   DEFAULT_CHAIN_ID,
@@ -73,9 +74,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   }, [activeChainId, switchingChain]);
 
   const fetchVaultBalances = useCallback(async () => {
-    // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
-    // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
-    try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+    try { await resolvePendingOutputNotes(getSigner()); } catch { /* best-effort */ }
     const { details } = await getSpendableVaultBalance(activeChainId, TOKEN_MAP);
     setSiphonVaultBalances(details);
     console.log("Siphon Vault spendable balances (on-chain reconciled):", details);

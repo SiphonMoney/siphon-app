@@ -91,8 +91,8 @@ export async function deposit(_token: string, _amount: string) {
     address: token.address
   };
 
-  let depositId: string | null = null; // Initialize depositId
-  let finalDepositId: string | null = null; // Initialize finalDepositId
+  let depositId: string | null = null;
+  let finalDepositId: string | null = null;
 
   try {
     // 1) Generate commitment data using zkHandler
@@ -102,6 +102,19 @@ export async function deposit(_token: string, _amount: string) {
     const decAmount = ethers.parseUnits(_amount, token.decimals);
     const tokenAddress = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
     const signerAddress = await signer.getAddress();
+
+    // Store full secrets in temp hint BEFORE sending tx so they survive a page refresh
+    // between mining and the final writeNote. Key is precommitment (known pre-tx).
+    depositId = `${currentChainId()}-${_token}-${commitmentData.precommitment}`;
+    localStorage.setItem(depositId, JSON.stringify({
+      nullifier:     commitmentData.nullifier,
+      secret:        commitmentData.secret,
+      precommitment: commitmentData.precommitment,
+      nullifierHash: commitmentData.nullifierHash ?? '',
+      amount:        _amount,
+      pending:       true,
+    }));
+    console.log("Stored deposit hint (with secrets) in localStorage:", depositId);
 
     const contract = await getEntrypointContract(signer);
     let receipt: TransactionReceipt | null = null;
@@ -168,11 +181,6 @@ export async function deposit(_token: string, _amount: string) {
       console.log("Deposit tx mined (ERC20):", receipt.hash);
     }
 
-    // Now that the transaction is successful, store the deposit hint locally
-    depositId = `${currentChainId()}-${_token}-${commitmentData.precommitment}`;
-    localStorage.setItem(depositId, JSON.stringify(commitmentData));
-    console.log("Stored deposit hint in localStorage:", depositId);
-
     // 3) Parse LeafInserted from MerkleTree logs
     const provider = getProvider();
     if (!provider) throw new Error("Provider not found");
@@ -201,27 +209,45 @@ export async function deposit(_token: string, _amount: string) {
     const [, leafBN] = abiCoder.decode(['uint256', 'uint256', 'uint256'], leafLog.data);
     const commitment = leafBN.toString();
 
-    // Update localStorage with commitment (use commitment as final key)
+    // Write encrypted note under the final commitment key, then remove the temp hint.
+    // Temp hint is removed AFTER writeNote succeeds so secrets are never orphaned.
     finalDepositId = `${currentChainId()}-${_token}-${commitment}`;
-    localStorage.removeItem(depositId); // Remove temp key
-    localStorage.setItem(finalDepositId, JSON.stringify({
-      ...commitmentData,
-      commitment
-    }));
-
-    // Save note to server (keep localStorage as fallback)
     try {
-      const { postNote } = await import('./noteStore');
-      await postNote(
-        signer,
-        { nullifier: commitmentData.nullifier, secret: commitmentData.secret, amount: _amount },
+      const { writeNote } = await import('./localNoteStore');
+      await writeNote(finalDepositId, {
+        nullifier:     commitmentData.nullifier,
+        secret:        commitmentData.secret,
         commitment,
-        commitmentData.nullifierHash ?? '',
+        precommitment: commitmentData.precommitment,
+        nullifierHash: commitmentData.nullifierHash ?? '',
+        amount:        _amount,
+        spent:         false,
+      }, signer);
+      localStorage.removeItem(depositId!);
+    } catch (e) {
+      console.warn('Encrypted localStorage write failed — temp hint preserved for recovery:', e);
+      // Don't remove depositId — the pending hint still holds the secrets
+    }
+
+    // Save commitment to Supabase (localStorage is fallback)
+    try {
+      const { postCommitment } = await import('./commitmentStore');
+      await postCommitment(
+        signer,
+        {
+          nullifier:     commitmentData.nullifier,
+          secret:        commitmentData.secret,
+          commitment,
+          amount:        _amount,
+          chainId:       currentChainId(),
+          nullifierHash: commitmentData.nullifierHash ?? '',
+          precommitment: commitmentData.precommitment,
+        },
         _token,
-        currentChainId()
+        'deposit',
       );
     } catch (e) {
-      console.warn('Server note save failed, localStorage fallback active', e);
+      console.warn('Server commitment save failed, localStorage fallback active', e);
     }
 
     console.log("✅ Deposit successful!");
@@ -235,10 +261,18 @@ export async function deposit(_token: string, _amount: string) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Error during deposit:", message);
-    // If an error occurred, and depositId was set, remove it from localStorage
+    // Only remove the temp hint if the tx never mined (finalDepositId not set).
+    // If the tx mined but writeNote failed, keep the hint — it holds the secrets for recovery.
     if (depositId && !finalDepositId) {
-      localStorage.removeItem(depositId);
-      console.log("Removed temporary deposit hint from localStorage due to error:", depositId);
+      const raw = localStorage.getItem(depositId);
+      // If hint has no nullifier the tx never sent — safe to remove.
+      // If it has nullifier the tx may have mined — keep it for recovery.
+      try {
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (!parsed.nullifier) localStorage.removeItem(depositId);
+      } catch {
+        localStorage.removeItem(depositId);
+      }
     }
     return { success: false, error: message };
   }
@@ -430,6 +464,26 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
     address: token.address
   };
 
+  // Background pool refill — tops up spare precommitments before proof gen starts.
+  // Not awaited; claimFromPool inside generateZKData handles an empty pool itself.
+  try {
+    const { ensurePool } = await import('./sparePool');
+    ensurePool(signer);
+  } catch { /* best-effort */ }
+
+  // Auto-merge if user has ≥6 unspent notes — the circuit cap is N=6.
+  try {
+    const { consolidateIfNeeded } = await import('./noteConsolidator');
+    const mergeResult = await consolidateIfNeeded(currentChainId(), tokenInfo);
+    if ('error' in mergeResult) {
+      console.warn('[withdraw] consolidation failed (non-blocking):', mergeResult.error);
+    } else if ('merged' in mergeResult && mergeResult.merged) {
+      console.log('[withdraw] Auto-merged notes before withdrawal:', mergeResult.key);
+    }
+  } catch (e) {
+    console.warn('[withdraw] consolidation threw (non-blocking):', e);
+  }
+
   try {
     // 1) Generate ZK data using zkHandler
     console.log("Generating ZK data for withdrawal...");
@@ -448,40 +502,16 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
     const entrypoint = await getEntrypointContract(signer);
     const withdrawFn = entrypoint.getFunction('withdraw');
 
-    // 2) Check if nullifier is already spent
-    try {
-      if (entrypoint.isNullifierSpent) {
-        const spent = await entrypoint.isNullifierSpent(withdrawalTxData.nullifierHash.toString());
-        console.log("isNullifierSpent:", spent);
-        if (spent) {
-          return { success: false, error: "Nullifier already spent" };
-        }
-      } else if (entrypoint.nullifiers) {
-        try {
-          const spent = await entrypoint.nullifiers(withdrawalTxData.nullifierHash.toString());
-          console.log("nullifiers mapping lookup:", spent);
-          if (spent) return { success: false, error: "Nullifier already spent" };
-        } catch {
-          console.log("nullifiers lookup not readable, continuing.");
-        }
-      } else {
-        console.log("No nullifier-check API available; continuing.");
-      }
-    } catch (e) {
-      console.warn("Error checking nullifier spent status:", e);
-    }
-
-    // 3) Dry-run with staticCall
+    // 2) Dry-run with staticCall using multi-note calldata
     try {
       console.log("Performing withdraw.staticCall (dry-run)...");
-
       await withdrawFn.staticCall(
         tokenAddress,
         _recipient,
         withdrawalTxData.amount.toString(),
         withdrawalTxData.stateRoot,
-        withdrawalTxData.nullifierHash.toString(),
-        withdrawalTxData.newCommitment.toString(),
+        withdrawalTxData.nullifierHashes,
+        withdrawalTxData.changeCommitment,
         withdrawalTxData.pA,
         withdrawalTxData.pB,
         withdrawalTxData.pC
@@ -493,7 +523,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       return { success: false, error: message };
     }
 
-    // 4) Send actual withdrawal transaction
+    // 3) Send actual withdrawal transaction
     try {
       console.log("Sending withdraw transaction...");
       const tx = await withdrawFn(
@@ -501,8 +531,8 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         _recipient,
         withdrawalTxData.amount.toString(),
         withdrawalTxData.stateRoot,
-        withdrawalTxData.nullifierHash.toString(),
-        withdrawalTxData.newCommitment.toString(),
+        withdrawalTxData.nullifierHashes,
+        withdrawalTxData.changeCommitment,
         withdrawalTxData.pA,
         withdrawalTxData.pB,
         withdrawalTxData.pC
@@ -513,30 +543,95 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       if (!receipt) throw new Error("Withdrawal tx was not mined (receipt null)");
       console.log("Withdraw tx mined:", receipt.hash);
 
-      // 5) Update localStorage
-      // Mark spent deposit
-      if (zkData.spentDepositKey) {
+      // 4) Mark ALL spent notes — localStorage and server commitments table
+      try {
+        const { markNoteSpent } = await import('./localNoteStore');
+        const { markCommitmentSpent } = await import('./commitmentStore');
+        for (const key of zkData.spentDepositKeys) {
+          markNoteSpent(key);
+          const serverId = zkData.serverCommitmentIds[key];
+          if (serverId) {
+            markCommitmentSpent(signer, serverId, 'true').catch(e =>
+              console.warn('Failed to mark server commitment spent:', key, e)
+            );
+          }
+        }
+      } catch {
+        console.warn("Failed to mark local deposits spent");
+      }
+
+      // 5) Save change note only when changeValue > 0.
+      // Zero-value change notes are on-chain (circuit always inserts a leaf) but have no
+      // spendable value — no point tracking them in localStorage or the commitments table.
+      if (zkData.changeValue > 0n) {
         try {
-          localStorage.setItem(zkData.spentDepositKey, JSON.stringify({
-            ...zkData.spentDeposit,
-            spent: true
-          }));
-          console.log("Marked local deposit as spent:", zkData.spentDepositKey);
-        } catch {
-          console.warn("Failed to mark local deposit spent:");
+          const { writeNote } = await import('./localNoteStore');
+          await writeNote(zkData.newDepositKey, {
+            nullifier:     zkData.newDeposit.nullifier,
+            secret:        zkData.newDeposit.secret,
+            commitment:    zkData.newDeposit.commitment!,
+            precommitment: zkData.newDeposit.precommitment,
+            nullifierHash: zkData.newDeposit.nullifierHash ?? '',
+            amount:        zkData.newDeposit.amount,
+            spent:         false,
+          }, signer);
+        } catch (e) {
+          console.warn('Encrypted change note write failed:', e);
+        }
+        console.log("Saved change commitment locally:", zkData.newDepositKey);
+
+        // Sync change note to Supabase commitments table (best-effort)
+        try {
+          const { postCommitment } = await import('./commitmentStore');
+          await postCommitment(
+            signer,
+            {
+              nullifier:     zkData.newDeposit.nullifier,
+              secret:        zkData.newDeposit.secret,
+              commitment:    zkData.newDeposit.commitment!,
+              amount:        zkData.newDeposit.amount,
+              chainId:       currentChainId(),
+              nullifierHash: zkData.newDeposit.nullifierHash ?? '',
+              precommitment: zkData.newDeposit.precommitment,
+            },
+            _token,
+            'change',
+          );
+        } catch (e) {
+          console.warn('Change note server save failed, localStorage fallback active', e);
         }
       }
 
-      // Save change commitment if changeValue > 0
-      if (zkData.changeValue > 0n) {
-        localStorage.setItem(zkData.newDepositKey, JSON.stringify(zkData.newDeposit));
-        console.log("Saved change commitment locally:", zkData.newDepositKey);
+      // Resolve the pool precommitment now that the change note is confirmed on-chain.
+      if (zkData.changePoolId) {
+        try {
+          const { resolvePrecommitment } = await import('./precommitmentStore');
+          await resolvePrecommitment(signer, zkData.changePoolId);
+        } catch (e) {
+          console.warn('[pool] Failed to resolve pool precommitment:', e);
+        }
+        // Refill pool async so the next withdrawal has entries ready.
+        try {
+          const { ensurePool } = await import('./sparePool');
+          ensurePool(signer);
+        } catch { /* best-effort */ }
       }
+
+      // Invalidate the leaf cache so the next withdrawal/balance refresh sees the
+      // updated tree: spent leaves gone, change leaf added.
+      invalidateLeafCache();
 
       return { success: true, transactionHash: receipt.hash };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("Error during withdraw transaction:", message);
+      // Release pool entry so it can be reused by the next withdrawal attempt.
+      if (zkData.changePoolId) {
+        try {
+          const { releasePrecommitment } = await import('./precommitmentStore');
+          await releasePrecommitment(signer, zkData.changePoolId);
+        } catch { /* best-effort */ }
+      }
       return { success: false, error: message };
     }
   } catch (err: unknown) {

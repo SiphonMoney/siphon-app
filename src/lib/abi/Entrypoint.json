@@ -28,8 +28,18 @@
           "type": "address"
         },
         {
+          "internalType": "address[6]",
+          "name": "_withdrawalVerifiers",
+          "type": "address[6]"
+        },
+        {
+          "internalType": "address[5]",
+          "name": "_mergeVerifiers",
+          "type": "address[5]"
+        },
+        {
           "internalType": "address",
-          "name": "_verifier",
+          "name": "_swapVerifier",
           "type": "address"
         }
       ],
@@ -336,6 +346,49 @@
         }
       ],
       "name": "initializeVaults",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_stateRoot",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "_nullifierHashes",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_mergedCommitment",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256[2]",
+          "name": "_pA",
+          "type": "uint256[2]"
+        },
+        {
+          "internalType": "uint256[2][2]",
+          "name": "_pB",
+          "type": "uint256[2][2]"
+        },
+        {
+          "internalType": "uint256[2]",
+          "name": "_pC",
+          "type": "uint256[2]"
+        }
+      ],
+      "name": "merge",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -712,7 +765,7 @@
         },
         {
           "internalType": "uint256",
-          "name": "_amount",
+          "name": "_withdrawnValue",
           "type": "uint256"
         },
         {
@@ -721,13 +774,13 @@
           "type": "uint256"
         },
         {
-          "internalType": "uint256",
-          "name": "_nullifier",
-          "type": "uint256"
+          "internalType": "uint256[]",
+          "name": "_nullifierHashes",
+          "type": "uint256[]"
         },
         {
           "internalType": "uint256",
-          "name": "_newCommitment",
+          "name": "_changeCommitment",
           "type": "uint256"
         },
         {
