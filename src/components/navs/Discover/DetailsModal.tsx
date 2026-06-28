@@ -13,7 +13,6 @@ import { generateZKData } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
 import { walletManager } from "../../extensions/walletManager";
-import { payExecutionFee } from "../../../lib/handler";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
