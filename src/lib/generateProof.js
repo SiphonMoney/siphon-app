@@ -101,56 +101,98 @@ export async function verifyProofLocally(proof, publicSignals) {
   }
 }
 
-/**
- * Multi-note withdrawal proof (N=1..6).
- * Loads wasm + zkey from /zk/w{N}/. G2 coordinates are swapped per BN254 convention.
- */
-export async function prepareWithdrawalTransactionMulti(circuitInput, N) {
-  console.log(`[generateProof] Running W${N} fullProve...`);
-  const t0 = Date.now();
+const RELAYER_URL = (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_PROVING_RELAYER_URL : null)
+  || (typeof window !== 'undefined' ? window.__ENV__?.NEXT_PUBLIC_PROVING_RELAYER_URL : null)
+  || '';
+
+function _normaliseProof(proof) {
+  return {
+    pA: [proof.pi_a[0].toString(), proof.pi_a[1].toString()],
+    pB: [
+      [proof.pi_b[0][1].toString(), proof.pi_b[0][0].toString()],
+      [proof.pi_b[1][1].toString(), proof.pi_b[1][0].toString()],
+    ],
+    pC: [proof.pi_c[0].toString(), proof.pi_c[1].toString()],
+  };
+}
+
+async function _proveViaRelayer(circuitInput, circuit) {
+  const url = `${RELAYER_URL}/prove`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inputs: circuitInput, circuit }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Proving relayer error (${circuit}): ${err.error || res.status}`);
+  }
+  const { proof, publicSignals } = await res.json();
+  return { proof: _normaliseProof(proof), publicSignals };
+}
+
+async function _proveViaNextApi(circuitInput, circuit) {
+  const res = await fetch('/api/prove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inputs: circuitInput, circuit }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`/api/prove error (${circuit}): ${err.error || res.status}`);
+  }
+  const { proof, publicSignals } = await res.json();
+  return { proof: _normaliseProof(proof), publicSignals };
+}
+
+async function _proveLocally(circuitInput, circuit) {
+  const isWithdraw = circuit.startsWith('w');
+  const N = parseInt(circuit.slice(1), 10);
+  const prefix = isWithdraw ? 'w' : 'm';
   const { proof, publicSignals } = await snarkjs.groth16.fullProve(
     circuitInput,
-    `/zk/w${N}/main_w${N}.wasm`,
-    `/zk/w${N}/zkey_final.zkey`
+    `/zk/${prefix}${N}/main_${prefix}${N}.wasm`,
+    `/zk/${prefix}${N}/zkey_final.zkey`,
   );
-  console.log(`[generateProof] W${N} proof in ${Date.now() - t0}ms`);
-  return {
-    proof: {
-      pA: [proof.pi_a[0].toString(), proof.pi_a[1].toString()],
-      pB: [
-        [proof.pi_b[0][1].toString(), proof.pi_b[0][0].toString()],
-        [proof.pi_b[1][1].toString(), proof.pi_b[1][0].toString()],
-      ],
-      pC: [proof.pi_c[0].toString(), proof.pi_c[1].toString()],
-    },
-    publicSignals,
-  };
+  return { proof: _normaliseProof(proof), publicSignals };
+}
+
+/**
+ * Route proof generation: proving relayer → /api/prove (server-side rapidsnark) → snarkjs (browser).
+ * Circuit is e.g. 'w1', 'w3', 'm2'.
+ */
+async function _prove(circuitInput, circuit) {
+  const t0 = Date.now();
+  console.log(`[generateProof] Proving ${circuit.toUpperCase()}...`);
+
+  let result;
+  if (RELAYER_URL) {
+    result = await _proveViaRelayer(circuitInput, circuit);
+  } else {
+    try {
+      result = await _proveViaNextApi(circuitInput, circuit);
+    } catch (e) {
+      console.warn(`[generateProof] /api/prove failed, falling back to snarkjs: ${e.message}`);
+      result = await _proveLocally(circuitInput, circuit);
+    }
+  }
+
+  console.log(`[generateProof] ${circuit.toUpperCase()} proof in ${Date.now() - t0}ms`);
+  return result;
+}
+
+/**
+ * Multi-note withdrawal proof (N=1..6).
+ */
+export async function prepareWithdrawalTransactionMulti(circuitInput, N) {
+  return _prove(circuitInput, `w${N}`);
 }
 
 /**
  * Merge proof (N=2..6).
- * Loads wasm + zkey from /zk/m{N}/. G2 coordinates are swapped per BN254 convention.
  */
 export async function prepareMergeTransaction(circuitInput, N) {
-  console.log(`[generateProof] Running M${N} fullProve...`);
-  const t0 = Date.now();
-  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
-    circuitInput,
-    `/zk/m${N}/main_m${N}.wasm`,
-    `/zk/m${N}/zkey_final.zkey`
-  );
-  console.log(`[generateProof] M${N} proof in ${Date.now() - t0}ms`);
-  return {
-    proof: {
-      pA: [proof.pi_a[0].toString(), proof.pi_a[1].toString()],
-      pB: [
-        [proof.pi_b[0][1].toString(), proof.pi_b[0][0].toString()],
-        [proof.pi_b[1][1].toString(), proof.pi_b[1][0].toString()],
-      ],
-      pC: [proof.pi_c[0].toString(), proof.pi_c[1].toString()],
-    },
-    publicSignals,
-  };
+  return _prove(circuitInput, `m${N}`);
 }
 
 /**
