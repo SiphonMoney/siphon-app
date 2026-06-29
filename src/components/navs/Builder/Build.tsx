@@ -995,6 +995,14 @@ export default function Build({
     setBuilderPrompt("");
     setBuildViewActive(false);
   }, [setNodes, setEdges, setCurrentFileName]);
+
+  // Clicking the "Siphon Protocol" logo returns to the builder landing (home) by clearing any
+  // loaded strategy graph. Nav dispatches this since the logo lives outside this component.
+  useEffect(() => {
+    const goHome = () => onRestart();
+    window.addEventListener('siphon:go-home', goHome);
+    return () => window.removeEventListener('siphon:go-home', goHome);
+  }, [onRestart]);
   
   const saveScene = useCallback((sceneName: string) => {
     const scene = {

@@ -391,6 +391,30 @@ const STRATEGY_LIBRARY_SPECS: Record<string, StrategyTemplateSpec> = {
       { source: 'swap', target: 'withdraw' },
     ],
   },
+  // Multi-leg: split one deposit into N shielded slices/rungs (atomic Vault.swap per leg, no
+  // withdraw node). The strategy node carries the slice/grid config the multi-leg builder reads.
+  'TWAP Executor': {
+    nodes: [
+      { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'ETH', amount: '0.003' } },
+      { id: 'strategy', x: 400, y: 200, data: { label: 'TWAP', type: 'strategy', strategy: 'TWAP', sliceCount: '3', intervalSeconds: '60', maxSlippageBps: '100' } },
+      { id: 'swap', x: 700, y: 200, data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'ETH', toCoin: 'USDC', amount: '0.003' } },
+    ],
+    edges: [
+      { source: 'deposit', target: 'strategy' },
+      { source: 'strategy', target: 'swap' },
+    ],
+  },
+  'Range Grid Bot': {
+    nodes: [
+      { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'ETH', amount: '0.004' } },
+      { id: 'strategy', x: 400, y: 200, data: { label: 'Range', type: 'strategy', strategy: 'Range', rangeLow: '1500', rangeHigh: '1800', gridLevels: '4' } },
+      { id: 'swap', x: 700, y: 200, data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'ETH', toCoin: 'USDC', amount: '0.004' } },
+    ],
+    edges: [
+      { source: 'deposit', target: 'strategy' },
+      { source: 'strategy', target: 'swap' },
+    ],
+  },
 };
 
 function composeStrategyGraph(name: string): { nodes: Node[]; edges: Edge[] } {
@@ -520,6 +544,8 @@ export const createOtherStrategies = (): Record<string, StrategyData> => {
     'Grid Trading': { name: 'Grid Trading', ...composeStrategyGraph('Grid Trading') },
     'Stop-Loss Shield': { name: 'Stop-Loss Shield', ...composeStrategyGraph('Stop-Loss Shield') },
     'Take-Profit Lock': { name: 'Take-Profit Lock', ...composeStrategyGraph('Take-Profit Lock') },
+    'TWAP Executor': { name: 'TWAP Executor', ...composeStrategyGraph('TWAP Executor') },
+    'Range Grid Bot': { name: 'Range Grid Bot', ...composeStrategyGraph('Range Grid Bot') },
   };
 };
 

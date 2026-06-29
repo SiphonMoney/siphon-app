@@ -61,10 +61,13 @@ export default function Nav({ onWalletConnected }: NavProps) {
   const showDappCenterNav = isDappPage && !isBuildMode && !isUserDash;
 
   const handleLogoClick = (event: React.MouseEvent) => {
-    if (!isDappPage || isBuildMode) return;
+    if (!isDappPage) return;
     event.preventDefault();
+    // Always return to the builder landing (home), even from build mode or a loaded strategy:
+    // switch to the blueprint view AND clear any loaded graph so the dashboard shows.
     window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'blueprint' }));
     window.dispatchEvent(new CustomEvent('pro-view-mode-change', { detail: 'blueprint' }));
+    window.dispatchEvent(new CustomEvent('siphon:go-home'));
   };
 
   const logoContent = (
