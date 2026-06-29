@@ -38,6 +38,36 @@ import entrypointArtifact from "./abi/Entrypoint.json";
 
 const ENTRYPOINT_ABI = entrypointArtifact.abi as ethers.InterfaceAbi;
 
+const V3_FACTORY_ABI = [
+  "function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)",
+];
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+/**
+ * Resolve the Uniswap v3 pool for tokenIn/tokenOut on `chainId`, trying the requested fee tier
+ * first then common ones. Returns the pool address for a leg's SwapBinding (bound into the swap
+ * proof and checked by Vault.swap). Throws if no pool exists.
+ */
+export async function resolveSwapPool(
+  chainId: number,
+  tokenInAddr: string,
+  tokenOutAddr: string,
+  fee = 3000,
+): Promise<{ pool: string; fee: number }> {
+  const net = getNetwork(chainId);
+  if (!net.uniswapV3Factory) throw new Error(`No uniswapV3Factory configured for chain ${chainId}`);
+  const signer = getSigner();
+  const provider = signer?.provider ?? ethers.getDefaultProvider(net.rpcUrl);
+  const factory = new Contract(net.uniswapV3Factory, V3_FACTORY_ABI, provider);
+  const tIn = tokenInAddr === NATIVE_TOKEN ? net.weth : tokenInAddr;
+  const tOut = tokenOutAddr === NATIVE_TOKEN ? net.weth : tokenOutAddr;
+  for (const f of [...new Set([fee, 3000, 500, 10000, 100])]) {
+    const pool: string = await factory.getPool(tIn, tOut, f);
+    if (pool && pool !== ZERO) return { pool, fee: f };
+  }
+  throw new Error(`No Uniswap v3 pool for ${tIn} → ${tOut} on chain ${chainId}`);
+}
+
 /**
  * Broadcast Entrypoint.split(asset, stateRoot, nullifierHash, outCommitments[8], pA, pB, pC),
  * then persist the real slice notes to the local encrypted note store so the per-leg swap proofs

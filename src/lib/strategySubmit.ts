@@ -85,7 +85,9 @@ export interface StrategyInput {
   asset_out: string;
   amount: number;
   recipient_address: string;
-  zk_proof: unknown;
+  // Single-strategy proof. Optional: multi-leg (TWAP/grid) strategies carry per-leg proofs in
+  // `legs[]` instead and have no single zk_proof.
+  zk_proof?: unknown;
   to_chain?: string;
   from_chain?: string;
   // Swap output routing. 'vault' re-deposits the swap output into the asset_out vault as a

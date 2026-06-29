@@ -12,6 +12,7 @@ export interface NetworkConfig {
   weth: string;
   usdc: string;
   swapRouter: string;
+  uniswapV3Factory?: string; // for resolving the swap pool (TWAP/grid leg SwapBinding)
   rpcUrl: string;
   explorer: string;
   deployBlock: number; // earliest block to scan for LeafInserted events
@@ -33,6 +34,7 @@ export const NETWORKS: Record<number, NetworkConfig> = {
     weth: '0x4200000000000000000000000000000000000006',
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     swapRouter: '0x2626664c2603336E57B271c5C0b26F421741e481',
+    uniswapV3Factory: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD',
     rpcUrl: 'https://mainnet.base.org',
     explorer: 'https://basescan.org',
     deployBlock: parseInt(process.env.NEXT_PUBLIC_BASE_MAINNET_DEPLOY_BLOCK || '47815995', 10),
@@ -48,6 +50,7 @@ export const NETWORKS: Record<number, NetworkConfig> = {
     weth: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
     swapRouter: '0x5D49f98ea31bfa7B41473Bc034BCA56B659C11A3',
+    uniswapV3Factory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c',
     rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
     explorer: 'https://sepolia.etherscan.io',
     deployBlock: parseInt(process.env.NEXT_PUBLIC_ETH_SEPOLIA_DEPLOY_BLOCK || '11168257', 10),

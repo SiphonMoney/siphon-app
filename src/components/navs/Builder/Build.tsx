@@ -69,10 +69,12 @@ import { processBuilderTurn } from "../../../builder_agent";
 import type { BuilderAgentSession } from "../../../builder_agent";
 import { useEthPrice } from "@/lib/useEthPrice";
 import { showAppToast } from "@/lib/appToast";
-import { getSelectedChainId, getTokens, getZkWithdrawRecipient } from "../../../lib/networks";
+import { getSelectedChainId, getTokens, getZkWithdrawRecipient, getNetwork, NATIVE_TOKEN } from "../../../lib/networks";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
+import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } from "../../../lib/multiLegBuilder";
+import { getOrCreateClientKey } from "../../../lib/fhe";
 import { getSigner } from "../../../lib/nexus";
 import { validateRecipientAddress, chainLabelToId, createDefaultLimitOrderTree } from "./BuildNodes";
 import {
@@ -788,6 +790,80 @@ export default function Build({
     };
     const token = TOKEN_CONFIG[assetIn];
     if (!token) { showAppToast(`Unsupported asset: ${assetIn}`, 'error'); return; }
+
+    // ── Multi-leg (TWAP / Grid): split the deposit into N slices, build N independent swap-proof
+    // legs (each a distinct nullifier), encrypt a per-leg trigger (fire-time for TWAP, price band
+    // for grid), and submit legs[]. The scheduler fires each leg independently. ──
+    const isMultiLeg = strategyKind === 'TWAP' || strategyKind === 'Range';
+    if (isMultiLeg) {
+      try {
+        const outToken = TOKEN_CONFIG[assetOut];
+        if (!outToken) { showAppToast(`Unsupported output asset: ${assetOut}`, 'error'); return; }
+        const net = getNetwork(CHAIN_ID);
+        const sliceCount = strategyKind === 'TWAP'
+          ? (payloadBounds.slices ?? 0)
+          : (payloadBounds.grid_levels ?? 0);
+        if (!sliceCount || sliceCount < 2) {
+          showAppToast(`Need ≥2 ${strategyKind === 'TWAP' ? 'slices' : 'grid levels'}.`, 'error');
+          return;
+        }
+
+        showAppToast(`Splitting deposit into ${sliceCount} ${strategyKind === 'TWAP' ? 'slices' : 'rungs'} + building proofs…`, 'info', 10000);
+        const clientKey = await getOrCreateClientKey(recipient);
+        const inAddr  = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
+        const outAddr = outToken.symbol === 'ETH' ? NATIVE_TOKEN : outToken.address;
+        const { pool, fee } = await resolveSwapPool(CHAIN_ID, inAddr, outAddr, 3000);
+        const dstToken = outToken.symbol === 'ETH' ? net.weth : outToken.address;
+        const swap = { pool, dstToken, fee, minAmountOut: 0n };
+        const submitSplit = (s: Parameters<typeof submitSplitOnChain>[2]) => submitSplitOnChain(CHAIN_ID, token, s);
+
+        const multi = strategyKind === 'TWAP'
+          ? await buildTwapLegs({
+              chainId: CHAIN_ID, inToken: token, sliceCount,
+              intervalSec: payloadBounds.interval_sec ?? 60,
+              swap, recipient, clientKeyHex: clientKey, submitSplit,
+            })
+          : await buildGridLegs({
+              chainId: CHAIN_ID, inToken: token,
+              low: payloadBounds.lower_bound ?? 0, high: payloadBounds.upper_bound ?? 0,
+              levels: sliceCount, swap, recipient, clientKeyHex: clientKey, submitSplit,
+            });
+
+        const mlStrategyData = {
+          user_id:           recipient,
+          strategy_type:     strategyKind === 'TWAP' ? 'TWAP' : 'RANGE_GRID',
+          side:              payloadBounds.side,
+          asset_in:          assetIn,
+          asset_out:         assetOut,
+          amount:            amount,
+          recipient_address: recipient,
+          legs:              multi.legs,
+          interval_sec:      payloadBounds.interval_sec,
+          grid_levels:       payloadBounds.grid_levels,
+          max_slippage_bps:  payloadBounds.max_slippage_bps,
+          schedule_anchor:   multi.scheduleAnchor,
+          is_private:        true,
+          to_chain:          toChain,
+          from_chain:        String(getSelectedChainId()),
+        };
+
+        const mlResult = await submitEncryptedStrategy(mlStrategyData, {
+          onKeygen:    () => showAppToast('Generating FHE keys (one-time)…', 'info', 5000),
+          onUploadKey: () => console.log('[TWAP/Grid] Uploading FHE server key…'),
+          onUploadClientKey: () => console.log('[TWAP/Grid] Syncing client key to confidential VM…'),
+        });
+        if (mlResult.success) {
+          showAppToast(`${strategyKind} registered — ${multi.legs.length} legs (split ${multi.splitTxHash.slice(0, 10)}…)`, 'success', 7000);
+          window.dispatchEvent(new CustomEvent('siphon:strategySubmitted', { detail: { strategyId: String(mlResult.data?.strategy_id ?? ''), userId: recipient } }));
+        } else {
+          showAppToast(mlResult.error || 'Multi-leg submit failed', 'error', 8000);
+        }
+      } catch (e) {
+        console.error('[TWAP/Grid] build failed:', e);
+        showAppToast(`Multi-leg build failed: ${e instanceof Error ? e.message : String(e)}`, 'error', 9000);
+      }
+      return;
+    }
 
     // Stop Loss / Take Profit can act on a fraction of the deposit (Position %). Apply it to the
     // withdrawn + swapped amount; the rest stays as a shielded change note.
