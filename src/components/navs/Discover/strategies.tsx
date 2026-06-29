@@ -300,16 +300,16 @@ const EDGE_STYLE = { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 };
 // Declarative library: graph specs only, composed into existing Build nodes.
 const STRATEGY_LIBRARY_SPECS: Record<string, StrategyTemplateSpec> = {
   'Limit Order': {
+    // No withdraw node: the swap is an atomic Vault.swap (output goes straight to the
+    // recipient / back into the vault as a note). Funds never leave to the executor wallet.
     nodes: [
       { id: 'deposit', x: 100, y: 200, data: { label: 'Deposit', type: 'deposit', chain: 'Sepolia', coin: 'USDC', amount: '1000' } },
       { id: 'strategy', x: 400, y: 200, data: { label: 'Limit Order', type: 'strategy', strategy: 'Limit Order', priceGoal: '1.05' } },
       { id: 'swap', x: 700, y: 200, data: { label: 'Swap', type: 'swap', dex: 'Uniswap', coin: 'USDC', toCoin: 'ETH', amount: '1000' } },
-      { id: 'withdraw', x: 1000, y: 200, data: { label: 'Withdraw', type: 'withdraw', chain: 'Sepolia', coin: 'ETH', amount: '', amountSource: 'output', linkedFromNodeId: 'swap', wallet: '0x...' } },
     ],
     edges: [
       { source: 'deposit', target: 'strategy' },
       { source: 'strategy', target: 'swap' },
-      { source: 'swap', target: 'withdraw' },
     ],
   },
   'DCA Accumulator': {
