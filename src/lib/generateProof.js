@@ -153,6 +153,15 @@ async function _proveLocally(circuitInput, circuit) {
     );
     return { proof: _normaliseProof(proof), publicSignals };
   }
+  // Split circuit lives at /zk/split (1 note → 8 slice notes, 10 pub signals).
+  if (circuit === 'split') {
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circuitInput,
+      `/zk/split/main_split.wasm`,
+      `/zk/split/zkey_final.zkey`,
+    );
+    return { proof: _normaliseProof(proof), publicSignals };
+  }
   const isWithdraw = circuit.startsWith('w');
   const N = parseInt(circuit.slice(1), 10);
   const prefix = isWithdraw ? 'w' : 'm';
@@ -212,6 +221,17 @@ export async function prepareSwapTransaction(circuitInput) {
   console.log('[generateProof] Proving SWAP (browser snarkjs)...');
   const result = await _proveLocally(circuitInput, 'swap');
   console.log(`[generateProof] SWAP proof in ${Date.now() - t0}ms`);
+  return result;
+}
+
+/**
+ * Split proof (1 note → 8 slice notes). Browser snarkjs (server prover has no split circuit).
+ */
+export async function prepareSplitTransaction(circuitInput) {
+  const t0 = Date.now();
+  console.log('[generateProof] Proving SPLIT (browser snarkjs)...');
+  const result = await _proveLocally(circuitInput, 'split');
+  console.log(`[generateProof] SPLIT proof in ${Date.now() - t0}ms`);
   return result;
 }
 

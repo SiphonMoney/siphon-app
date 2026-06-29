@@ -1,7 +1,7 @@
 import { ethers, Contract, Network } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
-import { prepareWithdrawalTransactionMulti, prepareSwapTransaction } from "./generateProof";
+import { prepareWithdrawalTransactionMulti, prepareSwapTransaction, prepareSplitTransaction } from "./generateProof";
 import { getProvider, getSigner } from './nexus';
 import { getNetwork, getReadProviderRpcUrl, getSelectedChainId } from './networks';
 import entrypointArtifact from './abi/Entrypoint.json';
@@ -650,6 +650,131 @@ export async function generateSwapProof(
       commitment:    newCommitmentOnChain,
       amountWei:     changeValue.toString(),
     },
+  };
+}
+
+const SPLIT_N = 8;
+
+export interface SplitSliceNote {
+  nullifier: string; secret: string; precommitment: string; commitment: string; amountWei: string;
+}
+export interface SplitProofData {
+  stateRoot: string;
+  nullifierHash: string;       // input note spent on-chain
+  outCommitments: string[];    // all 8 (on-chain insert order)
+  pA: [string, string];
+  pB: [[string, string], [string, string]];
+  pC: [string, string];
+  spentNoteKey: string;        // localStorage key of the note being split
+  slices: SplitSliceNote[];    // the real (non-zero) slice notes to persist + swap later
+}
+
+/**
+ * Split ONE note into `_sliceCount` equal slice-notes (+ zero-pad to 8) for a TWAP/grid.
+ * One private tx (Entrypoint.split) — hides the slice amounts and count (always 8 commitments),
+ * removing the deposit-side fingerprint of N separate deposits. The returned `slices` are the
+ * independent notes each future swap proof will spend.
+ */
+export async function generateSplitProof(
+  _chainId: number,
+  _token: TokenInfo,
+  _sliceCount: number,
+  _noteKey?: string,
+): Promise<SplitProofData | { error: string }> {
+  if (_sliceCount < 1 || _sliceCount > SPLIT_N) return { error: `sliceCount must be 1..${SPLIT_N}` };
+
+  const poseidon = await buildPoseidon();
+  const F = poseidon.F;
+  const pHash = (a: bigint, b: bigint): bigint => BigInt(F.toObject(poseidon([a, b])));
+  const pHash1 = (a: bigint): bigint => BigInt(F.toObject(poseidon([a])));
+
+  const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
+  const signer = getSigner();
+  if (!signer) return { error: "Wallet not connected." };
+
+  // 1. on-chain leaves + root
+  let leaves: bigint[];
+  try {
+    leaves = [...await getLeafSet(tokenAddress, _chainId)].map(s => BigInt(s));
+  } catch {
+    return { error: "Failed to fetch on-chain leaves for split." };
+  }
+  const { vault, merkleTreeAddress } = await resolveVault(tokenAddress, _chainId);
+  const provider = getReadProvider(_chainId);
+  const merkleTreeContract = new Contract(merkleTreeAddress, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider);
+  const onChainRoot = BigInt((await merkleTreeContract.getRoot()).toString());
+  const zeros: bigint[] = [0n];
+  for (let i = 1; i < TREE_DEPTH; i++) zeros[i] = pHash(zeros[i - 1], zeros[i - 1]);
+
+  // 2. select the note to split (specific key, or largest unspent note)
+  const { scanNoteMeta, readNote, markNoteSpent } = await import('./localNoteStore');
+  const metas = scanNoteMeta(`${_chainId}-${_token.symbol}-`);
+  let chosen: { key: string; data: CommitmentData; amountWei: bigint; leafIndex: number } | null = null;
+  for (const meta of metas) {
+    if (_noteKey && meta.key !== _noteKey) continue;
+    if (!meta.commitment || !meta.amount) continue;
+    if (meta.spent === true || meta.spent === 'true') continue;
+    const data = await readNote(meta.key, signer);
+    if (!data || !data.nullifier || !data.commitment) continue;
+    const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _token.decimals).toString());
+    if (amountWei <= 0n) continue;
+    const leafIndex = leaves.findIndex(l => l === BigInt(data.commitment));
+    if (leafIndex === -1) continue;
+    if (await vault.nullifiers(pHash1(BigInt(data.nullifier)))) { markNoteSpent(meta.key); continue; }
+    if (_noteKey || !chosen || amountWei > chosen.amountWei) {
+      chosen = { key: meta.key, data: { ...data, precommitment: data.precommitment ?? '' }, amountWei, leafIndex };
+      if (_noteKey) break;
+    }
+  }
+  if (!chosen) return { error: `No spendable ${_token.symbol} note found to split.` };
+
+  // 3. slice amounts: equal, remainder folded into the last real slice (conservation)
+  const V = chosen.amountWei;
+  const base = V / BigInt(_sliceCount);
+
+  // 4. build 8 output notes (real slices + zero pad)
+  const outValue: bigint[] = [];
+  const outNote: SplitSliceNote[] = [];
+  for (let i = 0; i < SPLIT_N; i++) {
+    const v = i >= _sliceCount ? 0n : (i < _sliceCount - 1 ? base : V - base * BigInt(_sliceCount - 1));
+    const cd = await generateCommitmentData(_chainId, _token, ethers.formatUnits(v, _token.decimals));
+    outValue.push(v);
+    outNote.push({
+      nullifier: cd.nullifier, secret: cd.secret, precommitment: cd.precommitment,
+      commitment: pHash(v, BigInt(cd.precommitment)).toString(), amountWei: v.toString(),
+    });
+  }
+
+  // 5. witness
+  const { pathElements, pathIndices } = buildMerklePath(leaves, chosen.leafIndex, zeros, pHash);
+  const nullifierHash = pHash1(BigInt(chosen.data.nullifier));
+  const circuitInput = {
+    stateRoot:     onChainRoot.toString(),
+    nullifierHash: nullifierHash.toString(),
+    outCommitment: outNote.map(o => o.commitment),
+    inValue:       V.toString(),
+    inNullifier:   chosen.data.nullifier.toString(),
+    inSecret:      chosen.data.secret.toString(),
+    pathElements:  pathElements.map(v => v.toString()),
+    pathIndices:   pathIndices.map(String),
+    outValue:      outValue.map(v => v.toString()),
+    outNullifier:  outNote.map(o => o.nullifier),
+    outSecret:     outNote.map(o => o.secret),
+  };
+
+  const { proof, publicSignals } = await prepareSplitTransaction(circuitInput);
+  // publicSignals: [stateRoot, nullifierHash, outCommitment[0..7]]
+  const outCommitments = publicSignals.slice(2, 2 + SPLIT_N);
+
+  return {
+    stateRoot:     onChainRoot.toString(),
+    nullifierHash: nullifierHash.toString(),
+    outCommitments,
+    pA: proof.pA as [string, string],
+    pB: proof.pB as [[string, string], [string, string]],
+    pC: proof.pC as [string, string],
+    spentNoteKey:  chosen.key,
+    slices:        outNote.slice(0, _sliceCount),
   };
 }
 
