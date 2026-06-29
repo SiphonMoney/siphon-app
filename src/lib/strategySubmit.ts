@@ -98,7 +98,14 @@ export interface StrategyInput {
   lower_bound?: number;
   // Composable strategies: tree with plaintext LEAF `bound`s, encrypted here.
   condition_tree?: unknown | null;
-  // Any extra fields (side, grid_levels, slices, …) are forwarded untouched.
+  // Multi-leg strategies (TWAP / RANGE_GRID): N independent legs, each with its own swap proof
+  // + per-leg encrypted trigger (encrypted fire-time for TWAP, encrypted price band for grid).
+  // Built by multiLegBuilder.buildTwapLegs / buildGridLegs. Already-encrypted — forwarded as-is.
+  legs?: import("./multiLegBuilder").BuiltLeg[];
+  interval_sec?: number;
+  grid_levels?: number;
+  schedule_anchor?: number;
+  // Any extra fields (side, slices, …) are forwarded untouched.
   [key: string]: unknown;
 }
 
