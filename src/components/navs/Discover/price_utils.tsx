@@ -93,7 +93,30 @@ export const calculateExchange = (
   return outputAmount;
 };
 
-/** Spot-rate estimate minus ~2% for fees/slippage (e.g. $1 in → ~$0.98 out). */
+const RUN_FEE_MIN_USD = 0.35;
+const RUN_FEE_PER_HOUR_USD = 0.35;
+
+/** Spot output after slippage % and run fee (USD) deducted in output-token terms. */
+export const calculateNetReceiveEstimate = (
+  inputAmount: number,
+  coinA: string,
+  coinB: string,
+  coinPrices: Record<string, number>,
+  slippagePct: number,
+  runFeeUsd: number,
+): number => {
+  const spot = calculateExchange(inputAmount, coinA, coinB, coinPrices);
+  if (spot <= 0) return 0;
+
+  const afterSlippage = spot * (1 - Math.max(0, slippagePct) / 100);
+  const outSym = coinB.toUpperCase();
+  const outPrice = coinPrices[outSym] ?? (outSym === "USDC" ? 1 : 0);
+  const feeInOut = outPrice > 0 ? runFeeUsd / outPrice : 0;
+
+  return Math.max(0, afterSlippage - feeInOut);
+};
+
+/** @deprecated Use calculateNetReceiveEstimate with explicit slippage + fee. */
 export const ESTIMATED_RECEIVE_FACTOR = 0.98;
 
 export const applyEstimatedReceiveHaircut = (spotOutputAmount: number): number => {
@@ -106,10 +129,10 @@ export const calculateEstimatedReceive = (
   coinA: string,
   coinB: string,
   coinPrices: Record<string, number>,
-): number => applyEstimatedReceiveHaircut(calculateExchange(inputAmount, coinA, coinB, coinPrices));
-
-const RUN_FEE_MIN_USD = 0.35;
-const RUN_FEE_PER_HOUR_USD = 0.35;
+  slippagePct = 2,
+  runFeeUsd = RUN_FEE_MIN_USD,
+): number =>
+  calculateNetReceiveEstimate(inputAmount, coinA, coinB, coinPrices, slippagePct, runFeeUsd);
 
 /** Parse run duration strings like `6h`, `2d` into whole hours. */
 export function durationToHours(duration: string): number {

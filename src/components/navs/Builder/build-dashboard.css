@@ -1143,6 +1143,174 @@
   cursor: not-allowed;
 }
 
+.build-dashboard-theme .widget-swap-card-header {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  z-index: 2;
+}
+
+.build-dashboard-theme .widget-swap-compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 0 0.15rem;
+  z-index: 2;
+}
+
+.build-dashboard-theme .widget-swap-compact-header .widget-card-eyebrow {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.build-dashboard-theme .widget-swap-settings-wrap {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 3;
+}
+
+.build-dashboard-theme .widget-swap-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.build-dashboard-theme .widget-swap-settings-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+  display: block;
+  stroke: currentColor;
+}
+
+.build-dashboard-theme .widget-swap-settings-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+/* Portaled to document.body — must not be scoped under .build-dashboard-theme ancestor */
+.widget-swap-settings-popover--portal {
+  position: fixed;
+  z-index: 12000;
+  width: 11.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(10, 10, 14, 0.98);
+  padding: 0.6rem 0.65rem;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-family: var(--font-source-code), ui-monospace, monospace;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.build-dashboard-theme .widget-swap-settings-popover {
+  display: none;
+}
+
+.widget-swap-settings-popover--portal .widget-swap-settings-title {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-source-code), ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.widget-swap-settings-popover--portal .widget-swap-settings-label {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.widget-swap-settings-popover--portal .widget-swap-settings-hint {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.build-dashboard-theme .widget-swap-settings-title {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--defi-text);
+}
+
+.build-dashboard-theme .widget-swap-settings-label,
+.widget-swap-settings-popover--portal .widget-swap-settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 8px;
+  color: var(--defi-text-subtle);
+}
+
+.build-dashboard-theme .widget-swap-settings-input,
+.widget-swap-settings-popover--portal .widget-swap-settings-input {
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.3rem 0.4rem;
+  font-size: 11px;
+  color: var(--defi-text);
+  outline: none;
+}
+
+.widget-swap-settings-popover--portal .widget-swap-settings-input {
+  color: #fff;
+}
+
+.build-dashboard-theme .widget-swap-settings-hint,
+.widget-swap-settings-popover--portal .widget-swap-settings-hint {
+  margin: 0.4rem 0 0.45rem;
+  font-size: 8px;
+  line-height: 1.4;
+  color: var(--defi-text-subtle);
+}
+
+.build-dashboard-theme .widget-swap-settings-save,
+.widget-swap-settings-popover--portal .widget-swap-settings-save {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.3rem 0.4rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--defi-text);
+  cursor: pointer;
+}
+
+.build-dashboard-theme .widget-swap-settings-save:hover,
+.widget-swap-settings-popover--portal .widget-swap-settings-save:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .build-dashboard-theme .widget-wallet-connect-btn .wallet-selector-trigger {
   font-size: 10px;
   padding: 0.35rem 0.65rem;

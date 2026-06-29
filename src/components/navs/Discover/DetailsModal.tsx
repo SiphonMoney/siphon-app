@@ -18,7 +18,8 @@ import { payExecutionFee } from "../../../lib/handler";
 import { resolveWalletAddress } from "../../../lib/walletAddress";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, getRunModeChainDisplayLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
-import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, calculateEstimatedReceive as calculateEstimatedReceiveUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, calculateRunFee, durationToHours } from "./price_utils";
+import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, calculateNetReceiveEstimate, fetchCoinPrices, calculateVariableCost, calculateFixedCost, calculateRunFee, durationToHours } from "./price_utils";
+import { DEFAULT_SWAP_SLIPPAGE_PCT } from "@/lib/quickSwapSettings";
 
 
 interface NodeData {
@@ -373,9 +374,18 @@ export default function DetailsModal({
     return calculateExchangeUtil(inputAmount, coinA, coinB, coinPrices);
   };
 
-  const calculateEstimatedReceive = (inputAmount: number, coinA: string, coinB: string): number => {
-    return calculateEstimatedReceiveUtil(inputAmount, coinA, coinB, coinPrices);
-  };
+  const estimateSlippagePct = useMemo(() => {
+    const strategyNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === "strategy");
+    if (!strategyNode) return DEFAULT_SWAP_SLIPPAGE_PCT;
+    const bps = getRunStepFieldValue(
+      runModeValues,
+      strategyNode.id,
+      "maxSlippageBps",
+      strategyNode.data as NodeData,
+    );
+    const parsed = parseFloat(bps || "");
+    return Number.isFinite(parsed) && parsed > 0 ? parsed / 100 : DEFAULT_SWAP_SLIPPAGE_PCT;
+  }, [modalStrategyNodes, runModeValues]);
 
   const formatAmount = (amount: number, coin?: string): string => {
     return formatAmountUtil(amount, coin);
@@ -407,7 +417,14 @@ export default function DetailsModal({
     const inputAmount =
       parseFloat(getRunStepFieldValue(runModeValues, depositStepId, "amount", depositData || {}) || "0") ||
       0;
-    const outputAmount = calculateEstimatedReceiveUtil(inputAmount, inputCoin, outputCoin, coinPrices);
+    const outputAmount = calculateNetReceiveEstimate(
+      inputAmount,
+      inputCoin,
+      outputCoin,
+      coinPrices,
+      estimateSlippagePct,
+      totalCost,
+    );
 
     const strategyNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === "strategy");
     const strategyKind = (strategyNode?.data as NodeData)?.strategy || "Custom";
@@ -437,7 +454,7 @@ export default function DetailsModal({
       depositChain,
       stepCount: displayStepNodes.length,
     };
-  }, [modalStrategyNodes, runModeValues, coinPrices, displayStepNodes, activeChainId]);
+  }, [modalStrategyNodes, runModeValues, coinPrices, displayStepNodes, activeChainId, estimateSlippagePct, totalCost]);
 
   const formatUsd = (value: number) =>
     value > 0 ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—";
@@ -1104,10 +1121,13 @@ export default function DetailsModal({
                     getRunStepFieldValue(runModeValues, depositStepId || '', 'amount', depositData || {}) || '0'
                   ) || 0;
                   
-                  const outputAmountNum = calculateEstimatedReceive(
-                    inputAmount, 
-                    inputCoin || 'USDC', 
-                    outputCoin || inputCoin || 'USDC'
+                  const outputAmountNum = calculateNetReceiveEstimate(
+                    inputAmount,
+                    inputCoin || "USDC",
+                    outputCoin || inputCoin || "USDC",
+                    coinPrices,
+                    estimateSlippagePct,
+                    totalCost,
                   );
                   
                   const formattedInputAmount = formatAmount(inputAmount, inputCoin);
