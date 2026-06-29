@@ -27,6 +27,7 @@ export function getServerRpcUrls(chainId: number): string[] {
       process.env.ETH_SEPOLIA_RPC,
       process.env.ETH_RPC_URL,
       NETWORKS[11155111].rpcUrl,
+      'https://sepolia.drpc.org',
       'https://ethereum-sepolia-rpc.publicnode.com',
     ]);
   }

@@ -1,7 +1,7 @@
 import { ethers, Contract, Network } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
-import { prepareWithdrawalTransaction } from "./generateProof";
+import { prepareWithdrawalTransactionMulti } from "./generateProof";
 import { getProvider, getSigner } from './nexus';
 import { getNetwork, getReadProviderRpcUrl, getSelectedChainId } from './networks';
 import entrypointArtifact from './abi/Entrypoint.json';
@@ -67,7 +67,7 @@ function suggestedRangeFromError(err: unknown): number | null {
  * RPC rejects it (honouring the provider's suggested range when given). Works on free tiers
  * that cap eth_getLogs; just slower the smaller the cap.
  */
-async function getLogsChunked(
+export async function getLogsChunked(
   provider: ethers.Provider,
   filter: { address: string; topics: (string | null)[] },
   fromBlock: number,
@@ -97,7 +97,7 @@ async function getLogsChunked(
 // Reuse one read provider per chain — avoids ethers spawning retry loops per call.
 const readProviderCache = new Map<number, ethers.Provider>();
 
-function getReadProvider(chainId?: number): ethers.Provider {
+export function getReadProvider(chainId?: number): ethers.Provider {
   const net = getNetwork(chainId ?? getSelectedChainId());
   const cached = readProviderCache.get(net.chainId);
   if (cached) return cached;
@@ -139,8 +139,14 @@ export interface CommitmentData {
 export interface WithdrawalTxData {
   recipient: string;
   amount: string;
-  nullifierHash: string;
-  newCommitment: string;
+  /** Multi-note: all nullifier hashes that were spent. */
+  nullifierHashes: string[];
+  /** Alias kept for single-note callers. */
+  nullifierHash?: string;
+  /** Change note commitment inserted into the tree (0 when draining all input value). */
+  changeCommitment: string;
+  /** Alias kept for single-note callers. */
+  newCommitment?: string;
   stateRoot: string;
   pA: [string, string];
   pB: [[string, string], [string, string]];
@@ -154,8 +160,21 @@ export interface ZKData {
   changeValue: bigint;
   newDepositKey: string;
   newDeposit: CommitmentData;
+  /** All input notes consumed by this withdrawal. */
+  spentDepositKeys: string[];
+  spentDeposits: CommitmentData[];
+  /** @deprecated use spentDepositKeys[0] */
   spentDepositKey: string | null;
+  /** @deprecated use spentDeposits[0] */
   spentDeposit: CommitmentData | null;
+  /** Pool precommitment id for the change note — resolve after tx confirms. */
+  changePoolId: string | null;
+  /**
+   * Map from localStorage key → server commitments table id.
+   * Used to call markCommitmentSpent() after withdrawal so the server stays in sync.
+   * Only populated for notes that were synced from the server.
+   */
+  serverCommitmentIds: Record<string, string>;
 }
 
 // --------- Utilities ----------
@@ -335,12 +354,14 @@ export function invalidateLeafCache(tokenAddress?: string) {
   if (tokenAddress) {
     const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
     leavesCache.delete(cacheKey);
+    leavesInflight.delete(cacheKey);
   } else {
     leavesCache.clear();
+    leavesInflight.clear();
   }
 }
 
-async function getLeafSet(tokenAddress: string, chainId?: number): Promise<Set<string>> {
+export async function getLeafSet(tokenAddress: string, chainId?: number): Promise<Set<string>> {
   const net = getNetwork(chainId ?? getSelectedChainId());
   const cacheKey = `${net.chainId}:${tokenAddress.toLowerCase()}`;
   const hit = leavesCache.get(cacheKey);
@@ -371,33 +392,19 @@ export async function getSpendableVaultBalance(
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
 
-  // Collect candidate notes (unspent locally, with an amount) grouped by token symbol.
+  // Collect candidate notes using plaintext metadata only — no decryption needed for balance.
+  const { scanNoteMeta } = await import('./localNoteStore');
   const notesByToken: Record<string, Array<{ commitment?: string; nullifierHash?: string; amount: string }>> = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key || !key.startsWith(`${chainId}-`)) continue;
-    const parts = key.split('-');
+  for (const meta of scanNoteMeta(`${chainId}-`)) {
+    if (meta.spent === true || meta.spent === 'true') continue;
+    const parts = meta.key.split('-');
     if (parts.length < 3) continue;
     const sym = parts[1].toUpperCase();
-    try {
-      const d = JSON.parse(localStorage.getItem(key) || '{}');
-      // Only skip notes that are explicitly spent. Note: `spent` may be the boolean false OR the
-      // string 'false' (older/output notes) — the string is truthy, so check the values directly.
-      if (!d || !d.amount || d.spent === true || d.spent === 'true') continue;
-
-      let nullifierHash = d.nullifierHash != null ? String(d.nullifierHash) : undefined;
-      if (!nullifierHash && d.nullifier) {
-        try {
-          nullifierHash = F.toString(poseidon([BigInt(d.nullifier)]));
-        } catch {}
-      }
-
-      (notesByToken[sym] ||= []).push({
-        commitment: d.commitment != null ? String(d.commitment) : undefined,
-        nullifierHash,
-        amount: String(d.amount),
-      });
-    } catch { /* skip unparseable */ }
+    (notesByToken[sym] ||= []).push({
+      commitment:    meta.commitment,
+      nullifierHash: meta.nullifierHash,
+      amount:        meta.amount,
+    });
   }
 
   const details: Record<string, number> = {};
@@ -425,15 +432,9 @@ export async function getSpendableVaultBalance(
       if (n.nullifierHash) {
         try {
           if (await vault.nullifiers(BigInt(n.nullifierHash))) {
-            // Nullifier is spent on-chain! Mark it spent locally.
-            const key = `${chainId}-${sym}-${n.commitment}`;
-            const dataStr = localStorage.getItem(key);
-            if (dataStr) {
-              try {
-                const data = JSON.parse(dataStr);
-                localStorage.setItem(key, JSON.stringify({ ...data, spent: true }));
-              } catch {}
-            }
+            // Nullifier is spent on-chain — mark it spent without touching encrypted fields.
+            const { markNoteSpent } = await import('./localNoteStore');
+            markNoteSpent(`${chainId}-${sym}-${n.commitment}`);
             continue; // already withdrawn
           }
         } catch { /* if the check fails, fall through and count it */ }
@@ -481,6 +482,36 @@ export interface SwapBinding {
   minAmountOut: bigint | string;
 }
 
+const MAX_NOTES = 6;
+
+/** Build a 32-level Merkle authentication path for `leafIndex` from the full ordered leaf set. */
+function buildMerklePath(
+  leaves: bigint[],
+  leafIndex: number,
+  zeros: bigint[],
+  poseidonHash: (a: bigint, b: bigint) => bigint,
+): { pathElements: bigint[]; pathIndices: number[] } {
+  const pathElements: bigint[] = [];
+  const pathIndices: number[] = [];
+  let levelNodes: bigint[] = leaves.slice();
+  let idx = leafIndex;
+  for (let level = 0; level < TREE_DEPTH; level++) {
+    const isRight = idx % 2;
+    pathIndices.push(isRight);
+    const siblingIdx = isRight === 1 ? idx - 1 : idx + 1;
+    pathElements.push(siblingIdx < levelNodes.length ? levelNodes[siblingIdx] : zeros[level]);
+    const next: bigint[] = [];
+    for (let i = 0; i < levelNodes.length; i += 2) {
+      const left = levelNodes[i];
+      const right = i + 1 < levelNodes.length ? levelNodes[i + 1] : zeros[level];
+      next.push(poseidonHash(left, right));
+    }
+    levelNodes = next;
+    idx = Math.floor(idx / 2);
+  }
+  return { pathElements, pathIndices };
+}
+
 export async function generateZKData(
   _chainId: number,
   _token: TokenInfo,
@@ -492,161 +523,76 @@ export async function generateZKData(
 
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
+  const poseidonHash = (a: bigint, b: bigint): bigint => BigInt(F.toObject(poseidon([a, b])));
 
-  // 1. FETCH LEAVES FIRST 
+  // 1. FETCH LEAVES
   const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
   let leaves: bigint[] = [];
   try {
-      const leafSet = await getLeafSet(tokenAddress, _chainId);
-      leaves = [...leafSet].map((s) => BigInt(s));
-      console.log("Found leaves count:", leaves.length);
+    const leafSet = await getLeafSet(tokenAddress, _chainId);
+    leaves = [...leafSet].map((s) => BigInt(s));
+    console.log("Found leaves count:", leaves.length);
   } catch (err) {
-      console.error("Failed to fetch on-chain leaves:", err);
-      return { error: "Failed to connect to blockchain to verify deposits." };
+    console.error("Failed to fetch on-chain leaves:", err);
+    return { error: "Failed to connect to blockchain to verify deposits." };
   }
 
-  // Sync server notes into localStorage
+  // 2. Sync server commitments into localStorage.
+  // Also build serverCommitmentIds map (localStorage key → server row id) so the
+  // withdrawal path can call markCommitmentSpent() for each spent input note.
   const signer = getSigner();
+  const serverCommitmentIds: Record<string, string> = {};
   if (signer) {
     try {
-      const { fetchNotes } = await import('./noteStore');
-      const serverNotes = await fetchNotes(signer);
-      for (const note of serverNotes) {
-        if (note.spent === 'false') {
-          const key = `${note.chain_id}-${note.asset}-${note.commitment}`;
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, JSON.stringify({
-              nullifier: note.decrypted.nullifier,
-              secret: note.decrypted.secret,
-              amount: note.decrypted.amount,
-              commitment: note.commitment,
-            }));
+      const { fetchCommitments } = await import('./commitmentStore');
+      const { writeNote } = await import('./localNoteStore');
+      const serverComms = await fetchCommitments(signer);
+      for (const c of serverComms) {
+        const key = `${c.decrypted.chainId}-${c.asset}-${c.decrypted.commitment}`;
+        // Track server id for every unspent note so we can mark it spent after withdrawal.
+        if (c.spent === 'false') {
+          serverCommitmentIds[key] = c.id;
+          // Write from server if: (a) key is absent, OR (b) key exists but is a metadata-only
+          // entry (no nullifier_enc) — vault-mode output notes are stored as metadata-only until
+          // resolvePendingOutputNotes runs, but generateZKData's old guard skipped them because
+          // the key existed. Check for nullifier_enc to detect the unencrypted stub.
+          const existing = localStorage.getItem(key);
+          const needsWrite = !existing || (() => {
+            try { return !JSON.parse(existing).nullifier_enc; } catch { return true; }
+          })();
+          if (needsWrite) {
+            await writeNote(key, {
+              nullifier:     c.decrypted.nullifier,
+              secret:        c.decrypted.secret,
+              commitment:    c.decrypted.commitment,
+              amount:        c.decrypted.amount,
+              nullifierHash: c.decrypted.nullifierHash ?? '',
+              precommitment: c.decrypted.precommitment ?? '',
+              spent:         false,
+            }, signer);
           }
         }
       }
     } catch (e) {
-      console.warn('Server note fetch failed, using localStorage only', e);
+      console.warn('Server commitment fetch failed, using localStorage only', e);
     }
   }
 
-  // 2. FIND A VALID SPENDABLE DEPOSIT
-  let storedDeposit: CommitmentData | null = null;
-  let spentDepositKey: string | null = null;
-  let leafIndex = -1;
-
-  console.log("Scanning localStorage for spendable deposits...");
-
-  const { vault } = await resolveVault(tokenAddress, _chainId);
-  
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    // Filter for keys matching this chain and token
-    if (!key.startsWith(`${_chainId}-${_token.symbol}-`)) continue;
-
-    const data = JSON.parse(localStorage.getItem(key) || '{}');
-    
-    // Check if data is locally valid and unspent
-    if (data && data.commitment && data.amount && (data.spent === 'false' || data.spent === false || data.spent === undefined)) {
-      try {
-        const storedAmountBN = BigInt(
-          ethers.parseUnits(data.amount.toString(), _token.decimals).toString()
-        );
-        const requestedBN = BigInt(
-          ethers.parseUnits(_amount, _token.decimals).toString()
-        );
-
-        // Check if amount is sufficient
-        if (storedAmountBN >= requestedBN) {
-            // Check if the nullifier is already spent on-chain
-            if (data.nullifier) {
-              const localNullifier = BigInt(data.nullifier);
-              const localNullifierHash = F.toString(poseidon([localNullifier]));
-              const isSpentOnChain = await vault.nullifiers(BigInt(localNullifierHash));
-              if (isSpentOnChain) {
-                console.warn("⚠️ Spent Deposit detected on-chain (nullifier spent):", key);
-                try {
-                  localStorage.setItem(key, JSON.stringify({ ...data, spent: true }));
-                } catch {}
-                continue;
-              }
-            }
-
-            // 🔍 CRITICAL CHECK: Does this commitment exist on-chain?
-            const localCommitment = BigInt(data.commitment);
-            
-            // Search for it in the leaves we just fetched
-            const foundIndex = leaves.findIndex(leaf => leaf === localCommitment);
-            
-            if (foundIndex !== -1) {
-                console.log("✅ Match found! Local commitment exists on-chain at index:", foundIndex);
-                storedDeposit = data;
-                spentDepositKey = key;
-                leafIndex = foundIndex; // Save the index now
-                break; // Stop looking, we found a good one
-            } else {
-                console.warn("⚠️ Ghost Deposit detected (exists locally but NOT on-chain):", key);
-                // We SKIP this key and continue the loop. 
-                // We do NOT crash here.
-            }
-        }
-      } catch (e) {
-        console.warn("Failed to process key", key, e);
-      }
-    }
-  }
-
-  // If after checking ALL keys, we still don't have a valid deposit:
-  if (!storedDeposit || !spentDepositKey || leafIndex === -1) {
-    console.error("No valid, confirmed deposit found.");
-    return { error: "No valid deposit found on-chain. Please deposit funds again or wait for confirmation." };
-  }
-
-  console.log("Selected stored deposit:", { spentDepositKey, leafIndex });
-
-  // 3) Reconstruct secrets and values
-  const existingSecret = BigInt(storedDeposit.secret);
-  const existingNullifier = BigInt(storedDeposit.nullifier);
-  if (!storedDeposit.commitment) {throw new Error('Stored deposit is missing commitment');}
-  const existingCommitment = BigInt(storedDeposit.commitment);
-  const existingValue = BigInt( ethers.parseUnits(storedDeposit.amount, _token.decimals).toString() );
-  const withdrawnValue = BigInt( ethers.parseUnits(_amount, _token.decimals).toString() );
-
-  console.log("existingSecret:", existingSecret.toString());
-  console.log("existingNullifier:", existingNullifier.toString());
-  console.log("existingCommitment:", existingCommitment.toString());
-  console.log("existingValue:", existingValue.toString());
-  console.log("withdrawnValue:", withdrawnValue.toString());
-
-  // 4) Derive new secrets for change output
-  const newSecret = BigInt(F.toObject(poseidon([existingSecret, 1n])));
-  const newNullifier = BigInt(F.toObject(poseidon([existingNullifier, 1n])));
-  const changeValue = existingValue - withdrawnValue;
-
-  console.log("Derived newSecret:", newSecret.toString());
-  console.log("Derived newNullifier:", newNullifier.toString());
-  console.log("Change Value:", changeValue.toString());
-
-  // 5) Build Merkle proof using filledSubtrees + zeros from the contract
-  // This mirrors the incremental insertion logic in MerkleTree.sol exactly.
-  const tokenAddress5 = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
-  // Read-only on-chain reads (root, filledSubtrees, zeros) — use the RPC fallback so this
-  // works without the wallet provider initialized, same as getOnChainLeaves above.
-  const provider5 = getReadProvider(_chainId);
-  const entrypoint5 = new Contract(
+  // 3. FETCH ON-CHAIN ROOT
+  const provider = getReadProvider(_chainId);
+  const entrypoint = new Contract(
     getNetwork(_chainId).entrypoint,
     entrypointArtifact.abi as ethers.InterfaceAbi,
-    provider5,
+    provider,
   );
-  const vaultAddr5 = await entrypoint5.getVault(tokenAddress5);
-  const vault5 = new Contract(vaultAddr5, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider5);
-  const merkleTreeAddr5 = await vault5.merkleTree();
-  const merkleTree5 = new Contract(merkleTreeAddr5, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider5);
+  const vaultAddr = await entrypoint.getVault(tokenAddress);
+  const vaultContract = new Contract(vaultAddr, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
+  const merkleTreeAddr = await vaultContract.merkleTree();
+  const merkleTreeContract = new Contract(merkleTreeAddr, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider);
+  const onChainRoot = BigInt((await withRetry(() => merkleTreeContract.getRoot())).toString());
+  console.log("✅ On-chain root:", onChainRoot.toString());
 
-  // Fetch on-chain root
-  const onChainRoot = BigInt((await withRetry(() => merkleTree5.getRoot())).toString());
-  
-  // Pre-computed empty-subtree hashes per level to avoid 20 RPC calls (which trigger 429 errors on Infura free tier)
+  // Pre-computed Poseidon zeros for depth 32
   const zeros: bigint[] = [
     0n,
     14744269619966411208579211824598458697587494354926760081771325075741142829156n,
@@ -682,111 +628,214 @@ export async function generateZKData(
     12549363297364877722388257367377629555213421373705596078299904496781819142130n,
   ];
 
-  console.log("✅ On-chain root:", onChainRoot.toString());
+  // 4. GREEDY MULTI-NOTE SELECTION
+  // Collect all unspent, on-chain-confirmed notes, greedy-fill from largest to smallest.
+  const withdrawnValueTotal = BigInt(ethers.parseUnits(_amount, _token.decimals).toString());
 
-  // Build the Merkle authentication path for `leafIndex` from the FULL on-chain leaf set.
-  // The previous filledSubtrees/zeros shortcut only yields a valid path for the *last* inserted
-  // leaf; spending any older deposit needs the real siblings, which we hash up here level by
-  // level (Poseidon(left,right), padding missing right nodes with zeros[level]).
-  const poseidonHash = (a: bigint, b: bigint): bigint => BigInt(F.toObject(poseidon([a, b])));
-  const pathElements: bigint[] = [];
-  const pathIndices: number[] = [];
-  let levelNodes: bigint[] = leaves.slice();
-  let idx = leafIndex;
-  for (let level = 0; level < TREE_DEPTH; level++) {
-    const isRight = idx % 2;
-    pathIndices.push(isRight);
-    const siblingIdx = isRight === 1 ? idx - 1 : idx + 1;
-    pathElements.push(siblingIdx < levelNodes.length ? levelNodes[siblingIdx] : zeros[level]);
+  const { vault: vaultForNullifier } = await resolveVault(tokenAddress, _chainId);
+  const { scanNoteMeta, readNote, markNoteSpent } = await import('./localNoteStore');
+  const _zkSigner = getSigner();
+  const noteMetas = scanNoteMeta(`${_chainId}-${_token.symbol}-`);
 
-    const next: bigint[] = [];
-    for (let i = 0; i < levelNodes.length; i += 2) {
-      const left = levelNodes[i];
-      const right = i + 1 < levelNodes.length ? levelNodes[i + 1] : zeros[level];
-      next.push(poseidonHash(left, right));
+  interface CandidateNote {
+    key: string;
+    data: CommitmentData;
+    amountWei: bigint;
+    leafIndex: number;
+  }
+  const candidates: CandidateNote[] = [];
+
+  for (const meta of noteMetas) {
+    const key = meta.key;
+    if (!meta.commitment || !meta.amount) continue;
+    if (meta.spent === true || meta.spent === 'true') continue;
+
+    const data = _zkSigner ? await readNote(key, _zkSigner) : null;
+    if (!data) continue;
+
+    try {
+      const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _token.decimals).toString());
+      if (amountWei === 0n) continue;
+
+      // Nullifier spent check
+      if (data.nullifier) {
+        const nullifierHash = F.toString(poseidon([BigInt(data.nullifier)]));
+        const isSpent = await vaultForNullifier.nullifiers(BigInt(nullifierHash));
+        if (isSpent) {
+          markNoteSpent(key);
+          continue;
+        }
+      }
+
+      // On-chain commitment check
+      const commitment = BigInt(data.commitment);
+      const foundIndex = leaves.findIndex(leaf => leaf === commitment);
+      if (foundIndex === -1) {
+        console.warn("⚠️ Ghost Deposit (not on-chain):", key);
+        continue;
+      }
+
+      candidates.push({ key, data: { ...data, precommitment: data.precommitment ?? '' }, amountWei, leafIndex: foundIndex });
+    } catch (e) {
+      console.warn("Failed to process note", key, e);
     }
-    levelNodes = next;
-    idx = Math.floor(idx / 2);
   }
 
-  const computedRoot = levelNodes[0];
-  if (computedRoot !== onChainRoot) {
-    console.warn(`[Proof] ⚠️ computed root ${computedRoot} != on-chain root ${onChainRoot} — proof would fail`);
+  // Sort descending by amount — greedy fill
+  candidates.sort((a, b) => (a.amountWei > b.amountWei ? -1 : a.amountWei < b.amountWei ? 1 : 0));
+
+  const selectedNotes: CandidateNote[] = [];
+  let accumulated = 0n;
+  for (const c of candidates) {
+    if (accumulated >= withdrawnValueTotal) break;
+    if (selectedNotes.length >= MAX_NOTES) break;
+    selectedNotes.push(c);
+    accumulated += c.amountWei;
+  }
+
+  if (accumulated < withdrawnValueTotal) {
+    return { error: `Insufficient balance. Have ${ethers.formatUnits(accumulated, _token.decimals)}, need ${_amount}.` };
+  }
+
+  const N = selectedNotes.length;
+  console.log(`Selected ${N} note(s) totaling ${ethers.formatUnits(accumulated, _token.decimals)} ${_token.symbol}`);
+
+  // 5. CLAIM CHANGE NOTE SECRETS FROM POOL
+  // Secrets are claimed from the pre-generated pool in DB so they survive a tab-close
+  // between proof generation and tx confirmation. Falls back to deterministic derivation
+  // if no signer is available (shouldn't happen in practice).
+  let changeNullifier: bigint, changeSecret: bigint, changePrecommitment: bigint;
+  let changePoolId: string | null = null;
+  if (signer) {
+    try {
+      const { claimFromPool } = await import('./sparePool');
+      const claimed = await claimFromPool(signer);
+      changeNullifier     = BigInt(claimed.nullifier);
+      changeSecret        = BigInt(claimed.secret);
+      changePrecommitment = BigInt(claimed.precommitment);
+      changePoolId        = claimed.id;
+    } catch (poolErr) {
+      console.warn('[generateZKData] pool claim failed, using deterministic fallback:', poolErr);
+      const nullifierXor  = selectedNotes.reduce((acc, n) => acc ^ BigInt(n.data.nullifier), 0n);
+      changeNullifier     = BigInt(F.toObject(poseidon([nullifierXor, 1n])));
+      changeSecret        = BigInt(F.toObject(poseidon([nullifierXor, 2n])));
+      changePrecommitment = BigInt(F.toObject(poseidon([changeNullifier, changeSecret])));
+      // changePoolId stays null — no pool entry to resolve
+    }
   } else {
-    console.log("✅ computed Merkle root matches on-chain root");
+    const nullifierXor  = selectedNotes.reduce((acc, n) => acc ^ BigInt(n.data.nullifier), 0n);
+    changeNullifier     = BigInt(F.toObject(poseidon([nullifierXor, 1n])));
+    changeSecret        = BigInt(F.toObject(poseidon([nullifierXor, 2n])));
+    changePrecommitment = BigInt(F.toObject(poseidon([changeNullifier, changeSecret])));
   }
-  console.log("✅ pathElements built (length:", pathElements.length, ")");
-  console.log("✅ pathIndices:", pathIndices.slice(0, 8));
+  const changeValue = accumulated - withdrawnValueTotal;
+  // Circuit always computes Poseidon(changeValue, changePrecommitment) with no zero short-circuit.
+  // Must pass the real hash even when changeValue === 0.
+  const changeCommitmentBig = BigInt(F.toObject(poseidon([changeValue, changePrecommitment])));
 
-  // 6) Generate new commitment
-  const newPrecommitment = BigInt(F.toObject(poseidon([newNullifier, newSecret])));
-  const newCommitment = BigInt(F.toObject(poseidon([changeValue, newPrecommitment])));
-
-  console.log("newPrecommitment:", newPrecommitment.toString());
-  console.log("newCommitment:", newCommitment.toString());
-
-  // 7) Generate the Groth16 proof locally in the browser (snarkjs + /public/zk circuit files).
-  // The remote proving-relayer (:5010) isn't deployed and its auth path triggers a blocking
-  // MetaMask signature popup, and the /api/prove route needs rapidsnark + a machine-specific
-  // ZK_BUILD_DIR — so local proving is the reliable path. Heavy: takes ~20–60s in the browser.
-  let withdrawalTxData: WithdrawalTxData;
-  {
-    console.log("[Proof] Generating Groth16 proof locally (snarkjs)…");
-    const rawWithdrawalTxData = await prepareWithdrawalTransaction({
-      existingValue: existingValue.toString(),
-      existingNullifier: existingNullifier.toString(),
-      existingSecret: existingSecret.toString(),
-      withdrawnValue: withdrawnValue.toString(),
-      newNullifier: newNullifier.toString(),
-      newSecret: newSecret.toString(),
-      pathElements: pathElements,
-      pathIndices: pathIndices,
-      recipient: _recipient,
-      stateRoot: onChainRoot.toString(),
-      // Swap-binding public signals (0 for plain withdraw / fee payment). For a swap these MUST
-      // match the values passed to Entrypoint.swap, or Vault.swap reverts InvalidSwapParams.
-      pool:         _swap ? _swap.pool : 0,
-      dstToken:     _swap ? _swap.dstToken : 0,
-      fee:          _swap ? _swap.fee : 0,
-      minAmountOut: _swap ? _swap.minAmountOut.toString() : 0,
-    });
-    withdrawalTxData = rawWithdrawalTxData as unknown as WithdrawalTxData;
+  // 6. BUILD MERKLE PATHS FOR EACH INPUT NOTE
+  const pathElementsAll: bigint[][] = [];
+  const pathIndicesAll: number[][] = [];
+  for (const note of selectedNotes) {
+    const { pathElements, pathIndices } = buildMerklePath(leaves, note.leafIndex, zeros, poseidonHash);
+    const computedRoot = (() => {
+      let levelNodes = leaves.slice();
+      let idx = note.leafIndex;
+      for (let level = 0; level < TREE_DEPTH; level++) {
+        const next: bigint[] = [];
+        for (let i = 0; i < levelNodes.length; i += 2) {
+          next.push(poseidonHash(levelNodes[i], i + 1 < levelNodes.length ? levelNodes[i + 1] : zeros[level]));
+        }
+        levelNodes = next; idx = Math.floor(idx / 2);
+      }
+      return levelNodes[0];
+    })();
+    if (computedRoot !== onChainRoot) {
+      console.warn(`[Proof] ⚠️ computed root for note[${note.leafIndex}] != on-chain root`);
+    }
+    pathElementsAll.push(pathElements);
+    pathIndicesAll.push(pathIndices);
   }
 
-  console.log("prepareWithdrawalTransaction returned summary:", {
-    amount: withdrawalTxData.amount?.toString?.() ?? withdrawalTxData.amount,
-    nullifierHash: withdrawalTxData.nullifierHash?.toString?.() ?? withdrawalTxData.nullifierHash,
-    newCommitment: withdrawalTxData.newCommitment?.toString?.() ?? withdrawalTxData.newCommitment,
-    proofLength: withdrawalTxData.proof ? Object.keys(withdrawalTxData.proof).length : 0,
-    publicSignals: withdrawalTxData.publicSignals ?? "none"
-  });
+  // 7. ASSEMBLE CIRCUIT INPUT AND GENERATE PROOF
+  // Circuit signals (per withdrawal.circom Withdrawal(32, N)):
+  //   Public:  withdrawnValue, stateRoot, changeCommitment, nullifierHash[N], recipient
+  //   Private: inValue[N], inNullifier[N], inSecret[N], pathElements[N][32], pathIndices[N][32],
+  //            changeNullifier, changeSecret
+  // changeValue is computed internally by the circuit (inSum[N] - withdrawnValue) — do NOT pass it.
+  const nullifierHashesInput = selectedNotes.map(n =>
+    BigInt(F.toObject(poseidon([BigInt(n.data.nullifier)]))).toString()
+  );
 
-  // 8) Validate proof format (Groth16: pA[2], pB[2][2], pC[2])
+  const circuitInput: Record<string, unknown> = {
+    withdrawnValue:   withdrawnValueTotal.toString(),
+    stateRoot:        onChainRoot.toString(),
+    changeCommitment: changeCommitmentBig.toString(),
+    nullifierHash:    nullifierHashesInput,
+    recipient:        BigInt(_recipient).toString(),
+    changeNullifier:  changeNullifier.toString(),
+    changeSecret:     changeSecret.toString(),
+    inValue:          selectedNotes.map(n => n.amountWei.toString()),
+    inNullifier:      selectedNotes.map(n => n.data.nullifier.toString()),
+    inSecret:         selectedNotes.map(n => n.data.secret.toString()),
+    pathElements:    pathElementsAll.map(pe => pe.map(v => v.toString())),
+    pathIndices:     pathIndicesAll.map(pi => pi.map(String)),
+  };
+
+  console.log("[Proof] Generating Groth16 W" + N + " proof locally (snarkjs)…");
+  const result = await prepareWithdrawalTransactionMulti(circuitInput, N);
+  const { proof: rawProof, publicSignals } = result;
+
+  // publicSignals order: [withdrawnValue, stateRoot, changeCommitment, nullifierHash[0..N-1], recipient]
+  // Use the circuit's authoritative changeCommitment output (publicSignals[2]) as the stored
+  // key and on-chain value — NOT the locally-computed Poseidon. They should agree if JS and
+  // circom Poseidon are identical, but the circuit output is the ground truth.
+  const changeCommitmentOnChain = BigInt(publicSignals[2]);
+  const nullifierHashes: string[] = selectedNotes.map((_, i) => publicSignals[3 + i]);
+
+  const withdrawalTxData: WithdrawalTxData = {
+    recipient:        _recipient,
+    amount:           withdrawnValueTotal.toString(),
+    nullifierHashes,
+    nullifierHash:    nullifierHashes[0],
+    changeCommitment: changeCommitmentOnChain.toString(),
+    newCommitment:    changeCommitmentOnChain.toString(),
+    stateRoot:        onChainRoot.toString(),
+    pA:               rawProof.pA as [string, string],
+    pB:               rawProof.pB as [[string, string], [string, string]],
+    pC:               rawProof.pC as [string, string],
+    publicSignals,
+  };
+
+  // 8. VALIDATE PROOF FORMAT
   if (!Array.isArray(withdrawalTxData.pA) || withdrawalTxData.pA.length !== 2 ||
       !Array.isArray(withdrawalTxData.pB) || withdrawalTxData.pB.length !== 2 ||
       !Array.isArray(withdrawalTxData.pC) || withdrawalTxData.pC.length !== 2) {
-    console.error("Groth16 proof components missing or malformed:", withdrawalTxData.pA, withdrawalTxData.pB, withdrawalTxData.pC);
     return { error: "Proof has invalid Groth16 format" };
   }
 
-  console.log("pA:", withdrawalTxData.pA);
-  console.log("pB:", withdrawalTxData.pB);
-  console.log("pC:", withdrawalTxData.pC);
+  // 9. PACKAGE ZK DATA
+  // Compute change note nullifier hash for on-chain spent check during balance reconciliation.
+  const changeNullifierHash = BigInt(F.toObject(poseidon([changeNullifier]))).toString();
 
-  // 9) Package ZK Data
   const zkData: ZKData = {
-    withdrawalTxData: withdrawalTxData,
-    changeValue: changeValue,
-    newDepositKey: `${_chainId}-${_token.symbol}-${withdrawalTxData.newCommitment.toString()}`,
+    withdrawalTxData,
+    changeValue,
+    newDepositKey: `${_chainId}-${_token.symbol}-${changeCommitmentOnChain.toString()}`,
     newDeposit: {
-      secret: newSecret.toString(),
-      nullifier: newNullifier.toString(),
-      precommitment: newPrecommitment.toString(),
-      commitment: withdrawalTxData.newCommitment.toString(),
-      amount: ethers.formatUnits(changeValue, _token.decimals)
+      secret:        changeSecret.toString(),
+      nullifier:     changeNullifier.toString(),
+      precommitment: changePrecommitment.toString(),
+      commitment:    changeCommitmentOnChain.toString(),
+      nullifierHash: changeNullifierHash,
+      amount:        ethers.formatUnits(changeValue, _token.decimals),
     },
-    spentDepositKey: spentDepositKey,
-    spentDeposit: storedDeposit
+    spentDepositKeys: selectedNotes.map(n => n.key),
+    spentDeposits:    selectedNotes.map(n => n.data),
+    spentDepositKey:  selectedNotes[0].key,
+    spentDeposit:     selectedNotes[0].data,
+    changePoolId,
+    serverCommitmentIds,
   };
 
   return zkData;

@@ -14,7 +14,6 @@ import { generateZKData } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
 import { walletManager } from "../../extensions/walletManager";
-import { payExecutionFee } from "../../../lib/handler";
 import { resolveWalletAddress } from "../../../lib/walletAddress";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, getRunModeChainDisplayLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";

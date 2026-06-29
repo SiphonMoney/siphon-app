@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { processArmedStrategies } from "@/lib/strategyApi";
 import { resolveWalletAddress } from "@/lib/walletAddress";
 import { isTeeAutonomousMode } from "@/lib/decryptorClient";
+import { getSigner } from "@/lib/nexus";
+import { resolvePendingOutputNotes } from "@/lib/outputNoteResolver";
 
 const POLL_MS = 5_000;
 
@@ -47,12 +49,35 @@ export default function StrategyAutoExecutor() {
     void tick();
     const interval = setInterval(() => void tick(), POLL_MS);
     const onWake = () => void tick();
+
+    const onExecuted = (e: Event) => {
+      const strategyId = (e as CustomEvent<{ strategyId: string }>).detail?.strategyId;
+
+      // Clean up spent input notes deferred from submission time.
+      if (strategyId) {
+        try {
+          const cleanupKey = `siphon-pending-cleanup-${strategyId}`;
+          const raw = localStorage.getItem(cleanupKey);
+          if (raw) {
+            const keys: string[] = JSON.parse(raw);
+            for (const k of keys) { try { localStorage.removeItem(k); } catch {} }
+            localStorage.removeItem(cleanupKey);
+          }
+        } catch { /* non-critical */ }
+      }
+
+      // Resolve vault-mode output notes now that on-chain deposit has landed.
+      resolvePendingOutputNotes(getSigner()).catch(() => { /* best-effort */ });
+    };
+
     window.addEventListener("walletConnected", onWake);
     window.addEventListener("siphon:strategySubmitted", onWake);
+    window.addEventListener("siphon:strategyExecuted", onExecuted);
     return () => {
       clearInterval(interval);
       window.removeEventListener("walletConnected", onWake);
       window.removeEventListener("siphon:strategySubmitted", onWake);
+      window.removeEventListener("siphon:strategyExecuted", onExecuted);
     };
   }, [tick, teeMode]);
 

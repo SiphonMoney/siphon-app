@@ -62,6 +62,56 @@ export async function initializeWithProvider(eip1193Provider: Eip1193Provider, f
     provider = new ethers.BrowserProvider(eip1193Provider);
     signer = await provider.getSigner();
     console.log("Ethers initialized with signer:", await signer.getAddress());
+
+    // Recover any deposit temp hints left from a page refresh between mining and writeNote.
+    import('./localNoteStore').then(m => m.recoverPendingHints(signer!)).catch(e =>
+      console.warn('[recovery] recoverPendingHints failed (best-effort):', e)
+    );
+
+    // Sync commitments from Supabase directly (no trade executor dependency).
+    const _signer = signer!;
+    (async () => {
+      const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const SUPABASE_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!SUPABASE_URL || !SUPABASE_KEY) return;
+
+      const { deriveCommTag, deriveEncKey, decryptBlob } = await import('./noteAuth');
+      const { writeNote } = await import('./localNoteStore');
+      const { getSelectedChainId } = await import('./networks');
+
+      const tag = await deriveCommTag(_signer);
+      const key = await deriveEncKey(_signer);
+
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/commitments?tag=eq.${encodeURIComponent(tag)}&spent=neq.true&select=id,asset,enc_blob,iv,spent,source`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
+      );
+      if (!res.ok) { console.warn('[sync] Supabase fetch failed:', res.status); return; }
+
+      const rows: { id: string; asset: string; enc_blob: string; iv: string; spent: string; source: string }[] = await res.json();
+      const chainId = getSelectedChainId();
+      let synced = 0;
+      for (const row of rows) {
+        try {
+          const d = await decryptBlob<{ nullifier: string; secret: string; commitment: string; amount: string; chainId?: number; precommitment?: string; nullifierHash?: string }>(key, row.enc_blob, row.iv);
+          if (!d.commitment || !d.nullifier || !d.secret) continue;
+          const noteKey = `${d.chainId ?? chainId}-${row.asset}-${d.commitment}`;
+          if (!localStorage.getItem(noteKey)) {
+            await writeNote(noteKey, {
+              nullifier:     d.nullifier,
+              secret:        d.secret,
+              commitment:    d.commitment,
+              precommitment: d.precommitment,
+              nullifierHash: d.nullifierHash,
+              amount:        d.amount,
+              spent:         false,
+            }, _signer);
+            synced++;
+          }
+        } catch { /* skip rows that fail to decrypt */ }
+      }
+      console.log(`[sync] Synced ${synced}/${rows.length} commitment(s) from Supabase`);
+    })().catch(e => console.warn('[sync] Supabase commitment sync failed:', e));
   } catch (error) {
     console.error("Failed to initialize ethers provider:", error);
     provider = null;

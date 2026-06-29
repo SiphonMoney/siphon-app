@@ -17,13 +17,14 @@
  */
 import { ethers, Signer } from 'ethers';
 import { generateCommitmentData, resolveOutputNote, invalidateLeafCache, type TokenInfo } from './zkHandler';
-import { postNote } from './noteStore';
+import { postPrecommitment } from './precommitmentStore';
+import { postCommitment } from './commitmentStore';
 
 const PENDING_PREFIX = 'siphon-pending-output-';
 
 interface PendingOutputNote {
-  nullifier: string;
-  secret: string;
+  nullifier?: string;   // not stored in localStorage — only in Supabase enc_blob
+  secret?: string;      // not stored in localStorage — only in Supabase enc_blob
   precommitment: string;
   nullifierHash: string;
   chainId: number;
@@ -43,6 +44,7 @@ function pendingKey(chainId: number, symbol: string, precommitment: string): str
 export async function createVaultOutputNote(
   chainId: number,
   token: TokenInfo,
+  signer?: Signer | null,
 ): Promise<{ precommitment: string }> {
   // Amount is irrelevant to the precommitment (= H(nullifier, secret)); pass '0'.
   const cd = await generateCommitmentData(chainId, token, '0');
@@ -58,7 +60,32 @@ export async function createVaultOutputNote(
     tokenAddress,
     decimals: token.decimals,
   };
-  localStorage.setItem(pendingKey(chainId, token.symbol, cd.precommitment), JSON.stringify(pending));
+  // Pending record: no nullifier/secret in plaintext — store metadata only until resolved.
+  localStorage.setItem(pendingKey(chainId, token.symbol, cd.precommitment), JSON.stringify({
+    precommitment: pending.precommitment,
+    nullifierHash: pending.nullifierHash,
+    chainId:       pending.chainId,
+    symbol:        pending.symbol,
+    tokenAddress:  pending.tokenAddress,
+    decimals:      pending.decimals,
+    // nullifier + secret omitted — kept only in Supabase (enc_blob)
+  }));
+
+  // Upload to Supabase so the precommitment survives across devices/clears.
+  if (signer) {
+    try {
+      await postPrecommitment(signer, {
+        nullifier:     cd.nullifier,
+        secret:        cd.secret,
+        precommitment: cd.precommitment,
+        asset:         token.symbol,
+        chainId,
+      });
+    } catch (e) {
+      console.warn('[OutputNote] precommitment server upload failed (localStorage still holds it):', e);
+    }
+  }
+
   return { precommitment: cd.precommitment };
 }
 
@@ -76,6 +103,17 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
     const k = localStorage.key(i);
     if (k && k.startsWith(PENDING_PREFIX)) pendingKeys.push(k);
   }
+  if (pendingKeys.length === 0) return 0;
+
+  // Fetch the server's pending precommitment list once so we don't make a
+  // round-trip + wallet sig request per resolved note inside the loop.
+  let serverPending: Awaited<ReturnType<typeof import('./precommitmentStore').fetchPendingPrecommitments>> = [];
+  if (signer) {
+    try {
+      const { fetchPendingPrecommitments } = await import('./precommitmentStore');
+      serverPending = await fetchPendingPrecommitments(signer);
+    } catch { /* best-effort */ }
+  }
 
   let resolved = 0;
   for (const k of pendingKeys) {
@@ -92,36 +130,61 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
       if (!hit) continue; // deposit not on-chain yet — try again next pass
 
       const humanAmount = ethers.formatUnits(hit.amount, rec.decimals);
-      // Spendable note in the format the withdraw scan expects:
-      // key `${chainId}-${SYMBOL}-${commitment}` → { nullifier, secret, amount(human), commitment }
       const noteKey = `${rec.chainId}-${rec.symbol}-${hit.commitment}`;
-      localStorage.setItem(
-        noteKey,
-        JSON.stringify({
-          nullifier: rec.nullifier,
-          secret: rec.secret,
+
+      // Pending records omit nullifier/secret from localStorage (stored only in Supabase enc_blob).
+      // Recover them from the server precommitment list fetched before this loop.
+      const serverMatch = serverPending.find(p => p.decrypted.precommitment === rec.precommitment);
+      const nullifier = rec.nullifier ?? serverMatch?.decrypted.nullifier;
+      const secret    = rec.secret    ?? serverMatch?.decrypted.secret;
+
+      if (signer && nullifier && secret) {
+        // Full resolved note — encrypt nullifier + secret.
+        const { writeNote } = await import('./localNoteStore');
+        await writeNote(noteKey, {
+          nullifier,
+          secret,
+          commitment:    hit.commitment,
           precommitment: rec.precommitment,
           nullifierHash: rec.nullifierHash,
-          amount: humanAmount,
-          commitment: hit.commitment,
-          spent: false,
-        }),
-      );
+          amount:        humanAmount,
+          spent:         false,
+        }, signer);
+      } else {
+        // No signer or secrets unavailable — write plaintext metadata only so balance scan
+        // can see the note; it will be unspendable until re-resolved with a signer.
+        localStorage.setItem(noteKey, JSON.stringify({
+          commitment:    hit.commitment,
+          precommitment: rec.precommitment,
+          nullifierHash: rec.nullifierHash,
+          amount:        humanAmount,
+          spent:         false,
+        }));
+      }
 
-      // Best-effort server sync so the note survives across devices/clears.
+      // Resolve on Supabase: write spendable commitment, mark precommitment resolved.
       if (signer) {
         try {
-          await postNote(
+          await postCommitment(
             signer,
-            { nullifier: rec.nullifier, secret: rec.secret, amount: humanAmount },
-            hit.commitment,
-            rec.nullifierHash,
+            {
+              nullifier:  nullifier!,
+              secret:     secret!,
+              commitment: hit.commitment,
+              amount:     humanAmount,
+              chainId:    rec.chainId,
+            },
             rec.symbol,
-            rec.chainId,
+            'vault-output',
           );
         } catch (e) {
-          console.warn('[OutputNote] server sync failed (localStorage still holds it):', e);
+          console.warn('[OutputNote] commitment server sync failed (localStorage still holds it):', e);
         }
+        // Mark the pending precommitment resolved.
+        try {
+          const { resolvePrecommitment } = await import('./precommitmentStore');
+          if (serverMatch) await resolvePrecommitment(signer, serverMatch.id);
+        } catch { /* best-effort */ }
       }
 
       // Bust the cached leaf scan for this token so the spendable-balance scan re-reads the
