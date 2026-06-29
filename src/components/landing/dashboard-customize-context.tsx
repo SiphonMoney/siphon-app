@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Plus, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import {
   ALL_KINDS,
   DEFAULT_PLACED,
@@ -20,6 +20,7 @@ import {
   type PlacedWidget,
   type WidgetKind,
 } from "@/components/widgets/config/grid";
+import { WIDGET_KIND_ICONS } from "@/components/landing/widget-kind-icons";
 import {
   canResizeKind,
   cycleSizeForKind,
@@ -185,6 +186,8 @@ export function DashboardCustomizePanel({
     return addable.filter((k) => WIDGET_LIBRARY[k].tier === filter);
   }, [addable, filter]);
 
+  const allOnBoard = addable.length === 0;
+
   if (variant === "default") return null;
   if (variant !== "hero" && !panelOpen) return null;
 
@@ -196,6 +199,7 @@ export function DashboardCustomizePanel({
       className={[
         "build-widget-customize-panel",
         variant === "hero" ? "build-widget-customize-panel--hero" : "",
+        variant === "hero" && allOnBoard ? "build-widget-customize-panel--all-on-board" : "",
         variant === "mobile" ? "build-widget-customize-panel--mobile" : "",
       ]
         .filter(Boolean)
@@ -217,47 +221,62 @@ export function DashboardCustomizePanel({
         </button>
       </div>
 
-      <div className="build-widget-customize-filters" role="tablist" aria-label="Filter widgets">
-        {WIDGET_FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            role="tab"
-            aria-selected={filter === f.id}
-            className={`build-widget-customize-filter${filter === f.id ? " build-widget-customize-filter--active" : ""}`}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {!allOnBoard ? (
+        <div className="build-widget-customize-filters" role="tablist" aria-label="Filter widgets">
+          {WIDGET_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              role="tab"
+              aria-selected={filter === f.id}
+              className={`build-widget-customize-filter${filter === f.id ? " build-widget-customize-filter--active" : ""}`}
+              onClick={() => setFilter(f.id)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
-      <ul className="build-widget-customize-grid">
-        {filtered.length === 0 ? (
-          <li className="build-widget-customize-empty">
-            {addable.length === 0
-              ? "All widgets are on the board."
-              : "No widgets in this filter — try another tab."}
-          </li>
-        ) : (
-          filtered.map((k) => (
-            <li key={k}>
-              <button
-                type="button"
-                onClick={() => addWidget(k)}
-                className="build-widget-customize-card"
-              >
-                <span className="build-widget-customize-card-top">
-                  <span className="widget-badge">{WIDGET_LIBRARY[k].tier}</span>
-                  <Plus className="size-3.5 shrink-0 opacity-70" strokeWidth={1.75} aria-hidden />
-                </span>
-                <span className="build-widget-customize-card-label">{WIDGET_META[k].label}</span>
-                <span className="build-widget-customize-card-hint">{WIDGET_META[k].hint}</span>
-              </button>
+      {allOnBoard ? (
+        <div className="build-widget-customize-body build-widget-customize-body--all-placed">
+          <p className="build-widget-customize-all-placed-msg">All widgets are on the board.</p>
+        </div>
+      ) : (
+        <ul
+          className={`build-widget-customize-grid${filtered.length === 0 ? " build-widget-customize-grid--empty" : ""}`}
+        >
+          {filtered.length === 0 ? (
+            <li className="build-widget-customize-empty">
+              No widgets in this filter — try another tab.
             </li>
-          ))
-        )}
-      </ul>
+          ) : (
+            filtered.map((k) => {
+              const Icon = WIDGET_KIND_ICONS[k];
+              return (
+              <li key={k}>
+                <button
+                  type="button"
+                  onClick={() => addWidget(k)}
+                  className="build-widget-customize-card"
+                >
+                  <span className="build-widget-customize-card-top">
+                    <span className="widget-badge">{WIDGET_LIBRARY[k].tier}</span>
+                  </span>
+                  <span className="build-widget-customize-card-icon" aria-hidden>
+                    <Icon strokeWidth={1.65} />
+                  </span>
+                  <span className="build-widget-customize-card-foot">
+                    <span className="build-widget-customize-card-label">{WIDGET_META[k].label}</span>
+                    <span className="build-widget-customize-card-hint">{WIDGET_META[k].hint}</span>
+                  </span>
+                </button>
+              </li>
+              );
+            })
+          )}
+        </ul>
+      )}
     </div>
   );
 }

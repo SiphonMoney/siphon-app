@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import type { Node, Edge } from '@xyflow/react';
 import "./Discover.css";
+import "./BuilderRunModal.css";
 import StrategyPreviewFlow from "../Builder/StrategyPreviewFlow";
 import { getModalStepNodes } from "../../../lib/builderLayout";
 import { getRunStepFieldValue, buildRunModeValuesFromNodes } from "../../../lib/runModeValues";
@@ -14,9 +15,9 @@ import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
 import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
-import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
+import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, getRunModeChainDisplayLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
-import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, getTransactionOutputForCost } from "./price_utils";
+import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, calculateRunFee, durationToHours } from "./price_utils";
 
 
 interface NodeData {
@@ -149,6 +150,7 @@ export default function DetailsModal({
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [activeChainId, setActiveChainId] = useState(getSelectedChainId);
   const [mounted, setMounted] = useState(false);
+  const [builderStepsOpen, setBuilderStepsOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -285,9 +287,9 @@ export default function DetailsModal({
     return tags;
   };
 
-  // Fetch prices only when entering Run mode (not on plain details open)
+  // Fetch prices when entering Run mode or opening from the builder
   useEffect(() => {
-    if (isOpen && isRunMode && !pricesLoaded) {
+    if (isOpen && (isRunMode || fromBuilder) && !pricesLoaded) {
       const fetchPrices = async () => {
         try {
           const prices = await fetchCoinPrices();
@@ -319,7 +321,7 @@ export default function DetailsModal({
       };
       fetchPrices();
     }
-  }, [isOpen, isRunMode, pricesLoaded]);
+  }, [isOpen, isRunMode, fromBuilder, pricesLoaded]);
 
   // Reset prices when modal closes or when exiting Run mode
   useEffect(() => {
@@ -394,17 +396,174 @@ export default function DetailsModal({
     return formatAmountUtil(amount, coin);
   };
 
-  // Calculate costs using fetched prices (only when prices are loaded)
-  const transactionOutputUSD = pricesLoaded ? getTransactionOutputForCost(
-    modalStrategyNodes,
-    runModeValues,
-    coinPrices,
-    calculateExchangeUtil
-  ) : 0;
   const executionTime = 2; // Fixed execution time
-  const variableCost = calculateVariableCost(runDuration);
-  const fixedCost = calculateFixedCost(transactionOutputUSD);
-  const totalCost = variableCost + fixedCost;
+  const runDurationHours = durationToHours(runDuration);
+  const baseFee = calculateFixedCost();
+  const hourlyFee = calculateVariableCost(runDuration);
+  const totalCost = calculateRunFee(runDuration);
+  const ethUsd = coinPrices.ETH || 3000;
+
+  const runSummary = useMemo(() => {
+    const depositNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === "deposit");
+    const swapNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === "swap");
+    const depositData = depositNode?.data as NodeData | undefined;
+    const swapData = swapNode?.data as NodeData | undefined;
+    const depositStepId = depositNode?.id ?? "";
+    const swapStepId = swapNode?.id ?? "";
+
+    const inputCoin =
+      getRunStepFieldValue(runModeValues, depositStepId, "tokenA", depositData || {}) ||
+      depositData?.coin ||
+      "USDC";
+    const outputCoin =
+      getRunStepFieldValue(runModeValues, swapStepId, "coinB", swapData || {}) ||
+      swapData?.toCoin ||
+      inputCoin;
+    const inputAmount =
+      parseFloat(getRunStepFieldValue(runModeValues, depositStepId, "amount", depositData || {}) || "0") ||
+      0;
+    const outputAmount = calculateExchangeUtil(inputAmount, inputCoin, outputCoin, coinPrices);
+
+    const strategyNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === "strategy");
+    const strategyKind = (strategyNode?.data as NodeData)?.strategy || "Custom";
+    const priceGoal = strategyNode
+      ? getRunStepFieldValue(runModeValues, strategyNode.id, "priceGoal", strategyNode.data as NodeData)
+      : "";
+    const depositChainRaw = depositNode
+      ? getRunStepFieldValue(runModeValues, depositStepId, "chain", depositData || {}) ||
+        getRunModeChainLabel(activeChainId)
+      : getRunModeChainLabel(activeChainId);
+    const depositChain = getRunModeChainDisplayLabel(depositChainRaw);
+
+    const coinPrice = (symbol: string) =>
+      coinPrices[symbol.toUpperCase()] ?? (symbol.toUpperCase() === "USDC" ? 1 : 0);
+    const inputUsd = inputAmount * coinPrice(inputCoin);
+    const outputUsd = outputAmount * coinPrice(outputCoin);
+
+    return {
+      inputCoin,
+      outputCoin,
+      inputAmount,
+      outputAmount,
+      inputUsd,
+      outputUsd,
+      strategyKind,
+      priceGoal,
+      depositChain,
+      stepCount: displayStepNodes.length,
+    };
+  }, [modalStrategyNodes, runModeValues, coinPrices, displayStepNodes, activeChainId]);
+
+  const formatUsd = (value: number) =>
+    value > 0 ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—";
+
+  const renderEditableRunSteps = () => (
+    <div className="strategy-steps-list builder-run-steps-list">
+      {displayStepNodes.map((node, index) => {
+        const nodeData = node.data as NodeData;
+        const tags = getStepTags(nodeData, true);
+        const stepId = node.id;
+
+        const handleMyWallet = () => {
+          const primaryWallet = walletManager.getPrimaryWallet();
+          let walletAddress = primaryWallet?.address;
+          if (!walletAddress) {
+            try {
+              const storedWallet = localStorage.getItem("siphon-connected-wallet");
+              if (storedWallet) {
+                walletAddress = JSON.parse(storedWallet).address;
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          if (walletAddress) {
+            setRunModeValues((prev) => ({
+              ...prev,
+              [stepId]: { ...prev[stepId], address: walletAddress },
+            }));
+            showToast("Wallet address filled successfully", "success");
+          } else {
+            showToast("No wallet connected. Please connect a wallet first.", "error");
+          }
+        };
+
+        return (
+          <div key={node.id} className="strategy-step-item builder-run-step-item">
+            <div className="strategy-step-number">{index + 1}</div>
+            <div className="strategy-step-content">
+              <div className="strategy-step-title">{nodeData?.label || `Step ${index + 1}`}</div>
+              {getStepHint(nodeData, strategyCoin) && (
+                <div className="strategy-step-hint">{getStepHint(nodeData, strategyCoin)}</div>
+              )}
+              <div className="strategy-step-details">
+                {tags.map((tag, idx) => (
+                  <div key={idx} className="strategy-step-input-wrapper">
+                    {tag.readOnly ? (
+                      <div className="strategy-step-readonly" title="Determined by the swap output">
+                        <span className="strategy-step-readonly-label">{tag.label}</span>
+                        <span className="strategy-step-readonly-value">{tag.value}</span>
+                      </div>
+                    ) : tag.options ? (
+                      <select
+                        className="strategy-step-select"
+                        value={getRunStepFieldValue(runModeValues, stepId, tag.field, nodeData)}
+                        onChange={(e) => {
+                          setRunModeValues((prev) => ({
+                            ...prev,
+                            [stepId]: { ...prev[stepId], [tag.field]: e.target.value },
+                          }));
+                        }}
+                      >
+                        <option value="">{tag.label}</option>
+                        {tag.field === "repeatMode" ? (
+                          <>
+                            <option value="until_funds">Until funds end</option>
+                            <option value="count">N times</option>
+                          </>
+                        ) : (
+                          tag.options.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        className="strategy-step-input"
+                        placeholder={tag.label}
+                        value={
+                          runModeValues[stepId]?.[tag.field] ??
+                          getRunStepFieldValue(runModeValues, stepId, tag.field, nodeData)
+                        }
+                        onChange={(e) => {
+                          setRunModeValues((prev) => ({
+                            ...prev,
+                            [stepId]: { ...prev[stepId], [tag.field]: e.target.value },
+                          }));
+                        }}
+                      />
+                    )}
+                  </div>
+                ))}
+                {nodeData?.type === "withdraw" && (
+                  <button
+                    className="strategy-step-my-wallet-btn"
+                    onClick={handleMyWallet}
+                    type="button"
+                  >
+                    My Wallet
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const addLog = (message: string) => {
     setExecutionLogs(prev => [...prev, message]);
@@ -437,6 +596,7 @@ export default function DetailsModal({
   const handleClose = () => {
     setIsRunMode(false);
     setRunModeValues({});
+    setBuilderStepsOpen(false);
     onClose();
   };
 
@@ -746,9 +906,182 @@ export default function DetailsModal({
             </div>
         </div>
       )}
+      {fromBuilder ? (
+        <div
+          className={`builder-run-overlay${isExecuting ? " builder-run-overlay--dark" : ""}`}
+          onClick={handleClose}
+          role="presentation"
+        >
+          <article
+            className="builder-run-card"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="builder-run-title"
+          >
+            <header className="builder-run-card-header">
+              <button
+                className="builder-run-close"
+                onClick={handleClose}
+                aria-label="Close"
+                type="button"
+                disabled={isExecuting}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+              <div className="builder-run-card-heading">
+                <p className="builder-run-receipt-eyebrow">Execution summary</p>
+                <h2 className="builder-run-receipt-title" id="builder-run-title">
+                  {selectedStrategy.name}
+                </h2>
+                {selectedStrategy.author && (
+                  <p className="builder-run-receipt-author">by {selectedStrategy.author}</p>
+                )}
+              </div>
+            </header>
+
+            <div className="builder-run-card-body">
+              <div className="builder-run-receipt-io">
+                  <div className="builder-run-receipt-io-col">
+                    <span className="builder-run-receipt-io-label">You pay</span>
+                    <span className="builder-run-receipt-io-amount">
+                      {pricesLoaded ? formatAmount(runSummary.inputAmount, runSummary.inputCoin) : "…"}
+                    </span>
+                    <span className="builder-run-receipt-io-coin">{runSummary.inputCoin}</span>
+                    <span className="builder-run-receipt-io-usd">
+                      {pricesLoaded ? formatUsd(runSummary.inputUsd) : "…"}
+                    </span>
+                  </div>
+                  <span className="builder-run-receipt-io-arrow" aria-hidden>
+                    →
+                  </span>
+                  <div className="builder-run-receipt-io-col builder-run-receipt-io-col--receive">
+                    <span className="builder-run-receipt-io-label">You receive (est.)</span>
+                    <span className="builder-run-receipt-io-amount builder-run-receipt-io-amount--estimate">
+                      <span className="builder-run-receipt-io-circa" aria-hidden>≈</span>
+                      {pricesLoaded ? formatAmount(runSummary.outputAmount, runSummary.outputCoin) : "…"}
+                    </span>
+                    <span className="builder-run-receipt-io-coin">{runSummary.outputCoin}</span>
+                    <span className="builder-run-receipt-io-usd">
+                      {pricesLoaded ? formatUsd(runSummary.outputUsd) : "…"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="builder-run-stats-grid">
+                  <div className="builder-run-stat">
+                    <span className="builder-run-stat-label">Strategy</span>
+                    <span className="builder-run-stat-value">{runSummary.strategyKind}</span>
+                  </div>
+                  <div className="builder-run-stat">
+                    <span className="builder-run-stat-label">Chain</span>
+                    <span className="builder-run-stat-value">{runSummary.depositChain}</span>
+                  </div>
+                  <div className="builder-run-stat">
+                    <span className="builder-run-stat-label">Steps</span>
+                    <span className="builder-run-stat-value">{runSummary.stepCount}</span>
+                  </div>
+                  <div className="builder-run-stat">
+                    <span className="builder-run-stat-label">Exec time</span>
+                    <span className="builder-run-stat-value">{executionTime}s</span>
+                  </div>
+                </div>
+
+                {runSummary.stepCount > 0 && (
+                  <div className="builder-run-receipt-steps-wrap">
+                    <button
+                      type="button"
+                      className="builder-run-receipt-steps-toggle"
+                      onClick={() => setBuilderStepsOpen((open) => !open)}
+                      aria-expanded={builderStepsOpen}
+                    >
+                      {builderStepsOpen ? "Hide steps" : "Review steps"}
+                      <span className="builder-run-receipt-steps-count">
+                        ({runSummary.stepCount})
+                      </span>
+                    </button>
+                    {builderStepsOpen && (
+                      <div className="builder-run-steps-panel">
+                        {renderEditableRunSteps()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="builder-run-receipt-divider" aria-hidden />
+
+                <p className="builder-run-costs-heading">Cost review</p>
+                <dl className="builder-run-receipt-costs">
+                  <div className="builder-run-receipt-cost-row">
+                    <dt>Base fee (min)</dt>
+                    <dd>${baseFee.toFixed(2)}</dd>
+                  </div>
+                  <div className="builder-run-receipt-cost-row">
+                    <dt>Hourly fee ($0.35 × {runDurationHours}h)</dt>
+                    <dd>${hourlyFee.toFixed(2)}</dd>
+                  </div>
+                  <div className="builder-run-receipt-cost-row">
+                    <dt>Execution window</dt>
+                    <dd>
+                      <select
+                        className="builder-run-receipt-duration"
+                        value={runDuration}
+                        onChange={(e) => setRunDuration(e.target.value)}
+                        aria-label="Execution window"
+                      >
+                        <option value="1h">1 hour</option>
+                        <option value="2h">2 hours</option>
+                        <option value="3h">3 hours</option>
+                        <option value="6h">6 hours</option>
+                        <option value="12h">12 hours</option>
+                        <option value="24h">24 hours</option>
+                        <option value="2d">2 days</option>
+                        <option value="3d">3 days</option>
+                        <option value="7d">7 days</option>
+                        <option value="14d">14 days</option>
+                        <option value="30d">30 days</option>
+                        <option value="60d">60 days</option>
+                        <option value="90d">90 days</option>
+                        <option value="180d">180 days</option>
+                        <option value="365d">365 days</option>
+                      </select>
+                    </dd>
+                  </div>
+                  <div className="builder-run-receipt-cost-row">
+                    <dt>Run fee (total)</dt>
+                    <dd>
+                      ${totalCost.toFixed(2)} USD
+                      <span className="builder-run-receipt-cost-sub">
+                        ≈ {(totalCost / ethUsd).toFixed(6)} ETH
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="builder-run-receipt-cost-row">
+                    <dt>Settlement</dt>
+                    <dd>Private vault note</dd>
+                  </div>
+                </dl>
+            </div>
+
+            <div className={`builder-run-actions ${isFading ? "fade-out" : "fade-in"}`}>
+              <button
+                className={`builder-run-submit ${!isWalletConnected ? "builder-run-submit--disabled" : ""}`}
+                onClick={handleExecute}
+                disabled={isExecuting}
+                type="button"
+              >
+                {isExecuting ? "Processing…" : !isWalletConnected ? "Connect wallet" : "Pay & run"}
+              </button>
+            </div>
+          </article>
+        </div>
+      ) : (
       <div
-        className={`strategy-modal-overlay ${isExecuting ? 'darkened' : ''}`}
-        onClick={fromBuilder ? undefined : handleClose}
+        className={`strategy-modal-overlay ${isExecuting ? "darkened" : ""}`}
+        onClick={handleClose}
         role="dialog"
         aria-modal="true"
         aria-labelledby="strategy-modal-title"
@@ -1191,17 +1524,6 @@ export default function DetailsModal({
             )}
             {isExecuting ? 'Processing...' : (!isWalletConnected ? 'Connect Wallet' : (isRunMode ? 'Pay & Run' : 'Run'))}
           </button>
-          {fromBuilder ? (
-            <button
-              className="strategy-modal-btn strategy-modal-btn-cancel"
-              onClick={handleClose}
-              type="button"
-              disabled={isExecuting}
-            >
-              Cancel
-            </button>
-          ) : (
-            <>
           <button 
             className="strategy-modal-btn strategy-modal-btn-edit"
             onClick={handleEdit}
@@ -1223,11 +1545,10 @@ export default function DetailsModal({
             </svg>
             Save
           </button>
-            </>
-          )}
+        </div>
         </div>
       </div>
-    </div>
+      )}
     </>,
     document.body
   );

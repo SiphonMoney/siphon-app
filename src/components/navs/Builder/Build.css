@@ -296,6 +296,8 @@
   margin: 0 auto;
   min-height: clamp(7.25rem, 17vh, 10.5rem);
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
   transition:
     min-height 0.38s ease,
     max-width 0.38s ease,
@@ -314,21 +316,39 @@
   min-height: clamp(11rem, 28vh, 16rem);
 }
 
+.build-hero-band--library-visible {
+  margin-top: clamp(0.55rem, 1.6vh, 1.15rem);
+}
+
+.build-hero-band--library-visible .build-hero-swap {
+  justify-content: flex-end;
+}
+
+.build-hero-band--library-visible .build-hero-swap-pane--library {
+  justify-content: flex-end;
+  padding-top: clamp(0.35rem, 1vh, 0.65rem);
+}
+
+.blueprint-view--dash-front .build-page-content:has(.build-hero-band--library-visible) .build-widget-band {
+  margin-top: clamp(0.45rem, 1.2vh, 0.85rem);
+}
+
 .build-hero-swap-pane {
   transition: opacity 0.38s ease;
 }
 
 .build-hero-swap-pane--chat {
   opacity: 1;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .build-hero-swap-pane--library {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  justify-content: center;
+  justify-content: stretch;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -861,10 +881,6 @@ body.build-view-expanded .dapp-main-container nav button {
 
 .blueprint-view--fullscreen:has(.blueprint-top-bar--visible) .build-sim-toast {
   top: calc(9.5rem + env(safe-area-inset-top, 0px));
-}
-
-.blueprint-stage .build-node-context-menu {
-  z-index: 30;
 }
 
 .blueprint-canvas .react-flow {

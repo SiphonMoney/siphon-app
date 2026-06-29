@@ -3147,3 +3147,381 @@ body.strategy-modal-open {
   font-weight: 600;
 }
 
+/* ── Builder run: fullscreen receipt ───────────────────── */
+
+.strategy-modal-overlay--builder {
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.94);
+}
+
+.strategy-modal--builder {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  animation: fadeIn 0.28s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.strategy-modal-header--builder {
+  flex-shrink: 0;
+  padding: max(1rem, env(safe-area-inset-top)) 1.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.strategy-modal-content--builder {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+}
+
+.builder-run-receipt {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.builder-run-summary-header {
+  margin-bottom: 0.85rem;
+  text-align: center;
+}
+
+.builder-run-receipt-title {
+  margin: 0;
+  font-family: var(--font-source-code), monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: center;
+}
+
+.builder-run-receipt-author {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.48);
+  text-align: center;
+}
+
+.builder-run-receipt-eyebrow {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: center;
+}
+
+.builder-run-costs-heading {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.builder-run-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+}
+
+.builder-run-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 0;
+}
+
+.builder-run-stat-label {
+  font-family: var(--font-source-code), monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.builder-run-stat-value {
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.builder-run-receipt-io-usd {
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.builder-run-steps-panel {
+  margin-top: 0.55rem;
+  max-height: min(38vh, 280px);
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.28);
+  padding: 0.45rem;
+}
+
+.builder-run-steps-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.builder-run-step-item {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+}
+
+.builder-run-step-item:last-child {
+  margin-bottom: 0;
+}
+
+.builder-run-receipt-io {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.65rem;
+  align-items: center;
+  text-align: center;
+}
+
+.builder-run-receipt-io-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.builder-run-receipt-io-label {
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.builder-run-receipt-io-amount {
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.15;
+  color: rgba(255, 255, 255, 0.96);
+  font-variant-numeric: tabular-nums;
+}
+
+.builder-run-receipt-io-coin {
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.builder-run-receipt-io-note {
+  font-family: var(--font-source-code), monospace;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.builder-run-receipt-io-arrow {
+  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1;
+}
+
+.builder-run-receipt-divider {
+  height: 1px;
+  margin: 1rem 0 0.85rem;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.14) 20%,
+    rgba(255, 255, 255, 0.14) 80%,
+    transparent
+  );
+}
+
+.builder-run-receipt-costs {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.builder-run-receipt-cost-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.builder-run-receipt-cost-row dt {
+  margin: 0;
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.builder-run-receipt-cost-row dd {
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-source-code), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.builder-run-receipt-cost-sub {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.builder-run-receipt-duration {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.45rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+}
+
+.builder-run-receipt-steps-wrap {
+  margin-top: 0.85rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+.builder-run-receipt-steps-toggle {
+  width: 100%;
+  border: none;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.45rem 0.55rem;
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.builder-run-receipt-steps-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.builder-run-receipt-steps-count {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.builder-run-receipt-steps {
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.builder-run-receipt-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.builder-run-receipt-step-title {
+  font-family: var(--font-source-code), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.builder-run-receipt-step-detail {
+  font-family: var(--font-source-code), monospace;
+  font-size: 9px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.strategy-modal-actions--builder {
+  flex-shrink: 0;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem max(1rem, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.strategy-modal-actions--builder .strategy-modal-btn-run {
+  min-width: 9rem;
+}
+
+@media (max-width: 768px) {
+  .strategy-modal-overlay--builder {
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .strategy-modal--builder {
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .builder-run-center {
+    width: min(100%, 100%);
+  }
+
+  .builder-run-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .builder-run-receipt-io-amount {
+    font-size: 1.15rem;
+  }
+}
+

@@ -1,6 +1,7 @@
 .build-node-context-menu {
   position: fixed;
-  z-index: 2000;
+  z-index: 10100;
+  pointer-events: auto;
   min-width: 180px;
   padding: 0.35rem;
   border-radius: 8px;

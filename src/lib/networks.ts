@@ -132,6 +132,16 @@ export function normalizeRunModeChainLabel(label: string): string {
   return id != null ? NETWORKS[id].name : trimmed;
 }
 
+/** Run-summary label — clarifies mainnet vs testnet (e.g. Base → Base Mainnet). */
+export function getRunModeChainDisplayLabel(label: string): string {
+  const normalized = normalizeRunModeChainLabel(label);
+  const id = resolveRunModeChainId(normalized);
+  if (id === 8453) return "Base Mainnet";
+  if (id === 11155111) return "Ethereum Sepolia";
+  if (id === 84532) return "Base Sepolia";
+  return normalized;
+}
+
 const STORAGE_KEY = 'siphon.selectedChainId';
 
 /** The chain the dapp is currently operating on (persisted in localStorage). */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import "./BuildNodeContextMenu.css";
 
 export interface BuildNodeContextMenuProps {
@@ -28,9 +29,10 @@ export default function BuildNodeContextMenu({
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        onClose();
-      }
+      const target = event.target;
+      if (!(target instanceof globalThis.Node)) return;
+      if (menuRef.current?.contains(target)) return;
+      onClose();
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -39,21 +41,26 @@ export default function BuildNodeContextMenu({
       }
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
+    const frame = requestAnimationFrame(() => {
+      document.addEventListener("mousedown", handlePointerDown, true);
+      document.addEventListener("keydown", handleKeyDown);
+    });
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      cancelAnimationFrame(frame);
+      document.removeEventListener("mousedown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose]);
 
-  return (
+  const menu = (
     <div
       ref={menuRef}
       className="build-node-context-menu"
       style={{ left: x, top: y }}
       role="menu"
       aria-label={nodeLabel ? `Actions for ${nodeLabel}` : "Block actions"}
+      onMouseDown={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.preventDefault()}
     >
       {nodeLabel && (
         <div className="build-node-context-menu-label">{nodeLabel}</div>
@@ -142,4 +149,7 @@ export default function BuildNodeContextMenu({
       </button>
     </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(menu, document.body);
 }

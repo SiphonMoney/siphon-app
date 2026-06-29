@@ -93,29 +93,37 @@ export const calculateExchange = (
   return outputAmount;
 };
 
-/**
- * Calculate variable cost based on duration
- */
-export const calculateVariableCost = (duration: string): number => {
+const RUN_FEE_MIN_USD = 0.35;
+const RUN_FEE_PER_HOUR_USD = 0.35;
+
+/** Parse run duration strings like `6h`, `2d` into whole hours. */
+export function durationToHours(duration: string): number {
   const match = duration.match(/(\d+)([hd])/);
-  if (!match) return 0.05;
-  const value = parseInt(match[1]);
+  if (!match) return 1;
+  const value = parseInt(match[1], 10);
   const unit = match[2];
-  const costPerMinute = 0.05 / 2; // $0.05 for 2 minutes
-  if (unit === 'h') {
-    return value * 60 * costPerMinute;
-  } else if (unit === 'd') {
-    return value * 24 * 60 * costPerMinute;
-  }
-  return 0.05;
+  if (unit === "h") return value;
+  if (unit === "d") return value * 24;
+  return 1;
+}
+
+/**
+ * Run fee: $0.35 minimum + $0.35 per execution-window hour.
+ */
+export const calculateRunFee = (duration: string): number => {
+  return RUN_FEE_MIN_USD + RUN_FEE_PER_HOUR_USD * durationToHours(duration);
 };
 
 /**
- * Calculate fixed cost as 0.015% of transaction output
+ * Hourly portion of the run fee ($0.35 / hour).
  */
-export const calculateFixedCost = (transactionOutputUSD: number): number => {
-  // Fixed cost is 0.015% of transaction output
-  return transactionOutputUSD * 0.00015;
+export const calculateVariableCost = (duration: string): number => {
+  return RUN_FEE_PER_HOUR_USD * durationToHours(duration);
+};
+
+/** Minimum run fee ($0.35). */
+export const calculateFixedCost = (_transactionOutputUSD: number = 0): number => {
+  return RUN_FEE_MIN_USD;
 };
 
 /**
