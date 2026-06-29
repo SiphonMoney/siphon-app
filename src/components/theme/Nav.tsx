@@ -13,7 +13,6 @@ interface NavProps {
 export default function Nav({ onWalletConnected }: NavProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const isHomePage = pathname === "/";
   const isDocsPage = pathname === "/docs";
   const isDappPage = pathname?.startsWith("/dapp");
   const isDarkPool = pathname === "/dapp/darkpool";
@@ -87,7 +86,7 @@ export default function Nav({ onWalletConnected }: NavProps) {
             {logoContent}
           </button>
         ) : (
-          <Link href="/" className="logo-link">
+          <Link href="/dapp" className="logo-link">
             {logoContent}
           </Link>
         )}
@@ -138,8 +137,8 @@ export default function Nav({ onWalletConnected }: NavProps) {
         </div>
       )}
 
-      {/* Right: Menu Buttons for Home/Docs, Wallet for Dapp */}
-      {(isHomePage || isDocsPage) && (
+      {/* Right: Menu Buttons for Docs, Wallet for Dapp */}
+      {isDocsPage && (
         <div className="nav-right">
           <div className="nav-mode-selector">
             <Link 

@@ -402,7 +402,7 @@ export function SwapPanel({ compact = false }: SwapPanelProps) {
         disabled={!canSubmit}
         onClick={() => void handlePayAndRun()}
       >
-        {busy ? "Processing…" : `Pay & run ${from} → ${to}`}
+        {busy ? "Processing…" : `Pay & run `}
       </button>
     </div>
   );
