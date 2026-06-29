@@ -193,10 +193,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid_llm_json" }, { status: 502 });
     }
 
-    const { message, ...parsed } = input;
+    const { message, intent, ...parsed } = input;
+    const resolvedIntent = intent === "build" ? "build" : "advise";
     return NextResponse.json({
       parsed,
       message: typeof message === "string" ? message : null,
+      intent: resolvedIntent,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "llm_error";

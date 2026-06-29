@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import WalletSelector from './WalletSelector';
 import { walletManager, WalletInfo } from './walletManager';
 import { showAppToast } from '@/lib/appToast';
@@ -12,49 +12,21 @@ export default function ConnectButton({ className, onConnected }: { className?: 
   const [connectedWallet, setConnectedWallet] = useState<WalletInfo | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [shouldOpenSelector, setShouldOpenSelector] = useState(false);
+
+  const syncConnectedWallet = useCallback(async () => {
+    const restored = await walletManager.restorePersistedSession();
+    const wallet = restored ?? walletManager.getPrimaryWallet() ?? null;
+    setConnectedWallet(wallet);
+    return wallet;
+  }, []);
   
   useEffect(() => {
-    // Check for existing connections on mount
-    const wallets = walletManager.getConnectedWallets();
-    if (wallets.length > 0) {
-      const wallet = wallets[0];
-      setConnectedWallet(wallet);
-    } else {
-      // Also check localStorage
-      try {
-        const storedWallet = localStorage.getItem('siphon-connected-wallet');
-        if (storedWallet) {
-          const wallet = JSON.parse(storedWallet);
-          if (wallet && wallet.address) {
-            setConnectedWallet(wallet);
-          }
-        }
-      } catch (error) {
-        console.error('Error reading wallet from localStorage:', error);
-      }
-    }
-  }, []);
+    void syncConnectedWallet();
+  }, [syncConnectedWallet]);
 
   useEffect(() => {
-    // Listen for wallet connection/disconnection events
     const handleWalletConnected = () => {
-      const wallets = walletManager.getConnectedWallets();
-      if (wallets.length > 0) {
-        setConnectedWallet(wallets[0]);
-      } else {
-        // Check localStorage
-        try {
-          const storedWallet = localStorage.getItem('siphon-connected-wallet');
-          if (storedWallet) {
-            const wallet = JSON.parse(storedWallet);
-            if (wallet && wallet.address) {
-              setConnectedWallet(wallet);
-            }
-          }
-        } catch (error) {
-          console.error('Error reading wallet from localStorage:', error);
-        }
-      }
+      void syncConnectedWallet();
     };
 
     const handleWalletDisconnected = () => {
@@ -63,7 +35,7 @@ export default function ConnectButton({ className, onConnected }: { className?: 
     };
 
     const handleTriggerConnection = () => {
-      if (!connectedWallet) {
+      if (!walletManager.hasActiveSession()) {
         setShouldOpenSelector(true);
       }
     };
@@ -77,22 +49,21 @@ export default function ConnectButton({ className, onConnected }: { className?: 
       window.removeEventListener('walletDisconnected', handleWalletDisconnected);
       window.removeEventListener('triggerWalletConnection', handleTriggerConnection);
     };
-  }, [connectedWallet]);
+  }, [syncConnectedWallet]);
 
   useEffect(() => {
-    // Fetch Siphon Vault balance when wallet is connected
+    // Fetch private vault balance when wallet is connected
     const fetchBalance = async () => {
       if (connectedWallet && connectedWallet.id === 'metamask') {
         try {
-          const VAULT_CHAIN_ID = getSelectedChainId(); // active network
+          const VAULT_CHAIN_ID = getSelectedChainId();
           const { details } = await getSpendableVaultBalance(VAULT_CHAIN_ID, TOKEN_MAP);
 
-          // Get ETH balance from Siphon Vault (case-insensitive lookup)
           const ethKey = Object.keys(details).find(key => key.toUpperCase() === 'ETH');
           const ethBalance = ethKey ? details[ethKey] : 0;
           setBalance(ethBalance);
         } catch (error) {
-          console.error('Failed to fetch Siphon Vault balance:', error);
+          console.error('Failed to fetch private balance:', error);
           setBalance(0);
         }
       } else {
@@ -150,7 +121,7 @@ export default function ConnectButton({ className, onConnected }: { className?: 
         if (window.ethereum) {
           await initializeWithProvider(window.ethereum);
         }
-        localStorage.setItem('siphon-connected-wallet', JSON.stringify(result.wallet));
+        walletManager.persistWallet(result.wallet);
         window.dispatchEvent(new Event('walletConnected'));
       } else {
         console.error(`Failed to connect ${walletId} wallet:`, result.error);

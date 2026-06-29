@@ -4,9 +4,11 @@ import { walletManager, WalletInfo } from '../../extensions/walletManager';
 import './UserDash.css';
 import { deposit, withdraw } from "../../../lib/handler";
 import { TOKEN_MAP, getUnifiedBalances, initializeWithProvider, isInitialized, deinit, getSigner } from '../../../lib/nexus';
-import { getSpendableVaultBalance, invalidateLeafCache } from '../../../lib/zkHandler';
+import { getSpendableVaultBalance, invalidateLeafCache, getLocalVaultNoteTotals } from '../../../lib/zkHandler';
 import { resolvePendingOutputNotes } from '../../../lib/outputNoteResolver';
+import { syncWalletNotesFromServer } from '../../../lib/syncWalletNotes';
 import { exportNotes, importNotes } from '../../../lib/noteStore';
+import ActivityLog from './ActivityLog';
 import {
   getNetwork,
   DEFAULT_CHAIN_ID,
@@ -72,14 +74,29 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     }
   }, [activeChainId, switchingChain]);
 
-  const fetchVaultBalances = useCallback(async () => {
+  const fetchVaultBalances = useCallback(async (options?: { syncServerNotes?: boolean }) => {
     // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
     // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
     try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+    if (options?.syncServerNotes && wallet && isInitialized()) {
+      try {
+        await syncWalletNotesFromServer(getSigner());
+      } catch {
+        /* server notes optional */
+      }
+    }
     const { details } = await getSpendableVaultBalance(activeChainId, TOKEN_MAP);
-    setSiphonVaultBalances(details);
-    console.log("Siphon Vault spendable balances (on-chain reconciled):", details);
-  }, [activeChainId]);
+    const local = getLocalVaultNoteTotals(activeChainId);
+    const display: Record<string, number> = {};
+    for (const sym of ['ETH', 'USDC']) {
+      const onChain = details[sym] ?? 0;
+      const fromNotes = local[sym] ?? 0;
+      const amount = onChain > 0 ? onChain : fromNotes;
+      if (amount > 0) display[sym] = amount;
+    }
+    setSiphonVaultBalances(display);
+    console.log("Private balance (on-chain reconciled):", display);
+  }, [activeChainId, wallet]);
 
   // Manual refresh: bust the cached leaf scan first so a just-landed deposit is picked up
   // immediately instead of waiting out the cache TTL / 60s poll.
@@ -87,7 +104,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     setIsVaultRefreshing(true);
     try {
       invalidateLeafCache();
-      await fetchVaultBalances();
+      await fetchVaultBalances({ syncServerNotes: true });
     } finally {
       setIsVaultRefreshing(false);
     }
@@ -109,7 +126,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           try { await initializeWithProvider(window.ethereum); } catch (e) { console.error('init ethers failed', e); }
         }
         const balances = await getUnifiedBalances(activeChainId);
-        if (!cancelled) setWalletBalances(balances);
+        if (!cancelled) setWalletBalances(balances ?? []);
       } catch (e) {
         console.error('Error fetching wallet balances:', e);
       }
@@ -126,28 +143,15 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   useEffect(() => {
     const checkWalletAndFetchBalances = async () => {
       try {
-        // First check walletManager
-        const wallets = walletManager.getConnectedWallets();
-        let metamaskWallet = wallets.find(w => w.id === 'metamask');
-        
-        // If not found in walletManager, check localStorage
-        if (!metamaskWallet) {
-          try {
-            const storedWallet = localStorage.getItem('siphon-connected-wallet');
-            if (storedWallet) {
-              const walletData = JSON.parse(storedWallet);
-              if (walletData && walletData.address) {
-                metamaskWallet = walletData;
-              }
-            }
-          } catch (error) {
-            console.error('Error reading wallet from localStorage:', error);
-          }
-        }
+        const restored = await walletManager.restorePersistedSession();
+        const metamaskWallet =
+          restored ??
+          walletManager.getConnectedWallets().find((w) => w.id === 'metamask') ??
+          null;
         
         if (metamaskWallet) {
           setWallet(metamaskWallet);
-          setTransactionInput(prev => ({...prev, recipient: metamaskWallet!.address}));
+          setTransactionInput(prev => ({...prev, recipient: metamaskWallet.address}));
           
           // Ensure ethers is initialized before fetching balances
           if (!isInitialized() && window.ethereum) {
@@ -158,6 +162,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
             }
           }
           
+        } else {
+          setWallet(null);
         }
       } catch (error) {
         console.error('Error fetching wallet data:', error);
@@ -202,7 +208,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         }
         
         const balances = await getUnifiedBalances(activeChainId);
-        setWalletBalances(balances);
+        setWalletBalances(balances ?? []);
       } catch (error) {
         console.error('Error refreshing wallet balances:', error);
       }
@@ -223,8 +229,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       setWallet(null);
       window.dispatchEvent(new Event('walletDisconnected'));
       deinit();
-      // Clear persisted wallet connection
-      localStorage.removeItem('siphon-connected-wallet');
+      walletManager.clearPersistedWallet();
       // Navigate back to discover view
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('userdash-view-change', { detail: 'blueprint' }));
@@ -236,7 +241,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const handleConfirm = async () => {
     if (isProcessing) return;
 
-    if (!walletConnected) {
+    if (!wallet || !isInitialized()) {
       showAppToast('Please connect wallet first', 'error');
       return;
     }
@@ -265,6 +270,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         if (result.success) {
           showAppToast(`Deposited ${transactionInput.amount} ${transactionInput.token}`, 'success');
           setTransactionInput(prev => ({...prev, amount: ""}));
+          invalidateLeafCache();
+          await refreshVaultBalances();
         } else {
           showAppToast(`Deposit failed: ${result.error}`, 'error');
         }
@@ -275,6 +282,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         if (result.success) {
           showAppToast(`Withdrew ${transactionInput.amount} ${transactionInput.token}`, 'success');
           setTransactionInput(prev => ({...prev, amount: ""}));
+          invalidateLeafCache();
+          await refreshVaultBalances();
         } else {
           showAppToast(`Withdraw failed: ${result.error}`, 'error');
         }
@@ -401,8 +410,9 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               <span className="userdash-balance-network">{activeNetwork.badgeLabel}</span>
             </div>
             <div className="userdash-balance-content-multi">
-              {walletBalances !== null && walletBalances.length > 0 ? (
-                // Sort and filter balances to show ETH then USDC
+              {walletBalances === null ? (
+                <div className="userdash-balance-loading">Loading...</div>
+              ) : walletBalances.length > 0 ? (
                 walletBalances
                   .filter(bal => bal.symbol === 'ETH' || bal.symbol === 'USDC')
                   .sort((a, b) => {
@@ -419,7 +429,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                     </div>
                   ))
               ) : (
-                <div className="userdash-balance-loading">Loading...</div>
+                <div className="userdash-balance-loading">Switch wallet to {activeNetwork.name}</div>
               )}
             </div>
             <div className="userdash-balance-description">
@@ -429,14 +439,14 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
 
           <div className="userdash-balance-card">
             <div className="userdash-balance-header">
-              <h2 className="userdash-balance-title">Siphon Vault Balance</h2>
+              <h2 className="userdash-balance-title">Private Balance</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
                   type="button"
                   onClick={refreshVaultBalances}
                   disabled={isVaultRefreshing}
-                  title="Refresh vault balance"
-                  aria-label="Refresh vault balance"
+                  title="Refresh private balance"
+                  aria-label="Refresh private balance"
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -455,10 +465,10 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               </div>
             </div>
             <div className="userdash-balance-content-multi">
-              {siphonVaultBalances !== null && Object.keys(siphonVaultBalances).length > 0 ? (
-                // Sort and filter balances to show ETH then USDC
+              {siphonVaultBalances !== null &&
+              Object.entries(siphonVaultBalances).some(([, amount]) => amount > 0) ? (
                 Object.entries(siphonVaultBalances)
-                  .filter(([symbol]) => symbol === 'ETH' || symbol === 'USDC')
+                  .filter(([symbol, amount]) => (symbol === 'ETH' || symbol === 'USDC') && amount > 0)
                   .sort(([symbolA], [symbolB]) => {
                     if (symbolA === 'ETH') return -1;
                     if (symbolB === 'ETH') return 1;
@@ -477,7 +487,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               )}
             </div>
             <div className="userdash-balance-description">
-              Your aggregated balance across all Siphon Vault deposits
+              Your private vault balance on {activeNetwork.name}
             </div>
           </div>
 
@@ -554,36 +564,48 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
           </div>
         </div>
 
-        <div className="userdash-notes-card">
-          <div className="userdash-balance-header">
-            <h2 className="userdash-balance-title">Private Notes Backup</h2>
+        <div className="userdash-bottom-row">
+          <div className="userdash-activity-card">
+            <div className="userdash-balance-header">
+              <h2 className="userdash-balance-title">Activity Log</h2>
+            </div>
+            <p className="userdash-activity-description">
+              Deposits, withdrawals, and strategy runs for your wallet.
+            </p>
+            <ActivityLog walletAddress={wallet.address} />
           </div>
-          <p className="userdash-notes-description">
-            Export or import encrypted ZK deposit receipts tied to your wallet. Use this to back up notes or restore them on another device.
-          </p>
-          <div className="userdash-notes-actions">
-            <button
-              type="button"
-              className="userdash-notes-button userdash-notes-button--primary"
-              onClick={handleExportNotes}
-              disabled={isNotesBusy}
-            >
-              {isNotesBusy ? 'Working...' : 'Export Notes'}
-            </button>
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleImportNotes}
-              className="userdash-notes-file-input"
-              id="userdash-import-notes"
-              disabled={isNotesBusy}
-            />
-            <label
-              htmlFor="userdash-import-notes"
-              className={`userdash-notes-button userdash-notes-button--secondary${isNotesBusy ? ' userdash-notes-button--disabled' : ''}`}
-            >
-              Import Notes
-            </label>
+
+          <div className="userdash-notes-card">
+            <div className="userdash-balance-header">
+              <h2 className="userdash-balance-title">Private Notes Backup</h2>
+            </div>
+            <p className="userdash-notes-description">
+              Export or import encrypted ZK deposit receipts tied to your wallet. Use this to back up notes or restore them on another device.
+            </p>
+            <div className="userdash-notes-actions">
+              <button
+                type="button"
+                className="userdash-notes-button userdash-notes-button--primary"
+                onClick={handleExportNotes}
+                disabled={isNotesBusy}
+              >
+                {isNotesBusy ? 'Working...' : 'Export Notes'}
+              </button>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportNotes}
+                className="userdash-notes-file-input"
+                id="userdash-import-notes"
+                disabled={isNotesBusy}
+              />
+              <label
+                htmlFor="userdash-import-notes"
+                className={`userdash-notes-button userdash-notes-button--secondary${isNotesBusy ? ' userdash-notes-button--disabled' : ''}`}
+              >
+                Import Notes
+              </label>
+            </div>
           </div>
         </div>
       </div>

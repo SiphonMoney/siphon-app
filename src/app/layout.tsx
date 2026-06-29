@@ -14,6 +14,19 @@ export const metadata: Metadata = {
   description: "Execute DeFi strategies on-demand in a fully encrypted manner. Run arbitrage, yield farming, liquidity mining, and grid trading privately. Your trades remain invisible to MEV bots and front-runners.",
   keywords: ["DeFi", "encrypted execution", "privacy", "strategy execution", "MEV protection", "blockchain", "cryptocurrency"],
   authors: [{ name: "Siphon Protocol" }],
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      "max-video-preview": -1,
+      "max-image-preview": "none",
+      "max-snippet": -1,
+    },
+  },
   openGraph: {
     title: "Siphon Protocol - Fully Encrypted DeFi Execution Layer",
     description: "Execute DeFi strategies on-demand in a fully encrypted manner. Your trades remain invisible to MEV bots and front-runners.",

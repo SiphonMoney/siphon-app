@@ -15,6 +15,7 @@ import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
 import { walletManager } from "../../extensions/walletManager";
 import { payExecutionFee } from "../../../lib/handler";
+import { resolveWalletAddress } from "../../../lib/walletAddress";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, getRunModeChainDisplayLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
 import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, calculateRunFee, durationToHours } from "./price_utils";
@@ -333,35 +334,15 @@ export default function DetailsModal({
 
   // Check wallet connection status
   useEffect(() => {
-    const checkWalletConnection = () => {
-      const wallets = walletManager.getConnectedWallets();
-      const hasConnectedWallet = wallets.length > 0;
-      
-      // Also check localStorage as fallback
-      if (!hasConnectedWallet) {
-        try {
-          const storedWallet = localStorage.getItem('siphon-connected-wallet');
-          if (storedWallet) {
-            const wallet = JSON.parse(storedWallet);
-            if (wallet && wallet.address) {
-              setIsWalletConnected(true);
-              return;
-            }
-          }
-        } catch (error) {
-          console.error('Error reading wallet from localStorage:', error);
-        }
-      }
-      
-      setIsWalletConnected(hasConnectedWallet);
+    const checkWalletConnection = async () => {
+      const restored = await walletManager.restorePersistedSession();
+      setIsWalletConnected(Boolean(restored ?? walletManager.getPrimaryWallet()));
     };
 
-    // Check on mount and when modal opens
-    checkWalletConnection();
+    void checkWalletConnection();
 
-    // Listen for wallet connection/disconnection events
     const handleWalletConnected = () => {
-      setIsWalletConnected(true);
+      setIsWalletConnected(walletManager.hasActiveSession());
     };
 
     const handleWalletDisconnected = () => {
@@ -465,18 +446,7 @@ export default function DetailsModal({
         const stepId = node.id;
 
         const handleMyWallet = () => {
-          const primaryWallet = walletManager.getPrimaryWallet();
-          let walletAddress = primaryWallet?.address;
-          if (!walletAddress) {
-            try {
-              const storedWallet = localStorage.getItem("siphon-connected-wallet");
-              if (storedWallet) {
-                walletAddress = JSON.parse(storedWallet).address;
-              }
-            } catch {
-              /* ignore */
-            }
-          }
+          const walletAddress = resolveWalletAddress();
           if (walletAddress) {
             setRunModeValues((prev) => ({
               ...prev,
@@ -1181,22 +1151,7 @@ export default function DetailsModal({
                         const stepId = node.id;
                         
                         const handleMyWallet = () => {
-                          // Check both walletManager and localStorage for wallet connection
-                          const primaryWallet = walletManager.getPrimaryWallet();
-                          let walletAddress = primaryWallet?.address;
-                          
-                          // If not in walletManager, check localStorage
-                          if (!walletAddress) {
-                            try {
-                              const storedWallet = localStorage.getItem('siphon-connected-wallet');
-                              if (storedWallet) {
-                                const wallet = JSON.parse(storedWallet);
-                                walletAddress = wallet.address;
-                              }
-                            } catch (error) {
-                              console.error('Error reading wallet from localStorage:', error);
-                            }
-                          }
+                          const walletAddress = resolveWalletAddress();
                           
                           if (walletAddress) {
                             setRunModeValues(prev => ({

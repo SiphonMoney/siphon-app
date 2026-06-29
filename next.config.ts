@@ -6,6 +6,20 @@ const nextConfig: NextConfig = {
   // but `next dev` doesn't. Unblocks deployment.
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-Robots-Tag",
+            value:
+              "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate",
+          },
+        ],
+      },
+    ];
+  },
   webpack: (config) => {
     // Required to import the wasm-bindgen (bundler target) FHE module in fhe-wasm/pkg.
     config.experiments = {

@@ -6,6 +6,7 @@ import Build from "./navs/Builder/Build";
 import Run from "./navs/Run/Run";
 import UserDash from "./navs/UserDash/UserDash";
 import Siphon from "./navs/Siphon/Siphon";
+import { walletManager } from "./extensions/walletManager";
 import type { ProViewMode } from "../lib/nexusView";
 
 interface NexusProps {
@@ -29,7 +30,16 @@ export default function Nexus({
   const [edges, setEdges] = useEdgesState<Edge>([]);
 
   useEffect(() => {
-    const handleWalletConnected = () => setWalletConnected(true);
+    const syncWalletState = async () => {
+      const restored = await walletManager.restorePersistedSession();
+      setWalletConnected(Boolean(restored ?? walletManager.getPrimaryWallet()));
+    };
+
+    void syncWalletState();
+
+    const handleWalletConnected = () => {
+      setWalletConnected(walletManager.hasActiveSession());
+    };
     const handleWalletDisconnected = () => setWalletConnected(false);
 
     window.addEventListener('walletConnected', handleWalletConnected);

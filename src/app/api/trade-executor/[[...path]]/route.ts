@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { DEFAULT_TRADE_EXECUTOR_URL } from '@/lib/tradeExecutorClient';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -6,7 +7,7 @@ export const maxDuration = 60;
 const UPSTREAM = (
   process.env.TRADE_EXECUTOR_URL ||
   process.env.NEXT_PUBLIC_TRADE_EXECUTOR_URL ||
-  'http://localhost:5005'
+  DEFAULT_TRADE_EXECUTOR_URL
 ).replace(/\/+$/, '');
 
 const FORWARD_HEADERS = [

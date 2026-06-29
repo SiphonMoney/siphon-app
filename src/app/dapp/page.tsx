@@ -5,7 +5,7 @@ import Nav from "@/components/theme/Nav";
 import Nexus from "@/components/Nexus";
 import StrategyAutoExecutor from "@/components/StrategyAutoExecutor";
 import TeeClientKeySync from "@/components/TeeClientKeySync";
-import { WalletInfo } from "@/components/extensions/walletManager";
+import { WalletInfo, walletManager } from "@/components/extensions/walletManager";
 import styles from "../hero.module.css";
 
 export default function DappPage() {
@@ -15,7 +15,7 @@ export default function DappPage() {
   const handleWalletConnected = (wallet: WalletInfo) => {
     setWalletConnected(true);
     setConnectedWallet(wallet);
-    localStorage.setItem('siphon-connected-wallet', JSON.stringify(wallet));
+    walletManager.persistWallet(wallet);
   };
 
   return (

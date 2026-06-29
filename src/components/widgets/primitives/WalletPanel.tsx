@@ -19,16 +19,17 @@ export function WalletPanel({ sectionId }: { sectionId?: string }) {
   const [vaultBalances, setVaultBalances] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
-    const sync = () => {
-      const wallets = walletManager.getConnectedWallets();
-      setWallet(wallets[0] ?? null);
+    const sync = async () => {
+      const restored = await walletManager.restorePersistedSession();
+      setWallet(restored ?? walletManager.getConnectedWallets()[0] ?? null);
     };
-    sync();
-    window.addEventListener("walletConnected", sync);
-    window.addEventListener("walletDisconnected", sync);
+    const onWalletEvent = () => { void sync(); };
+    void sync();
+    window.addEventListener("walletConnected", onWalletEvent);
+    window.addEventListener("walletDisconnected", onWalletEvent);
     return () => {
-      window.removeEventListener("walletConnected", sync);
-      window.removeEventListener("walletDisconnected", sync);
+      window.removeEventListener("walletConnected", onWalletEvent);
+      window.removeEventListener("walletDisconnected", onWalletEvent);
     };
   }, []);
 
@@ -38,8 +39,6 @@ export function WalletPanel({ sectionId }: { sectionId?: string }) {
       return;
     }
     try {
-      // Finalize any vault-mode swap outputs whose deposit has landed on-chain so they count
-      // toward the balance below. No signer → localStorage-only (avoids a wallet popup loop).
       try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
       const { details } = await getSpendableVaultBalance(getSelectedChainId(), TOKEN_MAP);
       const next: Record<string, number> = {};
@@ -81,7 +80,7 @@ export function WalletPanel({ sectionId }: { sectionId?: string }) {
       <div className="widget-card-header widget-card-header--compact">
         <div>
           <p className="widget-card-title">Wallet</p>
-          <p className="widget-card-subtitle">Siphon vault balance</p>
+          <p className="widget-card-subtitle">Private balance</p>
         </div>
       </div>
       <div className="widget-wallet-body">

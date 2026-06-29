@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SUPPORTED_CHAIN_IDS } from '@/lib/networks';
+import { NETWORKS } from '@/lib/networks';
 import { getServerRpcUrls } from '@/lib/rpcServer';
 
 export const runtime = 'nodejs';
@@ -9,7 +9,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Proxy JSON-RPC to upstream nodes with fallback + 429 backoff. */
 export async function POST(req: NextRequest) {
   const chainId = parseInt(req.nextUrl.searchParams.get('chainId') || '', 10);
-  if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
+  if (!NETWORKS[chainId]) {
     return NextResponse.json(
       { jsonrpc: '2.0', error: { code: -32600, message: 'Unsupported chainId' }, id: null },
       { status: 400 },

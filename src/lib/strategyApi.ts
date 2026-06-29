@@ -32,6 +32,13 @@ export function getExplorerTxUrl(txHash: string, chainId?: number): string {
   return `${net.explorer}/tx/${txHash}`;
 }
 
+function formatTradeExecutorError(raw: string): string {
+  if (/fetch failed|Trade executor proxy failed|ECONNREFUSED|ENOTFOUND/i.test(raw)) {
+    return "Trade executor is unreachable. Set NEXT_PUBLIC_TRADE_EXECUTOR_URL or start the local executor on port 5005.";
+  }
+  return raw;
+}
+
 export async function getStrategies(
   userId: string,
 ): Promise<{ success: boolean; strategies?: StrategyRecord[]; error?: string }> {
@@ -43,7 +50,14 @@ export async function getStrategies(
     });
     if (!res.ok) {
       const text = await res.text();
-      return { success: false, error: text.slice(0, 200) || `HTTP ${res.status}` };
+      let message = text.slice(0, 200) || `HTTP ${res.status}`;
+      try {
+        const json = JSON.parse(text) as { error?: string };
+        if (json.error) message = json.error;
+      } catch {
+        /* plain text body */
+      }
+      return { success: false, error: formatTradeExecutorError(message) };
     }
     const json = await res.json();
     if (json.status === "success" && Array.isArray(json.strategies)) {
@@ -53,7 +67,7 @@ export async function getStrategies(
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Unknown error",
+      error: formatTradeExecutorError(err instanceof Error ? err.message : "Unknown error"),
     };
   }
 }

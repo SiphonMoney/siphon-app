@@ -1,6 +1,10 @@
 import type { Edge, Node } from "@xyflow/react";
 import { createFlowFromParsed } from "./createNodes";
-import { llmParse, type BuilderChatTurn, type BuilderMarketContext, type LlmParseFailure } from "./llmParse";
+import { llmParse, isLlmParseFailure, type BuilderChatTurn, type BuilderMarketContext, type LlmParseFailure } from "./llmParse";
+import {
+  getDefaultAdvisorMessage,
+  shouldMaterializeFlow,
+} from "./messageIntent";
 import { createDefaultParsed } from "./parsedDefaults";
 import { getNextQuestion } from "./questions";
 import { syncFlowStructure } from "./syncFlow";
@@ -10,7 +14,7 @@ const LLM_MESSAGES: Record<LlmParseFailure["reason"], string> = {
   unconfigured:
     "Builder AI is not configured. Set OPENROUTER_API_KEY in Vercel (Production env) and redeploy — .env.local only works locally.",
   openrouter_error:
-    "Ai rejected the request. Check, and try again.",
+    "Ai rejected the request. Check, and try again. ",
   bad_response: "Something went wrong, please try again.",
   network: "Could not reach the Server. Check your connection and try again.",
 };
@@ -47,8 +51,8 @@ export async function processBuilderTurn(
   const trimmed = input.trim();
   const transcript = [...(session?.transcript ?? []), trimmed];
 
-  const result = await llmParse(trimmed, chatHistory, session?.parsed ?? null, market);
-  if ("ok" in result && result.ok === false) {
+  const result = await llmParse(trimmed, chatHistory, session?.parsed ?? null, market, session);
+  if (isLlmParseFailure(result)) {
     const botMessage =
       result.reason === "openrouter_error" && result.detail
         ? result.detail
@@ -61,7 +65,24 @@ export async function processBuilderTurn(
     };
   }
 
-  const { parsed } = result;
+  const { parsed, intent } = result;
+  const materialize = shouldMaterializeFlow(intent, parsed, existingNodes.length);
+
+  if (!materialize) {
+    const keptParsed =
+      intent === "build"
+        ? parsed
+        : session?.parsed ?? createDefaultParsed(trimmed);
+    return {
+      nodes: existingNodes,
+      edges: existingEdges,
+      session: buildSession(keptParsed, transcript),
+      botMessage:
+        result.message ??
+        (intent === "advise" ? getDefaultAdvisorMessage(trimmed) : getNextQuestion(parsed)?.question ?? null),
+    };
+  }
+
   const { nodes, edges } = applyFlowFromParsed(parsed, existingNodes, existingEdges);
   const nextSession = buildSession(parsed, transcript);
   const botMessage = result.message ?? getNextQuestion(parsed)?.question ?? null;

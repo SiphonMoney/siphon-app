@@ -113,20 +113,27 @@ export async function getUnifiedBalances(chainId?: number) {
   const walletNetwork = await provider.getNetwork();
   if (Number(walletNetwork.chainId) !== targetChainId) {
     console.warn(
-      `Wallet is on chain ${walletNetwork.chainId} but dapp expects ${targetChainId}; balances may be stale until the wallet switches.`,
+      `Wallet is on chain ${walletNetwork.chainId} but dapp expects ${targetChainId}; skipping balance fetch.`,
     );
+    return [];
   }
 
   const address = await signer.getAddress();
   const balancePromises = [];
 
   // 1. Fetch Native ETH Balance
-  balancePromises.push(provider.getBalance(address).then(balance => ({
-    symbol: 'ETH',
-    balance: formatUnits(balance, 18),
-    decimals: 18,
-    balanceRaw: balance
-  })));
+  balancePromises.push(
+    provider.getBalance(address).then((balance) => ({
+      symbol: 'ETH',
+      balance: formatUnits(balance, 18),
+      decimals: 18,
+      balanceRaw: balance,
+    })).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`Could not fetch ETH balance: ${message}`);
+      return null;
+    }),
+  );
 
   // 2. Fetch ERC20 Balances (from TOKEN_MAP, -> skip ETH)
   for (const tokenSymbol in TOKEN_MAP) {

@@ -7,8 +7,13 @@ import {
   applyPercentDipPrice,
 } from "./inferToolsFromPrompt";
 import { mergeLlmOntoParsed, parsedToFlowSnapshot } from "./mergeLlmParsed";
+import {
+  getDefaultAdvisorMessage,
+  resolveTurnIntent,
+  type BuilderMessageIntent,
+} from "./messageIntent";
 import { createDefaultParsed } from "./parsedDefaults";
-import type { ParsedPrompt } from "./types";
+import type { BuilderAgentSession, ParsedPrompt } from "./types";
 
 export interface BuilderChatTurn {
   role: "user" | "assistant";
@@ -22,6 +27,7 @@ export interface BuilderMarketContext {
 export interface LlmParseResult {
   parsed: ParsedPrompt;
   message: string | null;
+  intent: BuilderMessageIntent;
 }
 
 export type LlmParseFailure =
@@ -30,6 +36,12 @@ export type LlmParseFailure =
   | { ok: false; reason: "bad_response" }
   | { ok: false; reason: "network" };
 
+export function isLlmParseFailure(
+  result: LlmParseResult | LlmParseFailure,
+): result is LlmParseFailure {
+  return "ok" in result && result.ok === false;
+}
+
 /**
  * Calls /api/builder-agent (OpenRouter) and merges JSON onto prior session state.
  */
@@ -37,14 +49,21 @@ export async function llmParse(
   prompt: string,
   chatHistory: BuilderChatTurn[],
   previousParsed?: ParsedPrompt | null,
-  market?: BuilderMarketContext
+  market?: BuilderMarketContext,
+  session?: BuilderAgentSession | null,
 ): Promise<LlmParseResult | LlmParseFailure> {
   const base =
     previousParsed ?? createDefaultParsed(chatHistory.map((t) => t.content).join("\n") || prompt);
 
   const ethUsd = market?.ethUsd ?? null;
 
-  let data: { parsed?: Record<string, unknown>; message?: string | null; error?: string; detail?: string };
+  let data: {
+    parsed?: Record<string, unknown>;
+    message?: string | null;
+    intent?: string;
+    error?: string;
+    detail?: string;
+  };
   try {
     const res = await fetch("/api/builder-agent", {
       method: "POST",
@@ -70,6 +89,19 @@ export async function llmParse(
     return { ok: false, reason: "network" };
   }
 
+  const llmIntent = data.intent === "build" ? "build" : "advise";
+  const intent = resolveTurnIntent(llmIntent, session ?? null, prompt);
+
+  if (intent === "advise") {
+    return {
+      parsed: base,
+      message:
+        (typeof data.message === "string" && data.message.trim()) ||
+        getDefaultAdvisorMessage(prompt),
+      intent,
+    };
+  }
+
   const llm = data.parsed ?? {};
 
   let parsed = mergeLlmOntoParsed(base, llm, prompt);
@@ -84,5 +116,6 @@ export async function llmParse(
   return {
     parsed: clamped,
     message: capabilityMessage ?? (typeof data.message === "string" ? data.message : null),
+    intent: "build",
   };
 }

@@ -1,20 +1,10 @@
 import { walletManager } from "@/components/extensions/walletManager";
 
-/** Resolve the connected EVM wallet address (walletManager + localStorage fallback). */
+/** Resolve the connected EVM wallet address from the active wallet session. */
 export function resolveWalletAddress(): string | null {
-  const fromManager =
+  return (
     walletManager.getPrimaryWallet()?.address ??
-    walletManager.getConnectedWallets().find((w) => w.id === "metamask")?.address;
-  if (fromManager) return fromManager;
-
-  try {
-    const stored = localStorage.getItem("siphon-connected-wallet");
-    if (stored) {
-      const parsed = JSON.parse(stored) as { address?: string };
-      if (parsed.address) return parsed.address;
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
+    walletManager.getConnectedWallets().find((w) => w.id === "metamask")?.address ??
+    null
+  );
 }

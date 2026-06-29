@@ -449,6 +449,30 @@ export async function getSpendableVaultBalance(
   return { totalBalance, details };
 }
 
+/** Sum unspent note amounts in localStorage for a chain (may include not-yet-indexed deposits). */
+export function getLocalVaultNoteTotals(chainId: number): Record<string, number> {
+  const details: Record<string, number> = {};
+  if (typeof window === "undefined") return details;
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(`${chainId}-`)) continue;
+    const parts = key.split("-");
+    if (parts.length < 3) continue;
+    const sym = parts[1].toUpperCase();
+    try {
+      const d = JSON.parse(localStorage.getItem(key) || "{}");
+      if (!d?.amount || d.spent === true || d.spent === "true") continue;
+      const amt = parseFloat(String(d.amount));
+      if (!Number.isFinite(amt)) continue;
+      details[sym] = (details[sym] || 0) + amt;
+    } catch {
+      /* skip */
+    }
+  }
+  return details;
+}
+
 // --------- Generate ZK Data (for withdrawals) ----------
 export interface SwapBinding {
   pool: string;

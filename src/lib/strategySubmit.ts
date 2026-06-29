@@ -17,6 +17,7 @@ import {
 } from "@/lib/fhe";
 import { ensureClientKeyInDecryptor, isTeeAutonomousMode } from "@/lib/decryptorClient";
 import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
+import { appendUserActivity } from "@/lib/userActivityLog";
 
 function formatSubmitError(status: number, text: string): string {
   const trimmed = text.trim();
@@ -229,6 +230,18 @@ export async function submitEncryptedStrategy(
     const data = JSON.parse(text);
     // Fire-and-forget: log the client-side encryption timings into the trade-executor terminal.
     void reportClientMetrics(userId, data?.strategy_id, m);
+    try {
+      appendUserActivity(userId, {
+        kind: "strategy",
+        strategyId: data?.strategy_id,
+        status: "submitted",
+        amount: payload.amount as number | string | undefined,
+        token: payload.asset_in as string | undefined,
+        label: `Strategy ${String(payload.strategy_type || "run").replace(/_/g, " ")}`,
+      });
+    } catch {
+      /* activity log is best-effort */
+    }
     return { success: true, data };
   } catch (error: unknown) {
     return {

@@ -1,6 +1,8 @@
 import Solflare from '@solflare-wallet/sdk';
 import { getSelectedChainId, switchWalletNetwork } from '../../lib/networks';
 
+export const WALLET_STORAGE_KEY = 'siphon-connected-wallet';
+
 export interface WalletInfo {
   id: string;
   name: string;
@@ -18,6 +20,151 @@ export interface WalletConnectionResult {
 class WalletManager {
   private connectedWallets: Map<string, WalletInfo> = new Map();
   private solflareWallet: Solflare | null = null;
+  private restorePromise: Promise<WalletInfo | null> | null = null;
+  private providerListenersBound = false;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      this.bindProviderListeners();
+    }
+  }
+
+  private bindProviderListeners(): void {
+    if (this.providerListenersBound || typeof window === 'undefined') return;
+    const ethereum = (window as Window & { ethereum?: { on?: (event: string, handler: (...args: unknown[]) => void) => void } }).ethereum;
+    if (!ethereum?.on) return;
+
+    this.providerListenersBound = true;
+
+    ethereum.on('accountsChanged', (accounts: unknown) => {
+      const list = Array.isArray(accounts) ? (accounts as string[]) : [];
+      if (list.length === 0) {
+        this.clearSession();
+        window.dispatchEvent(new Event('walletDisconnected'));
+        return;
+      }
+
+      const metamask = this.connectedWallets.get('metamask');
+      if (!metamask) return;
+
+      const nextAddress = list[0];
+      if (nextAddress.toLowerCase() === metamask.address.toLowerCase()) return;
+
+      const updated: WalletInfo = { ...metamask, address: nextAddress };
+      this.connectedWallets.set('metamask', updated);
+      this.persistWallet(updated);
+      window.dispatchEvent(new Event('walletConnected'));
+    });
+  }
+
+  loadStoredWallet(): WalletInfo | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(WALLET_STORAGE_KEY);
+      if (!raw) return null;
+      const wallet = JSON.parse(raw) as WalletInfo;
+      return wallet?.address ? wallet : null;
+    } catch {
+      return null;
+    }
+  }
+
+  persistWallet(wallet: WalletInfo): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify(wallet));
+  }
+
+  clearPersistedWallet(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(WALLET_STORAGE_KEY);
+  }
+
+  clearSession(): void {
+    const wallets = this.getConnectedWallets();
+    for (const wallet of wallets) {
+      this.disconnectWallet(wallet.id);
+    }
+    this.clearPersistedWallet();
+  }
+
+  /** Restore in-memory session from the browser wallet + localStorage after reload. */
+  async restorePersistedSession(): Promise<WalletInfo | null> {
+    if (this.restorePromise) return this.restorePromise;
+    this.restorePromise = this.doRestorePersistedSession();
+    return this.restorePromise;
+  }
+
+  private async doRestorePersistedSession(): Promise<WalletInfo | null> {
+    if (typeof window === 'undefined') return null;
+
+    const stored = this.loadStoredWallet();
+    if (!stored) {
+      this.connectedWallets.clear();
+      return null;
+    }
+
+    if (stored.id === 'metamask') {
+      const eth = (window as Window & { ethereum?: { request: (params: { method: string }) => Promise<unknown> } }).ethereum;
+      if (!eth) {
+        this.connectedWallets.clear();
+        this.clearPersistedWallet();
+        return null;
+      }
+
+      try {
+        const accounts = (await eth.request({ method: 'eth_accounts' })) as string[];
+        const active = accounts.find(
+          (account) => account.toLowerCase() === stored.address.toLowerCase(),
+        );
+        if (!active) {
+          this.connectedWallets.clear();
+          this.clearPersistedWallet();
+          return null;
+        }
+
+        const wallet: WalletInfo = { ...stored, address: active, connected: true };
+        this.connectedWallets.set('metamask', wallet);
+        this.persistWallet(wallet);
+        return wallet;
+      } catch {
+        this.connectedWallets.clear();
+        this.clearPersistedWallet();
+        return null;
+      }
+    }
+
+    if (stored.id === 'phantom') {
+      const solana = (window as Window & {
+        solana?: {
+          isPhantom?: boolean;
+          isConnected?: boolean;
+          publicKey?: { toString: () => string };
+        };
+      }).solana;
+
+      if (
+        solana?.isPhantom &&
+        solana.isConnected &&
+        solana.publicKey &&
+        solana.publicKey.toString().toLowerCase() === stored.address.toLowerCase()
+      ) {
+        const wallet: WalletInfo = { ...stored, connected: true };
+        this.connectedWallets.set('phantom', wallet);
+        return wallet;
+      }
+
+      this.connectedWallets.clear();
+      this.clearPersistedWallet();
+      return null;
+    }
+
+    // Other wallet types: only restore if already tracked this session.
+    return this.connectedWallets.get(stored.id) ?? null;
+  }
+
+  hasActiveSession(): boolean {
+    return this.connectedWallets.size > 0;
+  }
 
   async connectMetaMask(): Promise<WalletConnectionResult> {
     try {
@@ -55,6 +202,7 @@ class WalletManager {
       };
 
       this.connectedWallets.set('metamask', wallet);
+      this.persistWallet(wallet);
       return { success: true, wallet };
     } catch (error: unknown) {
       return { success: false, error: error instanceof Error ? error.message : 'Failed to connect MetaMask' };
@@ -134,6 +282,7 @@ class WalletManager {
           connected: true
         };
         this.connectedWallets.set('phantom', wallet);
+        this.persistWallet(wallet);
         return { success: true, wallet };
       }
 
@@ -183,6 +332,7 @@ class WalletManager {
       };
 
       this.connectedWallets.set('phantom', wallet);
+      this.persistWallet(wallet);
       return { success: true, wallet };
     } catch (error: unknown) {
       console.error('Phantom connection error:', error);
@@ -324,6 +474,9 @@ class WalletManager {
       }
     }
     this.connectedWallets.delete(walletId);
+    if (this.getConnectedWallets().length === 0) {
+      this.clearPersistedWallet();
+    }
   }
 
   getConnectedWallets(): WalletInfo[] {

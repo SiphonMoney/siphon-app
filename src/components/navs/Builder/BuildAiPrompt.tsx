@@ -154,7 +154,7 @@ export default function BuildAiPrompt({
   defaultValue = "",
   onChange,
   onSubmit,
-  placeholder = "Describe your flow — limits, loops, schedules…",
+  placeholder = "Ask a question or describe your strategy…",
   submitLabel = "Send",
   isLoading = false,
   disabled = false,

@@ -5,6 +5,7 @@ import entrypointArtifact from "./abi/Entrypoint.json";
 import nativeVaultAbiJson from './abi/NativeVault.json';
 import merkleTreeAbiJson from './abi/MerkleTree.json';
 import { getNetwork, getSelectedChainId, NATIVE_TOKEN as NATIVE } from './networks';
+import { appendUserActivity } from './userActivityLog';
 
 // --------- Constants ----------
 // Chain + Entrypoint now come from the active network registry (Eth Sepolia / Base Sepolia).
@@ -229,6 +230,20 @@ export async function deposit(_token: string, _amount: string) {
     console.log("Precommitment:", commitmentData.precommitment);
     console.log("Commitment (from event):", commitment);
     console.log("Transaction hash:", receipt.hash);
+
+    try {
+      appendUserActivity(signerAddress, {
+        kind: "deposit",
+        chainId: currentChainId(),
+        token: _token.toUpperCase(),
+        amount: _amount,
+        txHash: receipt.hash,
+        status: "confirmed",
+        label: `Deposit ${_amount} ${_token.toUpperCase()}`,
+      });
+    } catch {
+      /* activity log is best-effort */
+    }
 
     return { success: true, executeTransaction: receipt.hash };
 
@@ -531,6 +546,23 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       if (zkData.changeValue > 0n) {
         localStorage.setItem(zkData.newDepositKey, JSON.stringify(zkData.newDeposit));
         console.log("Saved change commitment locally:", zkData.newDepositKey);
+      }
+
+      invalidateLeafCache();
+
+      try {
+        const wallet = await signer.getAddress();
+        appendUserActivity(wallet, {
+          kind: "withdraw",
+          chainId: currentChainId(),
+          token: _token.toUpperCase(),
+          amount: _amount,
+          txHash: receipt.hash,
+          status: "confirmed",
+          label: `Withdraw ${_amount} ${_token.toUpperCase()}`,
+        });
+      } catch {
+        /* activity log is best-effort */
       }
 
       return { success: true, transactionHash: receipt.hash };
