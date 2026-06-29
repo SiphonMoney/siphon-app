@@ -78,14 +78,14 @@
 }
 
 .blockTitle {
-  font-size: clamp(42px, 8vw, 76px);
+  font-size: clamp(64px, 16vw, 96px);
   font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
   text-transform: uppercase;
   color: #ffffff;
   margin: 0 0 3.75rem;
-  max-width: 22ch;
+  max-width: none;
 }
 
 .blockBody {
@@ -106,36 +106,77 @@
   width: 100%;
   display: flex;
   justify-content: center;
-  padding-bottom: clamp(2rem, 5vh, 3.5rem);
+  padding-bottom: clamp(2.5rem, 6vh, 4rem);
 }
 
 .scrollTip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  min-height: calc(1em + 0.65rem + 18px);
   font-family: var(--font-source-code), monospace;
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: clamp(13px, 2.2vw, 16px);
+  letter-spacing: 0.2em;
   text-transform: lowercase;
-  color: rgba(255, 255, 255, 0.3);
-  animation: scrollHint 2.4s ease-in-out infinite;
+  color: rgba(255, 255, 255, 0.72);
+  animation:
+    scrollHeroAppear 0.9s ease 0.45s both,
+    scrollHeroPulse 2.2s ease-in-out 1.35s infinite;
 }
 
-@keyframes scrollHint {
+.scrollChevron {
+  opacity: 0.85;
+  animation: scrollChevronBounce 2.2s ease-in-out 1.35s infinite;
+}
+
+@keyframes scrollHeroAppear {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scrollHeroPulse {
   0%,
   100% {
-    opacity: 0.35;
+    opacity: 0.55;
     transform: translateY(0);
   }
   50% {
-    opacity: 0.7;
-    transform: translateY(4px);
+    opacity: 1;
+    transform: translateY(6px);
   }
 }
 
-@media (max-width: 560px) {
+@keyframes scrollChevronBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(5px);
+    opacity: 1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .blockTitle {
+    font-size: clamp(42px, 8vw, 76px);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    max-width: 22ch;
+  }
+}
+
+@media (max-width: 1023px) {
   .copyStack {
     transform: translateY(2vh);
-  }
-
-  .blockTitle {
-    max-width: none;
   }
 }

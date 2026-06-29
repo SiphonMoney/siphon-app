@@ -1,23 +1,37 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Nav from "@/components/theme/Nav";
 import Nexus from "@/components/Nexus";
 import StrategyAutoExecutor from "@/components/StrategyAutoExecutor";
 import TeeClientKeySync from "@/components/TeeClientKeySync";
 import WelcomeOnboarding from "@/components/onboarding/WelcomeOnboarding";
 import { EthPriceProvider } from "@/lib/EthPriceProvider";
+import { hasCompletedOnboarding, markOnboardingComplete } from "@/lib/onboarding";
 import { WalletInfo, walletManager } from "@/components/extensions/walletManager";
 import styles from "../hero.module.css";
 
 export default function DappPage() {
   const [, setWalletConnected] = useState(false);
   const [, setConnectedWallet] = useState<WalletInfo | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  const [ready, setReady] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [dappMounted, setDappMounted] = useState(false);
   const [dappVisible, setDappVisible] = useState(false);
 
+  useEffect(() => {
+    const completed = hasCompletedOnboarding();
+    if (completed) {
+      setDappMounted(true);
+      setDappVisible(true);
+    } else {
+      setShowOnboarding(true);
+    }
+    setReady(true);
+  }, []);
+
   const handleOnboardingComplete = useCallback(() => {
+    markOnboardingComplete();
     setShowOnboarding(false);
     setDappMounted(true);
     requestAnimationFrame(() => setDappVisible(true));
@@ -35,11 +49,11 @@ export default function DappPage() {
       backgroundColor: "#000",
       position: "relative",
     }}>
-      {showOnboarding && (
+      {ready && showOnboarding && (
         <WelcomeOnboarding onComplete={handleOnboardingComplete} />
       )}
 
-      {dappMounted && (
+      {ready && dappMounted && (
         <EthPriceProvider>
         <>
           <div

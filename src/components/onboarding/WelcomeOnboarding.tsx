@@ -176,8 +176,24 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
         </div>
       </div>
 
-      <footer className={styles.footer}>
-        <span className={styles.scrollTip}>scroll</span>
+      <footer key={step} className={styles.footer}>
+        <div className={styles.scrollTip}>
+          <span>scroll</span>
+          {screen.hero && (
+            <svg
+              className={styles.scrollChevron}
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden
+            >
+              <path d="M12 5v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
       </footer>
     </div>
   );
