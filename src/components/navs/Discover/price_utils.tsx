@@ -93,6 +93,21 @@ export const calculateExchange = (
   return outputAmount;
 };
 
+/** Spot-rate estimate minus ~2% for fees/slippage (e.g. $1 in → ~$0.98 out). */
+export const ESTIMATED_RECEIVE_FACTOR = 0.98;
+
+export const applyEstimatedReceiveHaircut = (spotOutputAmount: number): number => {
+  if (spotOutputAmount <= 0) return 0;
+  return spotOutputAmount * ESTIMATED_RECEIVE_FACTOR;
+};
+
+export const calculateEstimatedReceive = (
+  inputAmount: number,
+  coinA: string,
+  coinB: string,
+  coinPrices: Record<string, number>,
+): number => applyEstimatedReceiveHaircut(calculateExchange(inputAmount, coinA, coinB, coinPrices));
+
 const RUN_FEE_MIN_USD = 0.35;
 const RUN_FEE_PER_HOUR_USD = 0.35;
 

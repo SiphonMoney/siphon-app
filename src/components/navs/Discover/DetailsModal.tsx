@@ -18,7 +18,7 @@ import { payExecutionFee } from "../../../lib/handler";
 import { resolveWalletAddress } from "../../../lib/walletAddress";
 import { getSelectedChainId, getTokens, getNetwork, RUN_MODE_CHAIN_LABELS, resolveRunModeChainId, getRunModeChainLabel, getRunModeChainDisplayLabel, selectChainAndSwitchWallet, getZkWithdrawRecipient } from "../../../lib/networks";
 import ChainToggle from "../../ChainToggle";
-import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, calculateRunFee, durationToHours } from "./price_utils";
+import { formatAmount as formatAmountUtil, calculateExchange as calculateExchangeUtil, calculateEstimatedReceive as calculateEstimatedReceiveUtil, fetchCoinPrices, calculateVariableCost, calculateFixedCost, calculateRunFee, durationToHours } from "./price_utils";
 
 
 interface NodeData {
@@ -373,6 +373,10 @@ export default function DetailsModal({
     return calculateExchangeUtil(inputAmount, coinA, coinB, coinPrices);
   };
 
+  const calculateEstimatedReceive = (inputAmount: number, coinA: string, coinB: string): number => {
+    return calculateEstimatedReceiveUtil(inputAmount, coinA, coinB, coinPrices);
+  };
+
   const formatAmount = (amount: number, coin?: string): string => {
     return formatAmountUtil(amount, coin);
   };
@@ -403,7 +407,7 @@ export default function DetailsModal({
     const inputAmount =
       parseFloat(getRunStepFieldValue(runModeValues, depositStepId, "amount", depositData || {}) || "0") ||
       0;
-    const outputAmount = calculateExchangeUtil(inputAmount, inputCoin, outputCoin, coinPrices);
+    const outputAmount = calculateEstimatedReceiveUtil(inputAmount, inputCoin, outputCoin, coinPrices);
 
     const strategyNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === "strategy");
     const strategyKind = (strategyNode?.data as NodeData)?.strategy || "Custom";
@@ -916,7 +920,7 @@ export default function DetailsModal({
             <div className="builder-run-card-body">
               <div className="builder-run-receipt-io">
                   <div className="builder-run-receipt-io-col">
-                    <span className="builder-run-receipt-io-label">You pay</span>
+                    <span className="builder-run-receipt-io-label">You Send</span>
                     <span className="builder-run-receipt-io-amount">
                       {pricesLoaded ? formatAmount(runSummary.inputAmount, runSummary.inputCoin) : "…"}
                     </span>
@@ -1100,7 +1104,7 @@ export default function DetailsModal({
                     getRunStepFieldValue(runModeValues, depositStepId || '', 'amount', depositData || {}) || '0'
                   ) || 0;
                   
-                  const outputAmountNum = calculateExchange(
+                  const outputAmountNum = calculateEstimatedReceive(
                     inputAmount, 
                     inputCoin || 'USDC', 
                     outputCoin || inputCoin || 'USDC'
@@ -1123,7 +1127,7 @@ export default function DetailsModal({
                         </div>
                         <div className="strategy-modal-io-arrow">→</div>
                         <div className="strategy-modal-io-outputs">
-                          <div className="strategy-modal-io-title">Output</div>
+                          <div className="strategy-modal-io-title">Output (est.)</div>
                           <div className="strategy-modal-io-items">
                             <div className="strategy-modal-io-item">
                               <span className="strategy-modal-io-coin">{outputCoin}</span>
