@@ -1,7 +1,7 @@
 import { ethers, Contract, Network } from 'ethers';
 import crypto from 'crypto';
 import { buildPoseidon } from 'circomlibjs';
-import { prepareWithdrawalTransactionMulti } from "./generateProof";
+import { prepareWithdrawalTransactionMulti, prepareSwapTransaction } from "./generateProof";
 import { getProvider, getSigner } from './nexus';
 import { getNetwork, getReadProviderRpcUrl, getSelectedChainId } from './networks';
 import entrypointArtifact from './abi/Entrypoint.json';
@@ -510,6 +510,147 @@ function buildMerklePath(
     idx = Math.floor(idx / 2);
   }
   return { pathElements, pathIndices };
+}
+
+export interface SwapProofData {
+  amountIn: string;        // wei routed into the swap
+  stateRoot: string;
+  nullifier: string;       // nullifierHash — on-chain spent key for the input note
+  newCommitment: string;   // change note inserted into the tree
+  recipient: string;       // swap-output recipient (bound to proof)
+  pool: string;
+  dstToken: string;
+  fee: number;
+  minAmountOut: string;
+  srcToken: string;        // input asset (NATIVE sentinel or ERC20)
+  pA: [string, string];
+  pB: [[string, string], [string, string]];
+  pC: [string, string];
+  spentNoteKey: string;    // localStorage key of the note being spent
+  // change note secrets so the caller can persist/track the remainder
+  change: { nullifier: string; secret: string; precommitment: string; commitment: string; amountWei: string };
+}
+
+/**
+ * Build an atomic-swap proof for ONE note → Vault.swap. The reusable core for limit / TWAP /
+ * grid slices: spends a single note (specific `_noteKey`, or the smallest note ≥ amountIn),
+ * routes `_amountIn` through the swap bound to recipient/pool/dstToken/fee/minOut, and mints a
+ * change note for the remainder. The executor later submits the returned struct via
+ * Entrypoint.swap — it never custodies funds and never sees the note secrets.
+ */
+export async function generateSwapProof(
+  _chainId: number,
+  _inToken: TokenInfo,
+  _amountIn: string,
+  _recipient: string,
+  _swap: SwapBinding,
+  _noteKey?: string,
+): Promise<SwapProofData | { error: string }> {
+  const poseidon = await buildPoseidon();
+  const F = poseidon.F;
+  const pHash = (a: bigint, b: bigint): bigint => BigInt(F.toObject(poseidon([a, b])));
+  const pHash1 = (a: bigint): bigint => BigInt(F.toObject(poseidon([a])));
+
+  const tokenAddress = _inToken.symbol === 'ETH' ? NATIVE_TOKEN : _inToken.address;
+  const amountInWei = BigInt(ethers.parseUnits(_amountIn, _inToken.decimals).toString());
+  if (amountInWei <= 0n) return { error: "Swap amountIn must be > 0." };
+
+  const signer = getSigner();
+  if (!signer) return { error: "Wallet not connected." };
+
+  // 1. on-chain leaves + root
+  let leaves: bigint[];
+  try {
+    leaves = [...await getLeafSet(tokenAddress, _chainId)].map(s => BigInt(s));
+  } catch {
+    return { error: "Failed to fetch on-chain leaves for swap proof." };
+  }
+  const { vault, merkleTreeAddress } = await resolveVault(tokenAddress, _chainId);
+  const provider = getReadProvider(_chainId);
+  const merkleTreeContract = new Contract(merkleTreeAddress, merkleTreeAbiJson.abi as ethers.InterfaceAbi, provider);
+  const onChainRoot = BigInt((await merkleTreeContract.getRoot()).toString());
+
+  // depth-32 Poseidon zeros (matches MerkleTree.sol)
+  const zeros: bigint[] = [0n];
+  for (let i = 1; i < TREE_DEPTH; i++) zeros[i] = pHash(zeros[i - 1], zeros[i - 1]);
+
+  // 2. select the note to spend (specific key, or smallest unspent note ≥ amountIn)
+  const { scanNoteMeta, readNote, markNoteSpent } = await import('./localNoteStore');
+  const metas = scanNoteMeta(`${_chainId}-${_inToken.symbol}-`);
+  let chosen: { key: string; data: CommitmentData; amountWei: bigint; leafIndex: number } | null = null;
+  for (const meta of metas) {
+    if (_noteKey && meta.key !== _noteKey) continue;
+    if (!meta.commitment || !meta.amount) continue;
+    if (meta.spent === true || meta.spent === 'true') continue;
+    const data = await readNote(meta.key, signer);
+    if (!data || !data.nullifier || !data.commitment) continue;
+    const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _inToken.decimals).toString());
+    if (amountWei < amountInWei) continue;
+    const leafIndex = leaves.findIndex(l => l === BigInt(data.commitment));
+    if (leafIndex === -1) continue;
+    if (await vault.nullifiers(pHash1(BigInt(data.nullifier)))) { markNoteSpent(meta.key); continue; }
+    if (_noteKey || !chosen || amountWei < chosen.amountWei) {
+      chosen = { key: meta.key, data: { ...data, precommitment: data.precommitment ?? '' }, amountWei, leafIndex };
+      if (_noteKey) break;
+    }
+  }
+  if (!chosen) return { error: `No spendable ${_inToken.symbol} note ≥ ${_amountIn} found.` };
+
+  // 3. change note (remainder = inValue - amountIn; 0 for a full-slice spend)
+  const changeValue = chosen.amountWei - amountInWei;
+  const change = await generateCommitmentData(_chainId, _inToken, ethers.formatUnits(changeValue, _inToken.decimals));
+
+  // 4. build the swap witness (signal names match swap.circom)
+  const { pathElements, pathIndices } = buildMerklePath(leaves, chosen.leafIndex, zeros, pHash);
+  const nullifierHash = pHash1(BigInt(chosen.data.nullifier));
+  const changeCommitment = pHash(changeValue, BigInt(change.precommitment));
+
+  const circuitInput = {
+    amountIn:      amountInWei.toString(),
+    stateRoot:     onChainRoot.toString(),
+    newCommitment: changeCommitment.toString(),
+    nullifierHash: nullifierHash.toString(),
+    recipient:     BigInt(_recipient).toString(),
+    pool:          BigInt(_swap.pool).toString(),
+    dstToken:      BigInt(_swap.dstToken).toString(),
+    fee:           BigInt(_swap.fee).toString(),
+    minAmountOut:  BigInt(_swap.minAmountOut).toString(),
+    inValue:       chosen.amountWei.toString(),
+    inNullifier:   chosen.data.nullifier.toString(),
+    inSecret:      chosen.data.secret.toString(),
+    pathElements:  pathElements.map(v => v.toString()),
+    pathIndices:   pathIndices.map(String),
+    changeNullifier: change.nullifier.toString(),
+    changeSecret:    change.secret.toString(),
+  };
+
+  const { proof, publicSignals } = await prepareSwapTransaction(circuitInput);
+  // publicSignals: [amountIn, stateRoot, newCommitment, nullifierHash, recipient, pool, dstToken, fee, minOut]
+  const newCommitmentOnChain = publicSignals[2];
+
+  return {
+    amountIn:      amountInWei.toString(),
+    stateRoot:     onChainRoot.toString(),
+    nullifier:     nullifierHash.toString(),
+    newCommitment: newCommitmentOnChain,
+    recipient:     _recipient,
+    pool:          _swap.pool,
+    dstToken:      _swap.dstToken,
+    fee:           Number(_swap.fee),
+    minAmountOut:  BigInt(_swap.minAmountOut).toString(),
+    srcToken:      tokenAddress,
+    pA: proof.pA as [string, string],
+    pB: proof.pB as [[string, string], [string, string]],
+    pC: proof.pC as [string, string],
+    spentNoteKey:  chosen.key,
+    change: {
+      nullifier:     change.nullifier,
+      secret:        change.secret,
+      precommitment: change.precommitment,
+      commitment:    newCommitmentOnChain,
+      amountWei:     changeValue.toString(),
+    },
+  };
 }
 
 export async function generateZKData(

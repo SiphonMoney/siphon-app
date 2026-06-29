@@ -144,6 +144,15 @@ async function _proveViaNextApi(circuitInput, circuit) {
 }
 
 async function _proveLocally(circuitInput, circuit) {
+  // Swap circuit lives at /zk/swap (single input note → atomic Vault.swap, 9 pub signals).
+  if (circuit === 'swap') {
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circuitInput,
+      `/zk/swap/main_swap.wasm`,
+      `/zk/swap/zkey_final.zkey`,
+    );
+    return { proof: _normaliseProof(proof), publicSignals };
+  }
   const isWithdraw = circuit.startsWith('w');
   const N = parseInt(circuit.slice(1), 10);
   const prefix = isWithdraw ? 'w' : 'm';
@@ -191,6 +200,19 @@ export async function prepareWithdrawalTransactionMulti(circuitInput, N) {
  */
 export async function prepareMergeTransaction(circuitInput, N) {
   return _prove(circuitInput, `m${N}`);
+}
+
+/**
+ * Atomic swap proof (single input note → Vault.swap). Used by limit/TWAP/grid slices.
+ * Goes straight to browser snarkjs — the server prover doesn't carry the swap circuit, and
+ * TWAP pre-generates many of these, so we skip N failed /api/prove round-trips.
+ */
+export async function prepareSwapTransaction(circuitInput) {
+  const t0 = Date.now();
+  console.log('[generateProof] Proving SWAP (browser snarkjs)...');
+  const result = await _proveLocally(circuitInput, 'swap');
+  console.log(`[generateProof] SWAP proof in ${Date.now() - t0}ms`);
+  return result;
 }
 
 /**
