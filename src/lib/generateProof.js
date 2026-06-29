@@ -101,9 +101,7 @@ export async function verifyProofLocally(proof, publicSignals) {
   }
 }
 
-const RELAYER_URL = (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_PROVING_RELAYER_URL : null)
-  || (typeof window !== 'undefined' ? window.__ENV__?.NEXT_PUBLIC_PROVING_RELAYER_URL : null)
-  || '';
+const RELAYER_URL = process.env.NEXT_PUBLIC_PROVING_RELAYER_URL || '';
 
 function _normaliseProof(proof) {
   return {

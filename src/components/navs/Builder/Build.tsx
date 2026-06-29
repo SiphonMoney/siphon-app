@@ -812,15 +812,16 @@ export default function Build({
 
     const txData = zkResult.withdrawalTxData;
     const zkProof = {
-      stateRoot:     txData.stateRoot,
-      nullifierHash: txData.nullifierHash,
-      newCommitment: txData.newCommitment,
+      stateRoot:        txData.stateRoot,
+      nullifierHashes:  txData.nullifierHashes,
+      changeCommitment: txData.changeCommitment,
+      amount:           txData.amount,
       pA: txData.pA,
       pB: txData.pB,
       pC: txData.pC,
     };
 
-    console.log('[Strategy] ZK proof generated:', { stateRoot: txData.stateRoot, nullifierHash: txData.nullifierHash });
+    console.log('[Strategy] ZK proof generated:', { stateRoot: txData.stateRoot, nullifierHashes: txData.nullifierHashes });
 
     // Vault-mode output: for a same-chain asset-changing swap, keep the output shielded — the
     // executor re-deposits it into the asset_out vault as a private note the user withdraws
@@ -852,6 +853,8 @@ export default function Build({
       max_slippage_bps:  payloadBounds.max_slippage_bps,
       recipient_address: recipient,
       zk_proof:          zkProof,
+      is_private:        true,
+      commitment_ids:    zkResult.spentDepositKeys.map(k => zkResult.serverCommitmentIds[k] ?? null),
       condition_tree:    useTree ? conditionTree : null,
       to_chain:          toChain,
       from_chain:        String(getSelectedChainId()),
@@ -868,20 +871,33 @@ export default function Build({
       onEncrypt:   () => console.log('[Strategy] Encrypting price conditions locally...'),
     });
     if (result.success) {
-      // Save the new change commitment — funds are not spent until on-chain tx confirms
+      // Save the new change commitment — funds are not spent until on-chain tx confirms.
       if (zkResult.newDepositKey && zkResult.newDeposit) {
         localStorage.setItem(zkResult.newDepositKey, JSON.stringify({ ...zkResult.newDeposit, spent: false }));
       }
-      // Do NOT mark old deposit as spent here — scheduler marks it spent after on-chain confirmation
 
-      // Strategy is registered with the trade-executor and runs server-side. No local FHE
-      // decryption / browser authorization needed.
       const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
+
+      // Defer localStorage cleanup until siphon:strategyExecuted confirms on-chain withdrawal.
+      // If we delete now and the executor fails, the user loses note secrets permanently.
+      // Store the mapping strategyId → spent keys so the event handler can clean up later.
+      if (strategyId && (zkResult.spentDepositKeys ?? []).length > 0) {
+        try {
+          localStorage.setItem(
+            `siphon-pending-cleanup-${strategyId}`,
+            JSON.stringify(zkResult.spentDepositKeys),
+          );
+        } catch { /* non-critical */ }
+      } else {
+        // No strategyId to key off — fall back to immediate cleanup (same as before).
+        for (const k of zkResult.spentDepositKeys ?? []) { try { localStorage.removeItem(k); } catch {} }
+      }
+
+      // Strategy is registered with the trade-executor and runs server-side.
       if (strategyId) {
         window.dispatchEvent(
           new CustomEvent('siphon:strategySubmitted', { detail: { strategyId, userId: recipient } }),
         );
-        if (zkResult.spentDepositKey) { try { localStorage.removeItem(zkResult.spentDepositKey); } catch {} }
       }
 
       if (useTree) {

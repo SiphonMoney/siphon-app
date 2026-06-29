@@ -260,20 +260,22 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       if (isDepositMode) {
         console.log('Depositing to Siphon Vault');
         const result = await deposit(transactionInput.token, transactionInput.amount);
-        
+
         if (result.success) {
           showAppToast(`Deposited ${transactionInput.amount} ${transactionInput.token}`, 'success');
           setTransactionInput(prev => ({...prev, amount: ""}));
+          refreshVaultBalances();
         } else {
           showAppToast(`Deposit failed: ${result.error}`, 'error');
         }
       } else {
         console.log('Withdrawing from Siphon Vault');
         const result = await withdraw(transactionInput.token, transactionInput.amount, transactionInput.recipient);
-        
+
         if (result.success) {
           showAppToast(`Withdrew ${transactionInput.amount} ${transactionInput.token}`, 'success');
           setTransactionInput(prev => ({...prev, amount: ""}));
+          refreshVaultBalances();
         } else {
           showAppToast(`Withdraw failed: ${result.error}`, 'error');
         }
@@ -454,7 +456,9 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               </div>
             </div>
             <div className="userdash-balance-content-multi">
-              {siphonVaultBalances !== null && Object.keys(siphonVaultBalances).length > 0 ? (
+              {isVaultRefreshing ? (
+                <div className="userdash-balance-loading" style={{ opacity: 0.6, fontStyle: 'italic' }}>Updating...</div>
+              ) : siphonVaultBalances !== null && Object.keys(siphonVaultBalances).length > 0 ? (
                 // Sort and filter balances to show ETH then USDC
                 Object.entries(siphonVaultBalances)
                   .filter(([symbol]) => symbol === 'ETH' || symbol === 'USDC')

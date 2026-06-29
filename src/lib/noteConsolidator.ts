@@ -154,25 +154,26 @@ export async function consolidateIfNeeded(
   const N = toMerge.length;
   if (N < 2) return { merged: false };
 
-  // Claim merge output note secrets from pool — persisted in DB before tx is submitted.
-  const { claimFromPool } = await import('./sparePool');
-  const mergePoolClaimed = await claimFromPool(signer);
-  const mergedNullifier = BigInt(mergePoolClaimed.nullifier);
-  const mergedSecret = BigInt(mergePoolClaimed.secret);
-  const mergePoolId = mergePoolClaimed.id;
-  const mergedValue = toMerge.reduce((acc, n) => acc + n.amountWei, 0n);
-  const mergedPrecommitment = BigInt(mergePoolClaimed.precommitment);
+  // Generate fresh secrets for the merge output note — no pool dependency.
+  const { modField } = await import('./zkHandler');
+  const randHex = () => Array.from(crypto.getRandomValues(new Uint8Array(31))).map(b => b.toString(16).padStart(2, '0')).join('');
+  const mergedNullifier = modField(BigInt('0x' + randHex()));
+  const mergedSecret    = modField(BigInt('0x' + randHex()));
+  const mergedValue     = toMerge.reduce((acc, n) => acc + n.amountWei, 0n);
+  const mergedPrecommitment = BigInt(F.toObject(poseidon([mergedNullifier, mergedSecret])));
   const mergedCommitment = BigInt(F.toObject(poseidon([mergedValue, mergedPrecommitment])));
 
-  // Build Merkle paths
+  // Build Merkle paths and pre-compute nullifier hashes (public inputs)
   const pathElementsAll = toMerge.map(n => buildMerklePath(leaves, n.leafIndex, poseidonHash).pathElements.map(v => v.toString()));
   const pathIndicesAll = toMerge.map(n => buildMerklePath(leaves, n.leafIndex, poseidonHash).pathIndices.map(String));
+  const inputNullifierHashes = toMerge.map(n => BigInt(F.toObject(poseidon([BigInt(n.nullifier)]))).toString());
 
   const circuitInput = {
     stateRoot:        onChainRoot.toString(),
-    mergedNullifier:  mergedNullifier.toString(),
-    mergedSecret:     mergedSecret.toString(),
-    mergedValue:      mergedValue.toString(),
+    mergedCommitment: mergedCommitment.toString(),
+    nullifierHash:    inputNullifierHashes,
+    mergeNullifier:   mergedNullifier.toString(),
+    mergeSecret:      mergedSecret.toString(),
     inValue:          toMerge.map(n => n.amountWei.toString()),
     inNullifier:      toMerge.map(n => n.nullifier),
     inSecret:         toMerge.map(n => n.secret),
@@ -211,7 +212,7 @@ export async function consolidateIfNeeded(
   );
 
   // Persist merge output secrets before tx so recovery is possible if writeNote fails post-mining.
-  const mergeHintKey = `merge-hint-${mergePoolId}`;
+  const mergeHintKey = `merge-hint-${mergedPrecommitment.toString()}`;
   localStorage.setItem(mergeHintKey, JSON.stringify({
     nullifier:     mergedNullifier.toString(),
     secret:        mergedSecret.toString(),
@@ -240,10 +241,6 @@ export async function consolidateIfNeeded(
     invalidateLeafCache();
   } catch (txErr) {
     localStorage.removeItem(mergeHintKey);  // tx never mined — clean up hint
-    try {
-      const { releasePrecommitment } = await import('./precommitmentStore');
-      await releasePrecommitment(signer, mergePoolId);
-    } catch { /* best-effort */ }
     throw txErr;
   }
 
@@ -292,14 +289,7 @@ export async function consolidateIfNeeded(
     console.warn('[consolidate] Failed to post merged note to server:', e);
   }
 
-  // Resolve the pool precommitment — merge output note is now confirmed on-chain.
-  try {
-    const { resolvePrecommitment } = await import('./precommitmentStore');
-    await resolvePrecommitment(signer, mergePoolId);
-  } catch (e) {
-    console.warn('[consolidate] Failed to resolve pool precommitment:', e);
-  }
-  // Refill pool async.
+  // Refill withdrawal spare pool async (best-effort).
   try {
     const { ensurePool } = await import('./sparePool');
     ensurePool(signer);

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import ConnectButton from "@/components/extensions/ConnectButton";
 import { walletManager, type WalletInfo } from "@/components/extensions/walletManager";
 import { getSpendableVaultBalance } from "@/lib/zkHandler";
-import { resolvePendingOutputNotes } from "@/lib/outputNoteResolver";
 import { TOKEN_MAP } from "@/lib/nexus";
 import { getSelectedChainId } from "@/lib/networks";
 
@@ -38,9 +37,6 @@ export function WalletPanel({ sectionId }: { sectionId?: string }) {
       return;
     }
     try {
-      // Finalize any vault-mode swap outputs whose deposit has landed on-chain so they count
-      // toward the balance below. No signer → localStorage-only (avoids a wallet popup loop).
-      try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
       const { details } = await getSpendableVaultBalance(getSelectedChainId(), TOKEN_MAP);
       const next: Record<string, number> = {};
       for (const sym of VAULT_TOKENS) {

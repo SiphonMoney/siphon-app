@@ -705,9 +705,9 @@ export async function generateZKData(
     changePrecommitment = BigInt(F.toObject(poseidon([changeNullifier, changeSecret])));
   }
   const changeValue = accumulated - withdrawnValueTotal;
-  const changeCommitmentBig = changeValue > 0n
-    ? BigInt(F.toObject(poseidon([changeValue, changePrecommitment])))
-    : 0n;
+  // Circuit always computes Poseidon(changeValue, changePrecommitment) with no zero short-circuit.
+  // Must pass the real hash even when changeValue === 0.
+  const changeCommitmentBig = BigInt(F.toObject(poseidon([changeValue, changePrecommitment])));
 
   // 6. BUILD MERKLE PATHS FOR EACH INPUT NOTE
   const pathElementsAll: bigint[][] = [];
@@ -735,18 +735,25 @@ export async function generateZKData(
 
   // 7. ASSEMBLE CIRCUIT INPUT AND GENERATE PROOF
   // Circuit signals (per withdrawal.circom Withdrawal(32, N)):
-  //   inValue[N], inNullifier[N], inSecret[N], pathElements[N][32], pathIndices[N][32],
-  //   withdrawnValue, recipient, changeNullifier, changeSecret, changeValue, stateRoot
+  //   Public:  withdrawnValue, stateRoot, changeCommitment, nullifierHash[N], recipient
+  //   Private: inValue[N], inNullifier[N], inSecret[N], pathElements[N][32], pathIndices[N][32],
+  //            changeNullifier, changeSecret
+  // changeValue is computed internally by the circuit (inSum[N] - withdrawnValue) — do NOT pass it.
+  const nullifierHashesInput = selectedNotes.map(n =>
+    BigInt(F.toObject(poseidon([BigInt(n.data.nullifier)]))).toString()
+  );
+
   const circuitInput: Record<string, unknown> = {
-    withdrawnValue: withdrawnValueTotal.toString(),
-    stateRoot:      onChainRoot.toString(),
-    recipient:      BigInt(_recipient).toString(),
-    changeNullifier: changeNullifier.toString(),
-    changeSecret:    changeSecret.toString(),
-    changeValue:     changeValue.toString(),
-    inValue:         selectedNotes.map(n => n.amountWei.toString()),
-    inNullifier:     selectedNotes.map(n => n.data.nullifier.toString()),
-    inSecret:        selectedNotes.map(n => n.data.secret.toString()),
+    withdrawnValue:   withdrawnValueTotal.toString(),
+    stateRoot:        onChainRoot.toString(),
+    changeCommitment: changeCommitmentBig.toString(),
+    nullifierHash:    nullifierHashesInput,
+    recipient:        BigInt(_recipient).toString(),
+    changeNullifier:  changeNullifier.toString(),
+    changeSecret:     changeSecret.toString(),
+    inValue:          selectedNotes.map(n => n.amountWei.toString()),
+    inNullifier:      selectedNotes.map(n => n.data.nullifier.toString()),
+    inSecret:         selectedNotes.map(n => n.data.secret.toString()),
     pathElements:    pathElementsAll.map(pe => pe.map(v => v.toString())),
     pathIndices:     pathIndicesAll.map(pi => pi.map(String)),
   };

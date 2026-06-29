@@ -131,12 +131,19 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
 
       const humanAmount = ethers.formatUnits(hit.amount, rec.decimals);
       const noteKey = `${rec.chainId}-${rec.symbol}-${hit.commitment}`;
-      if (signer && rec.nullifier && rec.secret) {
+
+      // Pending records omit nullifier/secret from localStorage (stored only in Supabase enc_blob).
+      // Recover them from the server precommitment list fetched before this loop.
+      const serverMatch = serverPending.find(p => p.decrypted.precommitment === rec.precommitment);
+      const nullifier = rec.nullifier ?? serverMatch?.decrypted.nullifier;
+      const secret    = rec.secret    ?? serverMatch?.decrypted.secret;
+
+      if (signer && nullifier && secret) {
         // Full resolved note — encrypt nullifier + secret.
         const { writeNote } = await import('./localNoteStore');
         await writeNote(noteKey, {
-          nullifier:     rec.nullifier,
-          secret:        rec.secret,
+          nullifier,
+          secret,
           commitment:    hit.commitment,
           precommitment: rec.precommitment,
           nullifierHash: rec.nullifierHash,
@@ -144,8 +151,8 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
           spent:         false,
         }, signer);
       } else {
-        // No signer or secrets missing (pending record had them stripped) — write plaintext
-        // metadata only so balance scan can at least see the note; secrets come from Supabase.
+        // No signer or secrets unavailable — write plaintext metadata only so balance scan
+        // can see the note; it will be unspendable until re-resolved with a signer.
         localStorage.setItem(noteKey, JSON.stringify({
           commitment:    hit.commitment,
           precommitment: rec.precommitment,
@@ -161,8 +168,8 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
           await postCommitment(
             signer,
             {
-              nullifier:  rec.nullifier!,
-              secret:     rec.secret!,
+              nullifier:  nullifier!,
+              secret:     secret!,
               commitment: hit.commitment,
               amount:     humanAmount,
               chainId:    rec.chainId,
@@ -173,11 +180,10 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
         } catch (e) {
           console.warn('[OutputNote] commitment server sync failed (localStorage still holds it):', e);
         }
-        // Mark the pending precommitment resolved using the list fetched before the loop.
+        // Mark the pending precommitment resolved.
         try {
           const { resolvePrecommitment } = await import('./precommitmentStore');
-          const match = serverPending.find(p => p.decrypted.precommitment === rec.precommitment);
-          if (match) await resolvePrecommitment(signer, match.id);
+          if (serverMatch) await resolvePrecommitment(signer, serverMatch.id);
         } catch { /* best-effort */ }
       }
 

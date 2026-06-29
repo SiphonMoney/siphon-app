@@ -58,21 +58,13 @@ export async function ensureServerKeyUploaded(
   clientKey: string,
   onUpload?: () => void,
 ): Promise<void> {
-  const base = getTradeExecutorBaseUrl();
-
-  let hasKey = false;
-  try {
-    const res = await fetch(`${base}/hasServerKey/${encodeURIComponent(userId)}`);
-    if (res.ok) {
-      const json = await res.json();
-      hasKey = Boolean(json?.has_key);
-    }
-  } catch {
-    // Network/server hiccup — fall through and attempt upload.
-  }
-  if (hasKey) return;
-
+  // Always upload — the server does an upsert, so this is safe and idempotent.
+  // Skipping the /hasServerKey check avoids the key-mismatch bug where a stale
+  // server key from a previous browser/device causes all FHE evaluations to decrypt
+  // to garbage (the browser encrypts with the new client key, the server evaluates
+  // with the old server key, decryption always returns 0 / never triggers).
   onUpload?.();
+  const base = getTradeExecutorBaseUrl();
   const serverKey = await deriveServerKey(clientKey);
   const res = await fetch(`${base}/uploadServerKey`, {
     method: "POST",

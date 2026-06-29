@@ -256,6 +256,22 @@ export async function deposit(_token: string, _amount: string) {
     console.log("Commitment (from event):", commitment);
     console.log("Transaction hash:", receipt.hash);
 
+    // Auto-merge if this deposit pushed the unspent note count to ≥6.
+    // consolidateIfNeeded self-gates (returns early if count < threshold).
+    (async () => {
+      try {
+        const { consolidateIfNeeded } = await import('./noteConsolidator');
+        const result = await consolidateIfNeeded(currentChainId(), tokenInfo);
+        if ('merged' in result && result.merged) {
+          console.log('[deposit] Auto-merged notes after deposit:', result.key);
+        } else if ('error' in result) {
+          console.warn('[deposit] Auto-merge failed (non-blocking):', result.error);
+        }
+      } catch (e) {
+        console.warn('[deposit] Auto-merge threw (non-blocking):', e);
+      }
+    })();
+
     return { success: true, executeTransaction: receipt.hash };
 
   } catch (err: unknown) {
@@ -308,19 +324,6 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
     const { ensurePool } = await import('./sparePool');
     ensurePool(signer);
   } catch { /* best-effort */ }
-
-  // Auto-merge if user has ≥6 unspent notes — the circuit cap is N=6.
-  try {
-    const { consolidateIfNeeded } = await import('./noteConsolidator');
-    const mergeResult = await consolidateIfNeeded(currentChainId(), tokenInfo);
-    if ('error' in mergeResult) {
-      console.warn('[withdraw] consolidation failed (non-blocking):', mergeResult.error);
-    } else if ('merged' in mergeResult && mergeResult.merged) {
-      console.log('[withdraw] Auto-merged notes before withdrawal:', mergeResult.key);
-    }
-  } catch (e) {
-    console.warn('[withdraw] consolidation threw (non-blocking):', e);
-  }
 
   try {
     // 1) Generate ZK data using zkHandler
@@ -381,10 +384,11 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       if (!receipt) throw new Error("Withdrawal tx was not mined (receipt null)");
       console.log("Withdraw tx mined:", receipt.hash);
 
-      // 4) Mark ALL spent notes — localStorage and server commitments table
+      // 4) Mark ALL spent notes — localStorage, server commitments table, and nullifier registry
       try {
         const { markNoteSpent } = await import('./localNoteStore');
         const { markCommitmentSpent } = await import('./commitmentStore');
+        const { getTradeExecutorBaseUrl } = await import('./tradeExecutorClient');
         for (const key of zkData.spentDepositKeys) {
           markNoteSpent(key);
           const serverId = zkData.serverCommitmentIds[key];
@@ -393,6 +397,15 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
               console.warn('Failed to mark server commitment spent:', key, e)
             );
           }
+        }
+        // Log each spent nullifier to the registry so the trade executor's double-spend guard
+        // knows these notes are gone even before it queries on-chain state.
+        for (const nullifierHash of zkData.withdrawalTxData.nullifierHashes) {
+          fetch(`${getTradeExecutorBaseUrl()}/nullifier-registry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nullifier_hash: nullifierHash, commitment_id: null }),
+          }).catch(e => console.warn('[nullifier-registry] Insert failed (non-blocking):', e));
         }
       } catch {
         console.warn("Failed to mark local deposits spent");
