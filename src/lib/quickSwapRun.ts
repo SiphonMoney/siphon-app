@@ -15,6 +15,7 @@ import {
 } from "@/lib/strategySpec";
 import { submitEncryptedStrategy } from "@/lib/strategySubmit";
 import { slippagePctToBps } from "@/lib/quickSwapSettings";
+import { markQuickSwapStrategy } from "@/lib/quickSwapStrategyIds";
 import { generateZKData } from "@/lib/zkHandler";
 
 export interface QuickSwapRunInput {
@@ -29,6 +30,12 @@ export interface QuickSwapRunInput {
 export async function executeQuickSwapPayAndRun(
   input: QuickSwapRunInput,
 ): Promise<{ success: boolean; error?: string; strategyId?: string }> {
+  const t0 = performance.now();
+  const timings: Record<string, number> = {};
+  const mark = (label: string, start: number) => {
+    timings[label] = performance.now() - start;
+  };
+
   const { assetIn, assetOut, amount, recipient, slippagePct, onProgress } = input;
   const log = (msg: string) => onProgress?.(msg);
 
@@ -61,7 +68,9 @@ export async function executeQuickSwapPayAndRun(
 
   const chainId = getSelectedChainId();
   log(`Switching to ${getNetwork(chainId).name}…`);
+  let step = performance.now();
   const switchResult = await selectChainAndSwitchWallet(chainId);
+  mark("networkSwitch", step);
   if (!switchResult.ok) {
     return { success: false, error: switchResult.error ?? "Could not switch network." };
   }
@@ -78,12 +87,14 @@ export async function executeQuickSwapPayAndRun(
   }
 
   log("Generating ZK proof…");
+  step = performance.now();
   const zkResult = await generateZKData(
     chainId,
     tokenInfo,
     String(amount),
     getZkWithdrawRecipient(chainId),
   );
+  mark("zkProof", step);
   if ("error" in zkResult) {
     return { success: false, error: zkResult.error };
   }
@@ -94,13 +105,17 @@ export async function executeQuickSwapPayAndRun(
   let outputPrecommitment: string | undefined;
   const isSameChainSwap = assetIn.toUpperCase() !== assetOut.toUpperCase();
   if (isSameChainSwap) {
+    step = performance.now();
     const out = await createVaultOutputNote(chainId, outToken);
+    mark("vaultOutputNote", step);
     outputMode = "vault";
     outputPrecommitment = out.precommitment;
     log(`Vault output prepared (${assetOut})`);
   }
 
+  step = performance.now();
   const prices = await fetchCoinPrices();
+  mark("priceFetch", step);
   const ethUsd = prices.ETH;
   if (!ethUsd || ethUsd <= 0) {
     return { success: false, error: "Could not fetch ETH price for immediate limit trigger." };
@@ -137,12 +152,21 @@ export async function executeQuickSwapPayAndRun(
   };
 
   log("Encrypting and submitting strategy…");
+  step = performance.now();
   const result = await submitEncryptedStrategy(strategyPayload, {
     onKeygen: () => log("Generating FHE keys (one-time)…"),
     onUploadKey: () => log("Uploading FHE server key…"),
     onUploadClientKey: () => log("Sending client key to confidential VM…"),
     onEncrypt: () => log("Encrypting price bounds…"),
   });
+  mark("fheSubmit", step);
+  timings.total = performance.now() - t0;
+  console.log(
+    "[QuickSwap timing]",
+    Object.entries(timings)
+      .map(([k, ms]) => `${k}=${ms.toFixed(0)}ms`)
+      .join(" "),
+  );
 
   if (!result.success) {
     return { success: false, error: result.error ?? "Strategy submission failed." };
@@ -161,6 +185,7 @@ export async function executeQuickSwapPayAndRun(
 
   const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? "");
   if (strategyId) {
+    markQuickSwapStrategy(strategyId);
     window.dispatchEvent(
       new CustomEvent("siphon:strategySubmitted", { detail: { strategyId, userId: recipient } }),
     );

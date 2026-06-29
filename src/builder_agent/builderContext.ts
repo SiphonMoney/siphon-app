@@ -69,7 +69,7 @@ When intent="build":
 - Use "message" to confirm what you built OR ask for one missing field.
 
 ## Execution context
-- Private execution on ${DEFAULT_CHAIN} mainnet via a ZK vault.
+- Private execution via a FHE & ZK.
 - Default DEX for swaps: ${DEFAULT_DEX}.
 - Active tokens (runnable today): ${activeTokens}.
 - Recognized but inactive (capture in coin/toCoin so UI can warn): ${supportedTokens}.

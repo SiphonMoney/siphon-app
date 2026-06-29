@@ -120,12 +120,18 @@ export default function ActivityLog({ walletAddress }: ActivityLogProps) {
     const interval = setInterval(() => void fetchRemote(), 8_000);
     const onActivity = () => loadLocal();
     const onExecuted = () => void fetchRemote();
+    const onFilter = (e: Event) => {
+      const detail = (e as CustomEvent<{ filter?: ActivityFilter; strategyId?: string }>).detail;
+      if (detail?.filter) setFilter(detail.filter);
+    };
     window.addEventListener("siphon:userActivityUpdated", onActivity);
     window.addEventListener("siphon:strategyExecuted", onExecuted);
+    window.addEventListener("siphon:activityLogFilter", onFilter);
     return () => {
       clearInterval(interval);
       window.removeEventListener("siphon:userActivityUpdated", onActivity);
       window.removeEventListener("siphon:strategyExecuted", onExecuted);
+      window.removeEventListener("siphon:activityLogFilter", onFilter);
     };
   }, [refresh, fetchRemote, loadLocal]);
 
