@@ -1,5 +1,5 @@
 import type { Node } from "@xyflow/react";
-import { getSelectedChainId, normalizeRunModeChainLabel, getRunModeChainLabel } from "./networks";
+import { getSelectedChainId, getRunModeChainLabel } from "./networks";
 
 type NodeData = Record<string, unknown>;
 
@@ -19,11 +19,9 @@ export function buildRunModeValuesFromNodes(nodes: Node[]): Record<string, Recor
     const step: Record<string, string> = {};
 
     if (type === "deposit") {
-      setIfPresent(
-        step,
-        "chain",
-        normalizeRunModeChainLabel(String(d.chain || getRunModeChainLabel(getSelectedChainId())))
-      );
+      // Follow the dashboard chain toggle, NOT the template's baked-in d.chain — otherwise a
+      // template authored on Sepolia forces a Base-selected run to build/arm on Sepolia.
+      setIfPresent(step, "chain", getRunModeChainLabel(getSelectedChainId()));
       setIfPresent(step, "tokenA", d.coin);
       setIfPresent(step, "amount", d.amount);
     } else if (type === "swap") {
@@ -47,11 +45,9 @@ export function buildRunModeValuesFromNodes(nodes: Node[]): Record<string, Recor
         setIfPresent(step, field, d[field]);
       }
     } else if (type === "withdraw") {
-      setIfPresent(
-        step,
-        "chain",
-        normalizeRunModeChainLabel(String(d.chain || getRunModeChainLabel(getSelectedChainId())))
-      );
+      // Follow the dashboard chain toggle, NOT the template's baked-in d.chain — otherwise a
+      // template authored on Sepolia forces a Base-selected run to build/arm on Sepolia.
+      setIfPresent(step, "chain", getRunModeChainLabel(getSelectedChainId()));
       setIfPresent(step, "coin", d.coin);
       setIfPresent(step, "amount", d.amount);
       setIfPresent(step, "address", d.wallet);
@@ -88,10 +84,10 @@ export function getRunStepFieldValue(
   if (field === "address") return String(nodeData.wallet || "");
   if (field === "dexType") return String(nodeData.dex || "Uniswap");
   if (field === "chain") {
-    const raw = nodeData.chain;
-    if (raw != null && String(raw).trim() !== "") {
-      return normalizeRunModeChainLabel(String(raw));
-    }
+    // The dashboard chain toggle is authoritative for run mode. A template's baked-in nodeData.chain
+    // (e.g. "Ethereum Sepolia") must NOT override the user's selected chain — that made a
+    // Base-selected strategy build + arm on Sepolia. An explicit per-step override (runModeValues)
+    // still wins via the `override` check above; otherwise always follow the selected chain.
     return getRunModeChainLabel(getSelectedChainId());
   }
 
