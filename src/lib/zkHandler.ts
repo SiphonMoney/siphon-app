@@ -29,7 +29,11 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 6): Promise<T> {
     } catch (err) {
       const msg = JSON.stringify(err ?? '') + String((err as Error)?.message ?? '');
       const rateLimited = /429|too many requests|rate.?limit/i.test(msg);
-      if (attempt >= tries - 1 || !rateLimited) throw err;
+      // A "missing revert data" CALL_EXCEPTION (data=null, reason=null) is what a lagging/flaky
+      // upstream returns — an empty 0x for an eth_call that should succeed. Transient, so retry.
+      // A genuine revert carries data/reason and won't match this, so we don't loop on real reverts.
+      const transientCallException = /missing revert data/i.test(msg);
+      if (attempt >= tries - 1 || (!rateLimited && !transientCallException)) throw err;
       await new Promise((r) => setTimeout(r, delay));
       delay = Math.min(delay * 2, 4000);
     }
@@ -261,9 +265,11 @@ async function resolveVault(
     entrypointArtifact.abi as ethers.InterfaceAbi,
     provider,
   );
-  const vaultAddress = await entrypoint.getVault(tokenAddress);
+  // Retry these — an intermittently-lagging upstream returns an empty 0x (CALL_EXCEPTION) for
+  // these state reads, which otherwise blanks the whole balance / output-note resolve.
+  const vaultAddress = await withRetry(() => entrypoint.getVault(tokenAddress));
   const vault = new Contract(vaultAddress, nativeVaultAbiJson.abi as ethers.InterfaceAbi, provider);
-  const merkleTreeAddress = await vault.merkleTree();
+  const merkleTreeAddress = await withRetry(() => vault.merkleTree());
   const info = { vault, merkleTreeAddress };
   vaultInfoCache.set(cacheKey, info);
   return info;
