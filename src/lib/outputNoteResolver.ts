@@ -19,12 +19,14 @@ import { ethers, Signer } from 'ethers';
 import { generateCommitmentData, resolveOutputNote, invalidateLeafCache, type TokenInfo } from './zkHandler';
 import { postPrecommitment } from './precommitmentStore';
 import { postCommitment } from './commitmentStore';
+import { deriveEncKey, encryptBlob, decryptBlob } from './noteAuth';
 
 const PENDING_PREFIX = 'siphon-pending-output-';
 
 interface PendingOutputNote {
-  nullifier?: string;   // not stored in localStorage — only in Supabase enc_blob
-  secret?: string;      // not stored in localStorage — only in Supabase enc_blob
+  nullifier?: string;   // plaintext nullifier — never written to localStorage
+  secret?: string;      // plaintext secret — never written to localStorage
+  enc?: { enc_blob: string; iv: string }; // AES-GCM(wallet key) of {nullifier,secret} — local fallback if Supabase upload fails
   precommitment: string;
   nullifierHash: string;
   chainId: number;
@@ -60,7 +62,19 @@ export async function createVaultOutputNote(
     tokenAddress,
     decimals: token.decimals,
   };
-  // Pending record: no nullifier/secret in plaintext — store metadata only until resolved.
+  // Encrypt {nullifier,secret} with the wallet-derived key and keep it in the pending record too.
+  // This is the local fallback so a Supabase upload failure can't permanently strand the funds —
+  // the resolver recovers the secret from here if the server copy is missing. Plaintext secret
+  // still never touches localStorage (only the AES-GCM ciphertext does).
+  let enc: { enc_blob: string; iv: string } | undefined;
+  if (signer) {
+    try {
+      const key = await deriveEncKey(signer);
+      enc = await encryptBlob(key, { nullifier: cd.nullifier, secret: cd.secret });
+    } catch (e) {
+      console.warn('[OutputNote] local secret encryption failed (Supabase will be the only copy):', e);
+    }
+  }
   localStorage.setItem(pendingKey(chainId, token.symbol, cd.precommitment), JSON.stringify({
     precommitment: pending.precommitment,
     nullifierHash: pending.nullifierHash,
@@ -68,7 +82,7 @@ export async function createVaultOutputNote(
     symbol:        pending.symbol,
     tokenAddress:  pending.tokenAddress,
     decimals:      pending.decimals,
-    // nullifier + secret omitted — kept only in Supabase (enc_blob)
+    ...(enc ? { enc } : {}),
   }));
 
   // Upload to Supabase so the precommitment survives across devices/clears.
@@ -132,11 +146,19 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
       const humanAmount = ethers.formatUnits(hit.amount, rec.decimals);
       const noteKey = `${rec.chainId}-${rec.symbol}-${hit.commitment}`;
 
-      // Pending records omit nullifier/secret from localStorage (stored only in Supabase enc_blob).
-      // Recover them from the server precommitment list fetched before this loop.
+      // Recover the secret: prefer the server precommitment list, then the locally-encrypted copy
+      // stored in the pending record (resilient to a Supabase upload/auth failure).
       const serverMatch = serverPending.find(p => p.decrypted.precommitment === rec.precommitment);
-      const nullifier = rec.nullifier ?? serverMatch?.decrypted.nullifier;
-      const secret    = rec.secret    ?? serverMatch?.decrypted.secret;
+      let nullifier = rec.nullifier ?? serverMatch?.decrypted.nullifier;
+      let secret    = rec.secret    ?? serverMatch?.decrypted.secret;
+      if ((!nullifier || !secret) && rec.enc && signer) {
+        try {
+          const key = await deriveEncKey(signer);
+          const dec = await decryptBlob<{ nullifier: string; secret: string }>(key, rec.enc.enc_blob, rec.enc.iv);
+          nullifier = nullifier ?? dec.nullifier;
+          secret    = secret    ?? dec.secret;
+        } catch { /* ignore — fall through to metadata-only note */ }
+      }
 
       if (signer && nullifier && secret) {
         // Full resolved note — encrypt nullifier + secret.
