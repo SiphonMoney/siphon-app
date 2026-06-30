@@ -7,6 +7,25 @@ import merkleTreeAbiJson from './abi/MerkleTree.json';
 import { getNetwork, getSelectedChainId, NATIVE_TOKEN as NATIVE } from './networks';
 import { appendUserActivity } from './userActivityLog';
 
+/**
+ * Turn a raw wallet/ethers error into a short, user-facing message — no JSON dumps, no
+ * `action="sendTransaction", reason="rejected", info={…}` noise in the toast.
+ */
+export function friendlyTxError(err: unknown): string {
+  const e = err as { code?: unknown; reason?: string; shortMessage?: string; message?: string; info?: { error?: { code?: number } } };
+  const code = e?.code ?? e?.info?.error?.code;
+  const raw = String(e?.shortMessage || e?.reason || e?.message || err || '');
+  if (code === 4001 || code === 'ACTION_REJECTED' || /user (rejected|denied)|action_rejected|denied transaction/i.test(raw))
+    return 'Transaction rejected in your wallet.';
+  if (/insufficient funds|insufficient balance|have 0\.0/i.test(raw)) return 'Insufficient balance for this transaction.';
+  if (/nullifier.*spent|already spent/i.test(raw)) return 'That note was already spent.';
+  if (/invalidzkproof/i.test(raw)) return 'Proof could not be verified — refresh and try again.';
+  if (/in-flight transaction limit/i.test(raw)) return 'Your wallet has a pending transaction — wait for it to confirm and retry.';
+  // Fallback: first clause only (drop the ethers detail after "(" or newline), truncated.
+  const clean = (e?.shortMessage || e?.reason || raw).split(/[\n(]/)[0].trim();
+  return clean.length > 140 ? clean.slice(0, 140) + '…' : (clean || 'Transaction failed.');
+}
+
 // --------- Constants ----------
 // Chain + Entrypoint now come from the active network registry (Eth Sepolia / Base Sepolia).
 const currentChainId = (): number => getSelectedChainId();
@@ -63,7 +82,7 @@ export async function checkFeePaymentStatus(_nullifier: string): Promise<{ paid:
       return { paid: false, amount: null };
     }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = friendlyTxError(error);
     console.error("❌ Error checking fee payment status:", message);
     return { paid: false, amount: null };
   }
@@ -166,9 +185,8 @@ export async function deposit(_token: string, _amount: string) {
           }
 
         } catch (approveErr: unknown) {
-          const approveMessage = approveErr instanceof Error ? approveErr.message : String(approveErr);
-          console.error("Error during token approval:", approveMessage);
-          throw new Error(`Token approval failed: ${approveMessage}`);
+          console.error("Error during token approval:", approveErr);
+          throw new Error(friendlyTxError(approveErr));
         }
       } else {
         console.log("Allowance sufficient. Skipping explicit approval.");
@@ -290,7 +308,7 @@ export async function deposit(_token: string, _amount: string) {
     return { success: true, executeTransaction: receipt.hash };
 
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = friendlyTxError(err);
     console.error("Error during deposit:", message);
     // Only remove the temp hint if the tx never mined (finalDepositId not set).
     // If the tx mined but writeNote failed, keep the hint — it holds the secrets for recovery.
@@ -374,7 +392,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       );
       console.log("withdraw.staticCall succeeded - proof validated on-chain (dry-run).");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = friendlyTxError(err);
       console.error("withdraw.staticCall reverted:", message);
       return { success: false, error: message };
     }
@@ -504,7 +522,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
 
       return { success: true, transactionHash: receipt.hash };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = friendlyTxError(err);
       console.error("Error during withdraw transaction:", message);
       // Release pool entry so it can be reused by the next withdrawal attempt.
       if (zkData.changePoolId) {
@@ -516,7 +534,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       return { success: false, error: message };
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = friendlyTxError(err);
     console.error("Error during withdraw:", message);
     return { success: false, error: message };
   }
