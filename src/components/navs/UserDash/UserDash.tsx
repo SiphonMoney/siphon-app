@@ -78,7 +78,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const fetchVaultBalances = useCallback(async (options?: { syncServerNotes?: boolean }) => {
     // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
     // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
-    try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+    const hasPending = typeof localStorage !== 'undefined' &&
+      Object.keys(localStorage).some((k) => k.startsWith('siphon-pending-output-'));
+    if (hasPending) {
+      try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+    }
     if (options?.syncServerNotes && wallet && isInitialized()) {
       try {
         await syncWalletNotesFromServer(getSigner());

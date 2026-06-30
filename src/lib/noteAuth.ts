@@ -23,6 +23,9 @@ const SIGN_AUTH        = 'Siphon notes auth v1';
 const _precommTagCache = new Map<string, string>();
 const _commTagCache    = new Map<string, string>();
 const _encKeyCache     = new Map<string, CryptoKey>();
+// De-dup concurrent enc-key derivations so a cold load / parallel proof gen triggers ONE
+// signature popup, not several (metamask-popup-reduction).
+const _encKeyInflight  = new Map<string, Promise<CryptoKey>>();
 
 // Cache auth headers for 30 s — the server allows a 5-minute window, so reuse is safe.
 const _authHeaderCache = new Map<string, { headers: Record<string, string>; expiresAt: number }>();
@@ -61,8 +64,7 @@ export async function deriveCommTag(signer: Signer): Promise<string> {
   return _deriveTag(signer, wallet, SIGN_COMM_TAG, _commTagCache, 'comm-tag');
 }
 
-export async function deriveEncKey(signer: Signer): Promise<CryptoKey> {
-  const wallet = (await signer.getAddress()).toLowerCase();
+async function _deriveEncKeyOnce(signer: Signer, wallet: string): Promise<CryptoKey> {
   const mem = _encKeyCache.get(wallet);
   if (mem) return mem;
   // Enc key stored as raw hex in sessionStorage — re-import without re-signing.
@@ -82,6 +84,18 @@ export async function deriveEncKey(signer: Signer): Promise<CryptoKey> {
   const exported = await crypto.subtle.exportKey('raw', key);
   _ssSet('enc-key', wallet, Array.from(new Uint8Array(exported)).map(b => b.toString(16).padStart(2, '0')).join(''));
   return key;
+}
+
+export async function deriveEncKey(signer: Signer): Promise<CryptoKey> {
+  const wallet = (await signer.getAddress()).toLowerCase();
+  const mem = _encKeyCache.get(wallet);
+  if (mem) return mem;
+  // Share one in-flight derivation across concurrent callers → a single signature prompt.
+  const inflight = _encKeyInflight.get(wallet);
+  if (inflight) return inflight;
+  const promise = _deriveEncKeyOnce(signer, wallet).finally(() => _encKeyInflight.delete(wallet));
+  _encKeyInflight.set(wallet, promise);
+  return promise;
 }
 
 export async function noteAuthHeaders(

@@ -12,6 +12,9 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+const PROVING_RELAYER_URL = process.env.PROVING_RELAYER_URL || '';
+const RELAYER_API_TOKEN   = process.env.RELAYER_API_TOKEN   || '';
+
 const ZK_BUILD_DIR   = process.env.ZK_BUILD_DIR   || '/Users/adityamane/Siphon_Money/Siphon/siphon-zk/circuits/build';
 const RAPIDSNARK_BIN = process.env.RAPIDSNARK_BIN || '/opt/homebrew/bin/rapidsnark';
 
@@ -31,6 +34,38 @@ function circuitPaths(circuit: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const body    = await req.json();
+  const inputs  = body.inputs;
+  const circuit = (body.circuit || '').toLowerCase();
+
+  if (!inputs || typeof inputs !== 'object') {
+    return NextResponse.json({ error: 'Missing inputs' }, { status: 400 });
+  }
+
+  // Offload heavy proving to the relayer when configured (keeps rapidsnark off Vercel).
+  if (PROVING_RELAYER_URL) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (RELAYER_API_TOKEN) headers['X-API-TOKEN'] = RELAYER_API_TOKEN;
+
+    const upstream = await fetch(`${PROVING_RELAYER_URL}/prove`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ inputs, circuit }),
+    });
+
+    const payload = await upstream.json().catch(() => ({}));
+    return NextResponse.json(payload, { status: upstream.status });
+  }
+
+  // Local proving fallback (rapidsnark).
+  if (!VALID_CIRCUITS.has(circuit)) {
+    return NextResponse.json(
+      { error: `Invalid circuit '${circuit}'. Valid: ${[...VALID_CIRCUITS].sort().join(', ')}` },
+      { status: 400 },
+    );
+  }
+  const { wasm, zkey, witnessGen } = circuitPaths(circuit);
+
   const id     = randomBytes(8).toString('hex');
   const tmpDir = join(tmpdir(), `siphon-prove-${id}`);
 
@@ -40,22 +75,6 @@ export async function POST(req: NextRequest) {
   const publicPath  = join(tmpDir, 'public.json');
 
   try {
-    const body    = await req.json();
-    const inputs  = body.inputs;
-    const circuit = (body.circuit || '').toLowerCase();
-
-    if (!inputs) {
-      return NextResponse.json({ error: 'Missing inputs' }, { status: 400 });
-    }
-    if (!VALID_CIRCUITS.has(circuit)) {
-      return NextResponse.json(
-        { error: `Invalid circuit '${circuit}'. Valid: ${[...VALID_CIRCUITS].sort().join(', ')}` },
-        { status: 400 },
-      );
-    }
-
-    const { wasm, zkey, witnessGen } = circuitPaths(circuit);
-
     await mkdir(tmpDir, { recursive: true });
     await writeFile(inputPath, JSON.stringify(inputs));
 

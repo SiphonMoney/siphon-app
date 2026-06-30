@@ -39,7 +39,11 @@ export function WalletPanel({ sectionId }: { sectionId?: string }) {
       return;
     }
     try {
-      try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+      const hasPending = typeof localStorage !== 'undefined' &&
+        Object.keys(localStorage).some((k) => k.startsWith('siphon-pending-output-'));
+      if (hasPending) {
+        try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+      }
       const { details } = await getSpendableVaultBalance(getSelectedChainId(), TOKEN_MAP);
       const next: Record<string, number> = {};
       for (const sym of VAULT_TOKENS) {
