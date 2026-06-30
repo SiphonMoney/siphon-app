@@ -5,6 +5,7 @@ import Nav from "@/components/theme/Nav";
 import Nexus from "@/components/Nexus";
 import StrategyAutoExecutor from "@/components/StrategyAutoExecutor";
 import TeeClientKeySync from "@/components/TeeClientKeySync";
+import StrategyNoteReconciler from "@/components/StrategyNoteReconciler";
 import WelcomeOnboarding from "@/components/onboarding/WelcomeOnboarding";
 import { EthPriceProvider } from "@/lib/EthPriceProvider";
 import { hasCompletedOnboarding, markOnboardingComplete } from "@/lib/onboarding";
@@ -154,6 +155,7 @@ export default function DappPage() {
               >
                 <Nexus isLoaded={dappVisible} />
                 <TeeClientKeySync />
+                <StrategyNoteReconciler />
                 <StrategyAutoExecutor />
               </div>
             </div>

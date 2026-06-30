@@ -76,6 +76,7 @@ import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } from "../../../lib/multiLegBuilder";
 import { getOrCreateClientKey } from "../../../lib/fhe";
 import { getSigner } from "../../../lib/nexus";
+import { reserveStrategyNotes } from "../../../lib/strategyNoteReservation";
 import { validateRecipientAddress, chainLabelToId, createDefaultLimitOrderTree } from "./BuildNodes";
 import {
   resolveLimitOrderConditionTree,
@@ -950,6 +951,17 @@ export default function Build({
       }
 
       const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
+
+      // Reserve the spent input notes (mark 'pending') so a normal withdrawal can't drain them in
+      // the window between arming and execution. Reconciled to 'true'/'false' on EXECUTED/FAILED.
+      const _resSigner = getSigner();
+      if (_resSigner && strategyId) {
+        void reserveStrategyNotes(
+          _resSigner,
+          strategyId,
+          (zkResult.spentDepositKeys ?? []).map((k) => zkResult.serverCommitmentIds[k]),
+        );
+      }
 
       // Defer localStorage cleanup until siphon:strategyExecuted confirms on-chain withdrawal.
       // If we delete now and the executor fails, the user loses note secrets permanently.
