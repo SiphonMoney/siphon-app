@@ -1103,10 +1103,20 @@ export async function generateZKData(
       const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _token.decimals).toString());
       if (amountWei === 0n) { diag.zero++; continue; }
 
-      // Nullifier spent check
+      // Nullifier spent check. Retry on transient RPC failure and DEFAULT TO UNSPENT on error,
+      // mirroring the batched balance path (checkNullifiersSpent) — otherwise a single flaky
+      // eth_call (429 / CALL_EXCEPTION) on this read drops a real, unspent note from candidates
+      // and produces a false "Insufficient balance / Have 0.0". Only a definite on-chain `true`
+      // skips the note; an error never hides funds.
       if (data.nullifier) {
         const nullifierHash = F.toString(poseidon([BigInt(data.nullifier)]));
-        const isSpent = await vaultForNullifier.nullifiers(BigInt(nullifierHash));
+        let isSpent = false;
+        try {
+          isSpent = await withRetry(() => vaultForNullifier.nullifiers(BigInt(nullifierHash)));
+        } catch (e) {
+          console.warn('[withdraw] nullifier check failed — treating as unspent (not dropping note):', key, e);
+          isSpent = false;
+        }
         if (isSpent) {
           markNoteSpent(key);
           diag.nullified++;
