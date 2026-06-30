@@ -453,7 +453,11 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         for (const nullifierHash of zkData.withdrawalTxData.nullifierHashes) {
           fetch(`${getTradeExecutorBaseUrl()}/nullifier-registry`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              // Same X-API-TOKEN the other executor calls send — this one omitted it and 401'd.
+              ...(process.env.NEXT_PUBLIC_API_TOKEN ? { 'X-API-TOKEN': process.env.NEXT_PUBLIC_API_TOKEN } : {}),
+            },
             body: JSON.stringify({ nullifier_hash: nullifierHash, commitment_id: null }),
           }).catch(e => console.warn('[nullifier-registry] Insert failed (non-blocking):', e));
         }
