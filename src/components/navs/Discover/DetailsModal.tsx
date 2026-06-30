@@ -13,6 +13,7 @@ import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } from "../../../lib/multiLegBuilder";
+import { armingFeeUsd } from "../../../lib/feeModel";
 import { getOrCreateClientKey } from "../../../lib/fhe";
 import { NATIVE_TOKEN } from "../../../lib/networks";
 import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
@@ -712,10 +713,28 @@ export default function DetailsModal({
         const clientKey = await getOrCreateClientKey(recipient);
         const submitSplit = (s: Parameters<typeof submitSplitOnChain>[2]) => submitSplitOnChain(fromChainId, tokenInfo, s);
 
+        // Part A: upfront arming fee, carved from the deposit as a protocol fee slice (shielded).
+        const windowHoursMl = strategyKind === 'TWAP'
+          ? (sliceCount * (bounds.interval_sec ?? 60)) / 3600
+          : 24;
+        let inUsdMl = coinPrices[tokenInfo.symbol.toUpperCase()] ?? (tokenInfo.symbol === 'USDC' ? 1 : 0);
+        if (tokenInfo.symbol === 'ETH' && inUsdMl <= 0) {
+          try {
+            const pr = await fetch('https://hermes.pyth.network/v2/updates/price/latest?ids[]=0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace');
+            const pj = await pr.json();
+            const p = pj?.parsed?.[0]?.price;
+            if (p) inUsdMl = Number(p.price) * 10 ** Number(p.expo);
+          } catch { /* graceful */ }
+        }
+        const armingFeeWeiMl = inUsdMl > 0
+          ? BigInt(Math.floor(armingFeeUsd(windowHoursMl) / inUsdMl * 10 ** tokenInfo.decimals))
+          : 0n;
+        addLog(`Arming fee: $${armingFeeUsd(windowHoursMl).toFixed(2)} (${armingFeeWeiMl} wei ${tokenInfo.symbol})`);
+
         // Each leg withdraws its slice → swaps → re-deposits the output into the asset_out vault.
         const multi = strategyKind === 'TWAP'
-          ? await buildTwapLegs({ chainId: fromChainId, inToken: tokenInfo, outToken: outTokenMl, sliceCount, intervalSec: bounds.interval_sec ?? 60, clientKeyHex: clientKey, submitSplit })
-          : await buildGridLegs({ chainId: fromChainId, inToken: tokenInfo, outToken: outTokenMl, low: bounds.lower_bound ?? 0, high: bounds.upper_bound ?? 0, levels: sliceCount, clientKeyHex: clientKey, submitSplit });
+          ? await buildTwapLegs({ chainId: fromChainId, inToken: tokenInfo, outToken: outTokenMl, sliceCount, intervalSec: bounds.interval_sec ?? 60, clientKeyHex: clientKey, submitSplit, armingFeeWei: armingFeeWeiMl })
+          : await buildGridLegs({ chainId: fromChainId, inToken: tokenInfo, outToken: outTokenMl, low: bounds.lower_bound ?? 0, high: bounds.upper_bound ?? 0, levels: sliceCount, clientKeyHex: clientKey, submitSplit, armingFeeWei: armingFeeWeiMl });
 
         addLog(`Submitting ${multi.legs.length}-leg ${strategyKind}…`);
         const mlResult = await submitEncryptedStrategy({
@@ -732,6 +751,8 @@ export default function DetailsModal({
           schedule_anchor: multi.scheduleAnchor,
           is_private: true,
           output_mode: 'vault' as const,
+          arming_fee_wei: multi.armingFeeWei,
+          arming_precommitment: multi.armingPrecommitment,
           from_chain: String(fromChainId),
           to_chain: String(toChainId ?? fromChainId),
         }, {
