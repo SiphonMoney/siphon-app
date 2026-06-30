@@ -1033,20 +1033,22 @@ export async function generateZKData(
     leafIndex: number;
   }
   const candidates: CandidateNote[] = [];
+  // Diagnostics: explain a "Have 0.0" instead of failing opaquely.
+  const diag = { metas: noteMetas.length, spent: 0, unreadable: 0, zero: 0, nullified: 0, ghost: 0, ok: 0, noSigner: !_zkSigner };
 
   for (const meta of noteMetas) {
     const key = meta.key;
     // TWAP/grid: spend exactly the named slice note, not a greedy mix of others.
     if (_noteKey && key !== _noteKey) continue;
     if (!meta.commitment || !meta.amount) continue;
-    if (meta.spent === true || meta.spent === 'true') continue;
+    if (meta.spent === true || meta.spent === 'true') { diag.spent++; continue; }
 
     const data = _zkSigner ? await readNote(key, _zkSigner) : null;
-    if (!data) continue;
+    if (!data) { diag.unreadable++; continue; } // metadata-only / undecryptable (no spendable secret)
 
     try {
       const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _token.decimals).toString());
-      if (amountWei === 0n) continue;
+      if (amountWei === 0n) { diag.zero++; continue; }
 
       // Nullifier spent check
       if (data.nullifier) {
@@ -1054,6 +1056,7 @@ export async function generateZKData(
         const isSpent = await vaultForNullifier.nullifiers(BigInt(nullifierHash));
         if (isSpent) {
           markNoteSpent(key);
+          diag.nullified++;
           continue;
         }
       }
@@ -1063,14 +1066,19 @@ export async function generateZKData(
       const foundIndex = leaves.findIndex(leaf => leaf === commitment);
       if (foundIndex === -1) {
         console.warn("⚠️ Ghost Deposit (not on-chain):", key);
+        diag.ghost++;
         continue;
       }
 
       candidates.push({ key, data: { ...data, precommitment: data.precommitment ?? '' }, amountWei, leafIndex: foundIndex });
+      diag.ok++;
     } catch (e) {
       console.warn("Failed to process note", key, e);
     }
   }
+
+  console.log(`[withdraw] ${_token.symbol} note triage:`, diag,
+    '— unreadable = metadata-only/undecryptable (no secret); ghost = commitment not in on-chain leaf set');
 
   // Sort descending by amount — greedy fill
   candidates.sort((a, b) => (a.amountWei > b.amountWei ? -1 : a.amountWei < b.amountWei ? 1 : 0));
@@ -1085,6 +1093,12 @@ export async function generateZKData(
   }
 
   if (accumulated < withdrawnValueTotal) {
+    if (diag.noSigner) {
+      return { error: `Wallet not connected for note decryption — reconnect and retry.` };
+    }
+    if (diag.ok === 0 && diag.unreadable > 0) {
+      return { error: `Found ${diag.unreadable} ${_token.symbol} note(s) but their secrets aren't on this device (metadata-only). Restore via Import Notes, or these funds came from a swap whose secret wasn't saved.` };
+    }
     return { error: `Insufficient balance. Have ${ethers.formatUnits(accumulated, _token.decimals)}, need ${_amount}.` };
   }
 
