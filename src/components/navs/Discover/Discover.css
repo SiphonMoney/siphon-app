@@ -2112,8 +2112,10 @@ body.strategy-modal-open {
 }
 
 .strategy-step-select option {
-  background: rgba(0, 0, 0, 0.95);
-  color: rgba(255, 255, 255, 0.9);
+  /* Solid (non-alpha) colors — some browsers flatten rgba option backgrounds to
+     white, which made the white option text invisible. */
+  background: #0b0b0f;
+  color: #ffffff;
 }
 
 .strategy-step-select option[value=""] {
@@ -3423,6 +3425,13 @@ body.strategy-modal-open {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.88);
   cursor: pointer;
+}
+
+.builder-run-receipt-duration option {
+  /* Explicit solid colors so the native popup isn't white-on-white on browsers
+     that render <option> with a white system background. */
+  background: #0b0b0f;
+  color: #ffffff;
 }
 
 .builder-run-receipt-steps-wrap {

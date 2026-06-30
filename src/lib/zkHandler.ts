@@ -105,7 +105,15 @@ export function getReadProvider(chainId?: number): ethers.Provider {
   const rpcUrl = getReadProviderRpcUrl(net.chainId);
   const network = Network.from(net.chainId);
   if (rpcUrl) {
-    const provider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
+    // batchMaxCount: 10 — ethers v6 auto-batches up to 100 JSON-RPC calls per HTTP
+    // request, but the public Base RPC (and most free tiers) reject any batch >10 with
+    // "-32014 maximum 10 calls in 1 batch", which failed the WHOLE balance reconcile →
+    // "No funds detected". Cap at 10 so batching still cuts round-trips ~10x while
+    // staying under the limit. A paid BASE_MAINNET_RPC allows far more but 10 is safe.
+    const provider = new ethers.JsonRpcProvider(rpcUrl, network, {
+      staticNetwork: network,
+      batchMaxCount: 10,
+    });
     readProviderCache.set(net.chainId, provider);
     return provider;
   }
@@ -385,6 +393,45 @@ export async function getLeafSet(tokenAddress: string, chainId?: number): Promis
   }
 }
 
+// Multicall3 — same canonical address on Base, Sepolia, and ~every EVM chain. Lets us check
+// many nullifiers in ONE eth_call instead of one round-trip per note.
+const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
+const MULTICALL3_ABI = [
+  'function aggregate3((address target, bool allowFailure, bytes callData)[] calls) view returns ((bool success, bytes returnData)[] returnData)',
+];
+
+/**
+ * Batch `vault.nullifiers(hash)` lookups into a single Multicall3 call. Returns a boolean per
+ * input hash (true = spent). On any failure, falls back to "not spent" for that entry so a
+ * flaky check never hides a real note.
+ */
+async function checkNullifiersSpent(
+  provider: ethers.Provider,
+  vault: Contract,
+  vaultAddress: string,
+  nullifierHashes: string[],
+): Promise<boolean[]> {
+  if (nullifierHashes.length === 0) return [];
+  const mc = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, provider);
+  const calls = nullifierHashes.map((h) => ({
+    target: vaultAddress,
+    allowFailure: true,
+    callData: vault.interface.encodeFunctionData('nullifiers', [BigInt(h)]),
+  }));
+  const results: Array<{ success: boolean; returnData: string }> = await withRetry(() =>
+    mc.aggregate3(calls),
+  );
+  return results.map((r) => {
+    if (!r.success) return false;
+    try {
+      const [spent] = vault.interface.decodeFunctionResult('nullifiers', r.returnData);
+      return Boolean(spent);
+    } catch {
+      return false;
+    }
+  });
+}
+
 export async function getSpendableVaultBalance(
   chainId: number,
   tokenMap: Record<string, TokenMeta>,
@@ -425,23 +472,41 @@ export async function getSpendableVaultBalance(
       continue;
     }
 
+    // Candidate notes that are actually on-chain (commitment in the leaf set), deduped.
     const counted = new Set<string>();
+    const candidates: Array<{ commitment: string; nullifierHash?: string; amount: string }> = [];
     for (const n of notes) {
       if (!n.commitment || !leaves.has(n.commitment)) continue; // phantom / not on-chain
       if (counted.has(n.commitment)) continue;                   // dedupe stale duplicate keys
-      if (n.nullifierHash) {
-        try {
-          if (await vault.nullifiers(BigInt(n.nullifierHash))) {
-            // Nullifier is spent on-chain — mark it spent without touching encrypted fields.
-            const { markNoteSpent } = await import('./localNoteStore');
-            markNoteSpent(`${chainId}-${sym}-${n.commitment}`);
-            continue; // already withdrawn
-          }
-        } catch { /* if the check fails, fall through and count it */ }
-      }
-      const amt = parseFloat(n.amount);
-      if (!Number.isFinite(amt)) continue;
       counted.add(n.commitment);
+      candidates.push({ commitment: n.commitment, nullifierHash: n.nullifierHash, amount: n.amount });
+    }
+
+    // One Multicall3 round-trip for every nullifier check (was one eth_call per note → slow,
+    // and the per-call batch is what tripped the RPC's 10-per-batch cap).
+    const withNh = candidates.filter((c) => c.nullifierHash);
+    let spentByNh = new Map<string, boolean>();
+    try {
+      const flags = await checkNullifiersSpent(
+        getReadProvider(chainId),
+        vault,
+        await vault.getAddress(),
+        withNh.map((c) => c.nullifierHash!),
+      );
+      withNh.forEach((c, i) => spentByNh.set(c.nullifierHash!, flags[i] ?? false));
+    } catch (e) {
+      console.warn(`[balance] nullifier multicall failed for ${sym}, counting as unspent:`, e);
+      spentByNh = new Map(); // treat all as unspent → never hides a real note
+    }
+
+    const { markNoteSpent } = await import('./localNoteStore');
+    for (const c of candidates) {
+      if (c.nullifierHash && spentByNh.get(c.nullifierHash)) {
+        markNoteSpent(`${chainId}-${sym}-${c.commitment}`); // already withdrawn on-chain
+        continue;
+      }
+      const amt = parseFloat(c.amount);
+      if (!Number.isFinite(amt)) continue;
       totalBalance += amt;
       details[sym] = (details[sym] || 0) + amt;
     }

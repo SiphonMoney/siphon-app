@@ -1130,7 +1130,7 @@ export default function DetailsModal({
                     <dd>
                       {(FEE.EXEC_BPS / 100).toFixed(2)}% of trade
                       <span className="builder-run-receipt-cost-sub">
-                        min ${FEE.MIN_EXEC_USD.toFixed(2)} + ${FEE.GAS_REIMBURSE_USD.toFixed(2)} gas · taken from each leg
+                        min ${(FEE.MIN_EXEC_USD + FEE.GAS_REIMBURSE_USD).toFixed(2)} per fill
                       </span>
                     </dd>
                   </div>
