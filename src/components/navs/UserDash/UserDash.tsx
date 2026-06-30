@@ -90,8 +90,22 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         /* server notes optional */
       }
     }
-    const { details } = await getSpendableVaultBalance(activeChainId, TOKEN_MAP);
-    const local = getLocalVaultNoteTotals(activeChainId);
+    // On-chain reconcile refines the balance (drops spent / not-yet-indexed notes), but a
+    // throttled RPC must never leave the panel stuck on "Updating…". Cap it with a timeout and
+    // fall back to local note totals (computed from localStorage, no RPC) on any failure.
+    let details: Record<string, number> = {};
+    try {
+      const reconciled = await Promise.race([
+        getSpendableVaultBalance(activeChainId, TOKEN_MAP),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error('balance scan timeout')), 12_000),
+        ),
+      ]);
+      details = reconciled.details;
+    } catch (e) {
+      console.warn('[balance] on-chain reconcile unavailable, showing local note totals:', e);
+    }
+    const local = getLocalVaultNoteTotals(activeChainId); // after reconcile so spent-marks apply
     const display: Record<string, number> = {};
     for (const sym of ['ETH', 'USDC']) {
       const onChain = details[sym] ?? 0;
