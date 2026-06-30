@@ -210,30 +210,37 @@ async function buildLegsFromSplit(
   const executor = getZkWithdrawRecipient(chainId); // proofs withdraw to the executor wallet
   const signer = getSigner() ?? undefined;
 
-  // Part A: fetch a protocol precommitment for the arming-fee slice (best-effort — if the pool is
-  // empty or fees are off, fall back to no fee slice so creation never blocks).
-  let feeSlice: { amountWei: bigint; precommitment: string } | undefined;
+  // Part A — upfront arming fee. The split circuit needs every output's secret, so a protocol-owned
+  // fee SLICE is impossible; instead collect the arming fee as a SEPARATE shielded deposit into the
+  // fee-vault with a protocol precommitment (deposit() only needs the precommitment, not the secret).
+  // Best-effort: if the pool is empty / it reverts, strategy creation continues without the fee.
   let armingPrecommitment: string | undefined;
-  if (armingFeeWei > 0n) {
+  let armingCollectedWei = 0n;
+  if (armingFeeWei > 0n && signer) {
     try {
       const r = await fetch(`${getTradeExecutorBaseUrl()}/fee-pool/next?chain_id=${chainId}&asset=${inToken.symbol}`);
       const j = await r.json();
       if (j?.precommitment) {
-        feeSlice = { amountWei: armingFeeWei, precommitment: String(j.precommitment) };
+        const net = getNetwork(chainId);
+        const asset = inToken.symbol === "ETH" ? NATIVE_TOKEN : inToken.address;
+        const ep = new Contract(net.entrypoint, ["function deposit(address,uint256,uint256) payable returns (uint256)"], signer);
+        const tx = await ep.deposit(asset, armingFeeWei, BigInt(j.precommitment),
+          inToken.symbol === "ETH" ? { value: armingFeeWei } : {});
+        await tx.wait();
         armingPrecommitment = String(j.precommitment);
+        armingCollectedWei = armingFeeWei;
       }
-    } catch { /* pool unavailable — skip the arming fee this time */ }
+    } catch (e) { console.warn("[Fee] arming-fee deposit skipped:", e); }
   }
 
-  // 1. Split one deposit note into N slice notes (+ optional protocol fee slice), private, on-chain.
-  const split = await generateSplitProof(chainId, inToken, sliceCount, undefined, feeSlice);
+  // 1. Split one deposit note into N slice notes (private, on-chain).
+  const split = await generateSplitProof(chainId, inToken, sliceCount);
   if ("error" in split) throw new Error(`split proof failed: ${split.error}`);
   const { txHash: splitTxHash, sliceNoteKeys } = await submitSplit(split);
   if (sliceNoteKeys.length < sliceCount) {
     throw new Error(`split produced ${sliceNoteKeys.length} slice notes, need ${sliceCount}`);
   }
-  // User slices only (the fee slice has no nullifier and is skipped in submitSplit).
-  const userSlices = split.slices.filter((s) => s.nullifier);
+  const userSlices = split.slices;
 
   // 2+3+4. Per slice: withdraw proof (this slice → executor) + output vault note + encrypted trigger.
   const legs: BuiltLeg[] = [];
@@ -260,7 +267,7 @@ async function buildLegsFromSplit(
 
   return {
     legs, splitTxHash, scheduleAnchor,
-    armingFeeWei: armingPrecommitment ? armingFeeWei.toString() : undefined,
+    armingFeeWei: armingPrecommitment ? armingCollectedWei.toString() : undefined,
     armingPrecommitment,
   };
 }
