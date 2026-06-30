@@ -705,22 +705,17 @@ export default function DetailsModal({
       if (strategyKind === 'TWAP' || strategyKind === 'Range') {
         const outTokenMl = tokenMap[(assetOut || '').toUpperCase()];
         if (!outTokenMl) throw new Error(`Unsupported output asset: ${assetOut}`);
-        const net = getNetwork(fromChainId);
         const sliceCount = strategyKind === 'TWAP' ? (bounds.slices ?? 0) : (bounds.grid_levels ?? 0);
         if (!sliceCount || sliceCount < 2) throw new Error(`Need ≥2 ${strategyKind === 'TWAP' ? 'slices' : 'grid levels'}`);
 
         addLog(`Splitting deposit into ${sliceCount} ${strategyKind === 'TWAP' ? 'slices' : 'rungs'} + building proofs…`);
         const clientKey = await getOrCreateClientKey(recipient);
-        const inAddr = tokenInfo.symbol === 'ETH' ? NATIVE_TOKEN : tokenInfo.address;
-        const outAddr = outTokenMl.symbol === 'ETH' ? NATIVE_TOKEN : outTokenMl.address;
-        const { pool, fee } = await resolveSwapPool(fromChainId, inAddr, outAddr, 3000);
-        const dstToken = outTokenMl.symbol === 'ETH' ? net.weth : outTokenMl.address;
-        const swap = { pool, dstToken, fee, minAmountOut: 0n };
         const submitSplit = (s: Parameters<typeof submitSplitOnChain>[2]) => submitSplitOnChain(fromChainId, tokenInfo, s);
 
+        // Each leg withdraws its slice → swaps → re-deposits the output into the asset_out vault.
         const multi = strategyKind === 'TWAP'
-          ? await buildTwapLegs({ chainId: fromChainId, inToken: tokenInfo, sliceCount, intervalSec: bounds.interval_sec ?? 60, swap, recipient, clientKeyHex: clientKey, submitSplit })
-          : await buildGridLegs({ chainId: fromChainId, inToken: tokenInfo, low: bounds.lower_bound ?? 0, high: bounds.upper_bound ?? 0, levels: sliceCount, swap, recipient, clientKeyHex: clientKey, submitSplit });
+          ? await buildTwapLegs({ chainId: fromChainId, inToken: tokenInfo, outToken: outTokenMl, sliceCount, intervalSec: bounds.interval_sec ?? 60, clientKeyHex: clientKey, submitSplit })
+          : await buildGridLegs({ chainId: fromChainId, inToken: tokenInfo, outToken: outTokenMl, low: bounds.lower_bound ?? 0, high: bounds.upper_bound ?? 0, levels: sliceCount, clientKeyHex: clientKey, submitSplit });
 
         addLog(`Submitting ${multi.legs.length}-leg ${strategyKind}…`);
         const mlResult = await submitEncryptedStrategy({
@@ -736,6 +731,7 @@ export default function DetailsModal({
           max_slippage_bps: bounds.max_slippage_bps,
           schedule_anchor: multi.scheduleAnchor,
           is_private: true,
+          output_mode: 'vault' as const,
           from_chain: String(fromChainId),
           to_chain: String(toChainId ?? fromChainId),
         }, {

@@ -783,7 +783,8 @@ export async function generateZKData(
   _token: TokenInfo,
   _amount: string,
   _recipient: string,
-  _swap?: SwapBinding
+  _swap?: SwapBinding,
+  _noteKey?: string,   // restrict spend to ONE specific note (TWAP/grid slice)
 ): Promise<ZKData | { error: string }> {
   console.log("generateZKData() called", { _chainId, _token: _token.symbol, _amount, _recipient, _swap });
 
@@ -913,6 +914,8 @@ export async function generateZKData(
 
   for (const meta of noteMetas) {
     const key = meta.key;
+    // TWAP/grid: spend exactly the named slice note, not a greedy mix of others.
+    if (_noteKey && key !== _noteKey) continue;
     if (!meta.commitment || !meta.amount) continue;
     if (meta.spent === true || meta.spent === 'true') continue;
 

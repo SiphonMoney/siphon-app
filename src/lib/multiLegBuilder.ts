@@ -23,17 +23,18 @@
 import { ethers, Contract } from "ethers";
 import {
   generateSplitProof,
-  generateSwapProof,
+  generateZKData,
   invalidateLeafCache,
   type TokenInfo,
   type SwapBinding,
   type SplitProofData,
-  type SwapProofData,
+  type ZKData,
 } from "./zkHandler";
 import { computeRangeGridLegs } from "./strategySpec";
 import { encryptPrice, encryptPriceCents } from "./fhe";
-import { getNetwork, NATIVE_TOKEN } from "./networks";
+import { getNetwork, NATIVE_TOKEN, getZkWithdrawRecipient } from "./networks";
 import { getSigner } from "./nexus";
+import { createVaultOutputNote } from "./outputNoteResolver";
 import { writeNote, markNoteSpent } from "./localNoteStore";
 
 // The bundled Entrypoint.json predates the split() upgrade, so declare split explicitly.
@@ -143,18 +144,19 @@ export interface BuiltLeg {
   target_price?: number;          // grid rung price (reference)
   encrypted_upper_bound?: string; // sell-rung price band
   encrypted_lower_bound?: string; // buy-rung price band  OR  TWAP encrypted fire-time
+  // Each leg re-deposits its swap output into the asset_out vault as a private note; this is that
+  // note's precommitment (the executor mints Poseidon(actualOut, precommitment) on deposit).
+  output_precommitment: string;
+  // A single-slice WITHDRAW proof (executor withdraws this slice → swaps → re-deposits to vault).
   zk_proof: {
     pA: [string, string];
     pB: [[string, string], [string, string]];
     pC: [string, string];
     stateRoot: string;
     nullifierHashes: string[];    // one slice note spent per leg
-    newCommitment: string;
-    pool: string;
-    dstToken: string;
-    fee: number;
-    minAmountOut: string;
-    amountIn: string;
+    changeCommitment: string;
+    newCommitment: string;        // == changeCommitment (backend reads either)
+    amount: string;               // withdrawn value (slice amount, wei)
   };
 }
 
@@ -164,42 +166,42 @@ export interface MultiLegResult {
   scheduleAnchor: number;         // unix seconds the TWAP fire-times were computed against
 }
 
-/** A swap proof → the leg's zk_proof wire shape (single slice note ⇒ 1-element nullifier array). */
-function swapProofToLegProof(p: SwapProofData): BuiltLeg["zk_proof"] {
+/** A single-slice withdraw proof → the leg's zk_proof wire shape. */
+function withdrawProofToLegProof(tx: ZKData["withdrawalTxData"]): BuiltLeg["zk_proof"] {
   return {
-    pA: p.pA,
-    pB: p.pB,
-    pC: p.pC,
-    stateRoot: p.stateRoot,
-    nullifierHashes: [p.nullifier],
-    newCommitment: p.newCommitment,
-    pool: p.pool,
-    dstToken: p.dstToken,
-    fee: p.fee,
-    minAmountOut: p.minAmountOut,
-    amountIn: p.amountIn,
+    pA: tx.pA,
+    pB: tx.pB,
+    pC: tx.pC,
+    stateRoot: tx.stateRoot,
+    nullifierHashes: tx.nullifierHashes,
+    changeCommitment: tx.changeCommitment,
+    newCommitment: tx.changeCommitment,
+    amount: tx.amount,
   };
 }
 
 /**
- * Split the deposit, then build one swap proof per slice. Shared by TWAP + Grid; the caller
- * supplies the per-leg encrypted bound via `encryptLeg(legIndex, sliceAmountHuman)`.
+ * Split the deposit, then build one WITHDRAW proof per slice (matching the single-strategy
+ * main-branch flow). Each leg's proof is bound to the executor: the executor withdraws that
+ * slice → swaps asset_in→asset_out → re-deposits the output into the asset_out vault as a private
+ * note (output_precommitment). Shared by TWAP + Grid; the caller supplies the per-leg encrypted
+ * bound via `encryptLeg(legIndex, sliceAmountHuman)`.
  *
- * `submitSplit` must broadcast Entrypoint.split(splitProof) and resolve once the slice
- * commitments are on-chain leaves (so the subsequent swap proofs can prove membership). It also
- * must persist the slice notes to the local note store keyed `${chainId}-${symbol}-${commitment}`
- * so generateSwapProof can find them by note key.
+ * `submitSplit` must broadcast Entrypoint.split(splitProof), resolve once the slice commitments
+ * are on-chain leaves, and persist the slice notes to the local note store keyed
+ * `${chainId}-${symbol}-${commitment}` so generateZKData can spend them by note key.
  */
 async function buildLegsFromSplit(
   chainId: number,
   inToken: TokenInfo,
+  outToken: TokenInfo,
   sliceCount: number,
-  swap: SwapBinding,
-  recipient: string,
   encryptLeg: (legIndex: number, sliceAmountHuman: string) => Promise<Pick<BuiltLeg, "encrypted_upper_bound" | "encrypted_lower_bound" | "side" | "eval_mode" | "target_price">>,
   submitSplit: (split: SplitProofData) => Promise<{ txHash: string; sliceNoteKeys: string[] }>,
 ): Promise<MultiLegResult> {
   const scheduleAnchor = Math.floor(Date.now() / 1000);
+  const executor = getZkWithdrawRecipient(chainId); // proofs withdraw to the executor wallet
+  const signer = getSigner() ?? undefined;
 
   // 1. Split one deposit note into N slice notes (private, on-chain).
   const split = await generateSplitProof(chainId, inToken, sliceCount);
@@ -209,22 +211,26 @@ async function buildLegsFromSplit(
     throw new Error(`split produced ${sliceNoteKeys.length} slice notes, need ${sliceCount}`);
   }
 
-  // 2+3. Per slice: swap proof + encrypted trigger.
+  // 2+3+4. Per slice: withdraw proof (this slice → executor) + output vault note + encrypted trigger.
   const legs: BuiltLeg[] = [];
   for (let i = 0; i < sliceCount; i++) {
     const noteKey = sliceNoteKeys[i];
     const slice = split.slices[i];
     const sliceAmountHuman = ethers.formatUnits(slice.amountWei, inToken.decimals);
 
-    const proof = await generateSwapProof(chainId, inToken, sliceAmountHuman, recipient, swap, noteKey);
-    if ("error" in proof) throw new Error(`leg ${i} swap proof failed: ${proof.error}`);
+    const zk = await generateZKData(chainId, inToken, sliceAmountHuman, executor, undefined, noteKey);
+    if ("error" in zk) throw new Error(`leg ${i} withdraw proof failed: ${zk.error}`);
+
+    // One private asset_out note per leg; the executor mints it on re-deposit.
+    const out = await createVaultOutputNote(chainId, outToken, signer);
 
     const bound = await encryptLeg(i, sliceAmountHuman);
     legs.push({
       leg_index: i,
       amount: parseFloat(sliceAmountHuman),
       ...bound,
-      zk_proof: swapProofToLegProof(proof),
+      output_precommitment: out.precommitment,
+      zk_proof: withdrawProofToLegProof(zk.withdrawalTxData),
     });
   }
 
@@ -238,14 +244,13 @@ async function buildLegsFromSplit(
 export async function buildTwapLegs(opts: {
   chainId: number;
   inToken: TokenInfo;
+  outToken: TokenInfo;
   sliceCount: number;
   intervalSec: number;
-  swap: SwapBinding;
-  recipient: string;
   clientKeyHex: string;
   submitSplit: (split: SplitProofData) => Promise<{ txHash: string; sliceNoteKeys: string[] }>;
 }): Promise<MultiLegResult> {
-  const { chainId, inToken, sliceCount, intervalSec, swap, recipient, clientKeyHex, submitSplit } = opts;
+  const { chainId, inToken, outToken, sliceCount, intervalSec, clientKeyHex, submitSplit } = opts;
   const anchor = Math.floor(Date.now() / 1000);
   const encryptLeg = async (i: number) => {
     // Encode the fire-time RELATIVE to the schedule anchor (k*interval seconds), so values stay
@@ -257,7 +262,7 @@ export async function buildTwapLegs(opts: {
       encrypted_lower_bound: await encryptPriceCents(fireOffset, clientKeyHex),
     };
   };
-  const res = await buildLegsFromSplit(chainId, inToken, sliceCount, swap, recipient, encryptLeg, submitSplit);
+  const res = await buildLegsFromSplit(chainId, inToken, outToken, sliceCount, encryptLeg, submitSplit);
   return { ...res, scheduleAnchor: anchor };
 }
 
@@ -268,15 +273,14 @@ export async function buildTwapLegs(opts: {
 export async function buildGridLegs(opts: {
   chainId: number;
   inToken: TokenInfo;
+  outToken: TokenInfo;
   low: number;
   high: number;
   levels: number;
-  swap: SwapBinding;
-  recipient: string;
   clientKeyHex: string;
   submitSplit: (split: SplitProofData) => Promise<{ txHash: string; sliceNoteKeys: string[] }>;
 }): Promise<MultiLegResult> {
-  const { chainId, inToken, low, high, levels, swap, recipient, clientKeyHex, submitSplit } = opts;
+  const { chainId, inToken, outToken, low, high, levels, clientKeyHex, submitSplit } = opts;
   const rungs = computeRangeGridLegs(low, high, levels);
   const encryptLeg = async (i: number) => {
     const rung = rungs[i];
@@ -285,5 +289,5 @@ export async function buildGridLegs(opts: {
       ? { eval_mode: "price" as const, side: "LIMIT_BUY" as const, target_price: rung.price, encrypted_lower_bound: encBound }
       : { eval_mode: "price" as const, side: "LIMIT_SELL" as const, target_price: rung.price, encrypted_upper_bound: encBound };
   };
-  return buildLegsFromSplit(chainId, inToken, levels, swap, recipient, encryptLeg, submitSplit);
+  return buildLegsFromSplit(chainId, inToken, outToken, levels, encryptLeg, submitSplit);
 }

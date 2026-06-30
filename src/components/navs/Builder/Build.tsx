@@ -799,7 +799,6 @@ export default function Build({
       try {
         const outToken = TOKEN_CONFIG[assetOut];
         if (!outToken) { showAppToast(`Unsupported output asset: ${assetOut}`, 'error'); return; }
-        const net = getNetwork(CHAIN_ID);
         const sliceCount = strategyKind === 'TWAP'
           ? (payloadBounds.slices ?? 0)
           : (payloadBounds.grid_levels ?? 0);
@@ -810,23 +809,20 @@ export default function Build({
 
         showAppToast(`Splitting deposit into ${sliceCount} ${strategyKind === 'TWAP' ? 'slices' : 'rungs'} + building proofs…`, 'info', 10000);
         const clientKey = await getOrCreateClientKey(recipient);
-        const inAddr  = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
-        const outAddr = outToken.symbol === 'ETH' ? NATIVE_TOKEN : outToken.address;
-        const { pool, fee } = await resolveSwapPool(CHAIN_ID, inAddr, outAddr, 3000);
-        const dstToken = outToken.symbol === 'ETH' ? net.weth : outToken.address;
-        const swap = { pool, dstToken, fee, minAmountOut: 0n };
         const submitSplit = (s: Parameters<typeof submitSplitOnChain>[2]) => submitSplitOnChain(CHAIN_ID, token, s);
 
+        // Each leg withdraws its slice → swaps → re-deposits the output into the asset_out vault
+        // as a private note (output_mode='vault'), matching the single-strategy shielded flow.
         const multi = strategyKind === 'TWAP'
           ? await buildTwapLegs({
-              chainId: CHAIN_ID, inToken: token, sliceCount,
+              chainId: CHAIN_ID, inToken: token, outToken, sliceCount,
               intervalSec: payloadBounds.interval_sec ?? 60,
-              swap, recipient, clientKeyHex: clientKey, submitSplit,
+              clientKeyHex: clientKey, submitSplit,
             })
           : await buildGridLegs({
-              chainId: CHAIN_ID, inToken: token,
+              chainId: CHAIN_ID, inToken: token, outToken,
               low: payloadBounds.lower_bound ?? 0, high: payloadBounds.upper_bound ?? 0,
-              levels: sliceCount, swap, recipient, clientKeyHex: clientKey, submitSplit,
+              levels: sliceCount, clientKeyHex: clientKey, submitSplit,
             });
 
         const mlStrategyData = {
@@ -843,6 +839,7 @@ export default function Build({
           max_slippage_bps:  payloadBounds.max_slippage_bps,
           schedule_anchor:   multi.scheduleAnchor,
           is_private:        true,
+          output_mode:       'vault' as const,
           to_chain:          toChain,
           from_chain:        String(getSelectedChainId()),
         };
