@@ -8,6 +8,9 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+const PROVING_RELAYER_URL = process.env.PROVING_RELAYER_URL || '';
+const RELAYER_API_TOKEN   = process.env.RELAYER_API_TOKEN   || '';
+
 const ZK_BUILD_DIR   = process.env.ZK_BUILD_DIR   || '/Users/adityamane/Siphon_Money/Siphon/siphon-zk/circuits/build';
 const RAPIDSNARK_BIN = process.env.RAPIDSNARK_BIN || '/opt/homebrew/bin/rapidsnark';
 const ZKEY_PATH      = join(ZK_BUILD_DIR, 'zkey_final.zkey');
@@ -15,6 +18,26 @@ const WASM_PATH      = join(ZK_BUILD_DIR, 'main_js/main.wasm');
 const GEN_WITNESS_JS = join(ZK_BUILD_DIR, 'main_js/generate_witness.js');
 
 export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { inputs, circuit } = body;
+  if (!inputs || typeof inputs !== 'object') {
+    return NextResponse.json({ error: 'Missing inputs' }, { status: 400 });
+  }
+
+  if (PROVING_RELAYER_URL) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (RELAYER_API_TOKEN) headers['X-API-TOKEN'] = RELAYER_API_TOKEN;
+
+    const upstream = await fetch(`${PROVING_RELAYER_URL}/prove`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ inputs, circuit }),
+    });
+
+    const payload = await upstream.json().catch(() => ({}));
+    return NextResponse.json(payload, { status: upstream.status });
+  }
+
   const id = randomBytes(8).toString('hex');
   const tmpDir = join(tmpdir(), `siphon-prove-${id}`);
 
@@ -24,23 +47,15 @@ export async function POST(req: NextRequest) {
   const publicPath  = join(tmpDir, 'public.json');
 
   try {
-    const body = await req.json();
-    const { inputs } = body;
-    if (!inputs) {
-      return NextResponse.json({ error: 'Missing inputs' }, { status: 400 });
-    }
-
     await mkdir(tmpDir, { recursive: true });
     await writeFile(inputPath, JSON.stringify(inputs));
 
-    // Step 1: generate witness
     const t0 = Date.now();
     await execFileAsync('node', [GEN_WITNESS_JS, WASM_PATH, inputPath, witnessPath], {
       timeout: 30_000,
     });
     const witnessMs = Date.now() - t0;
 
-    // Step 2: rapidsnark prove
     const t1 = Date.now();
     await execFileAsync(RAPIDSNARK_BIN, [ZKEY_PATH, witnessPath, proofPath, publicPath], {
       timeout: 60_000,
@@ -64,7 +79,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Proof generation failed' }, { status: 500 });
 
   } finally {
-    // clean up temp files
     await Promise.allSettled([
       unlink(inputPath).catch(() => {}),
       unlink(witnessPath).catch(() => {}),

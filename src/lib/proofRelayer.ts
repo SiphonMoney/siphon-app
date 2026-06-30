@@ -4,21 +4,7 @@ import { buildPoseidon } from 'circomlibjs';
 // @ts-ignore
 import { proofToCalldata } from './generateProof';
 
-const RELAYER_URL = process.env.NEXT_PUBLIC_PROVING_RELAYER_URL || '';
-const SIGN_MESSAGE_BASE = 'Siphon note encryption v1';
-
-async function getRelayerAuthHeaders(signer: Signer): Promise<Record<string, string>> {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const message = `${SIGN_MESSAGE_BASE}:${timestamp}`;
-  const signature: string = await signer.signMessage(message);
-  const wallet: string = await signer.getAddress();
-  return {
-    'X-Wallet-Address': wallet.toLowerCase(),
-    'X-Signature': signature,
-    'X-Timestamp': timestamp,
-    'Content-Type': 'application/json',
-  };
-}
+const PROVE_URL = '/api/prove';
 
 export async function prepareWithdrawalTransactionRemote(params: {
   existingValue: string;
@@ -32,6 +18,8 @@ export async function prepareWithdrawalTransactionRemote(params: {
   recipient: string;
   stateRoot: string;
 }, signer: Signer) {
+  void signer;
+
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
 
@@ -62,14 +50,9 @@ export async function prepareWithdrawalTransactionRemote(params: {
     pathIndices:       params.pathIndices,
   };
 
-  const proveUrl = RELAYER_URL ? `${RELAYER_URL}/prove` : '/api/prove';
-  const headers = RELAYER_URL
-    ? await getRelayerAuthHeaders(signer)
-    : { 'Content-Type': 'application/json' };
-
-  const res = await fetch(proveUrl, {
+  const res = await fetch(PROVE_URL, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ inputs }),
   });
 
