@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaderEntries } from "./src/lib/botProtection";
 
 const nextConfig: NextConfig = {
   // Don't fail the production build on lint/type issues. The app runs fine in dev; these are
@@ -10,13 +11,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [
-          {
-            key: "X-Robots-Tag",
-            value:
-              "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate",
-          },
-        ],
+        headers: securityHeaderEntries(),
       },
     ];
   },

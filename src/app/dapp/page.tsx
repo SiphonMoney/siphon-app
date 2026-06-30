@@ -113,6 +113,7 @@ export default function DappPage() {
           >
             <div
               className="dapp-main-container"
+              data-sensitive
               style={{
                 height: "100%",
                 display: "flex",
