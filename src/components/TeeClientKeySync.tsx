@@ -14,22 +14,43 @@ export default function TeeClientKeySync() {
   useEffect(() => {
     if (!isTeeAutonomousMode()) return;
 
-    const sync = async () => {
+    let done = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    // Returns true once the key is synced (or there's genuinely nothing to sync yet).
+    const sync = async (): Promise<boolean> => {
       const userId = resolveWalletAddress();
-      if (!userId) return;
+      if (!userId) return false; // wallet not connected yet — keep polling
       const clientKey = getStoredClientKey(userId);
-      if (!clientKey) return;
+      if (!clientKey) return false; // no key for this wallet yet (e.g. before first strategy)
       try {
         await ensureClientKeyInDecryptor(userId, clientKey);
         console.log("[TEE] Client key synced to confidential VM");
+        return true;
       } catch (e) {
-        console.warn("[TEE] Client key sync failed:", e);
+        console.warn("[TEE] Client key sync failed (will retry):", e);
+        return false;
       }
     };
 
-    void sync();
-    window.addEventListener("walletConnected", sync);
-    return () => window.removeEventListener("walletConnected", sync);
+    // MetaMask auto-reconnect can land after mount and won't always fire walletConnected,
+    // and the decryptor (in-memory keys) may have restarted — so poll until the key is synced.
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const tick = async () => {
+      if (done) return;
+      if (await sync()) { done = true; stop(); }
+    };
+
+    void tick();
+    timer = setInterval(tick, 3000); // retry every 3s
+    // Stop polling after ~2 min so we don't loop forever if the user never connects.
+    const giveUp = setTimeout(stop, 120_000);
+    window.addEventListener("walletConnected", tick);
+    return () => {
+      stop();
+      clearTimeout(giveUp);
+      window.removeEventListener("walletConnected", tick);
+    };
   }, []);
 
   return null;
