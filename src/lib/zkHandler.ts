@@ -296,6 +296,25 @@ function purgeStaleLeafScanCache(): void {
   } catch { /* ignore */ }
 }
 
+/**
+ * True while an auto-merge for `symbol` is in flight — a `merge-hint-*` entry exists (written when
+ * the merge tx is sent, removed after the consolidated note is persisted). During this window the
+ * input notes are already spent but the merged output leaf isn't selectable yet, so selection would
+ * transiently report "no spendable note". Lets callers show "consolidating, wait" instead.
+ */
+function hasPendingMergeFor(symbol: string): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith('merge-hint-')) continue;
+      const row = JSON.parse(localStorage.getItem(k) || '{}');
+      if (String(row.symbol || '').toUpperCase() === symbol.toUpperCase()) return true;
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
 // --------- Helper: Get on-chain leaves ----------
 async function getOnChainLeaves(tokenAddress: string, chainId?: number): Promise<bigint[]> {
   zlog("getOnChainLeaves() tokenAddress:", tokenAddress);
@@ -1140,6 +1159,9 @@ export async function generateZKData(
       return { error: `Wallet not connected for note decryption — reconnect and retry.` };
     }
     if (diag.ok === 0 && (diag.unreadable > 0 || _drifted)) {
+      if (hasPendingMergeFor(_token.symbol)) {
+        return { error: `Consolidating your ${_token.symbol} notes — wait ~30 seconds for the merge to confirm, then retry.` };
+      }
       if (foreignOwners.size > 0) {
         const o = [...foreignOwners][0];
         return { error: `These notes belong to account ${o.slice(0, 6)}…${o.slice(-4)} — connect that account to withdraw.` };

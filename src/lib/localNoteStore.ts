@@ -115,15 +115,17 @@ export interface NoteMeta {
  * then finalize the note under its commitment key and remove the temp hint.
  */
 export async function recoverPendingHints(signer: Signer): Promise<void> {
-  const hints: Array<{ key: string; nullifier: string; secret: string; precommitment: string; nullifierHash: string; amount: string }> = [];
+  const hints: Array<{ key: string; nullifier: string; secret: string; precommitment: string; nullifierHash: string; amount: string; symbol?: string; chainId?: number | string }> = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key) continue;
     try {
       const row = JSON.parse(localStorage.getItem(key) || '{}');
-      // Temp hints have plaintext `nullifier` and `pending: true` — encrypted notes have `nullifier_enc`
+      // Temp hints have plaintext `nullifier` and `pending: true` — encrypted notes have `nullifier_enc`.
+      // Two shapes: deposit hints keyed `{chainId}-{SYMBOL}-{precommitment}` (symbol/chain in the key),
+      // and merge hints keyed `merge-hint-{precommitment}` (symbol/chain in the BODY).
       if (row.pending === true && row.nullifier && !row.nullifier_enc) {
-        hints.push({ key, nullifier: row.nullifier, secret: row.secret, precommitment: row.precommitment, nullifierHash: row.nullifierHash ?? '', amount: row.amount });
+        hints.push({ key, nullifier: row.nullifier, secret: row.secret, precommitment: row.precommitment, nullifierHash: row.nullifierHash ?? '', amount: row.amount, symbol: row.symbol, chainId: row.chainId });
       }
     } catch { /* skip */ }
   }
@@ -144,11 +146,22 @@ export async function recoverPendingHints(signer: Signer): Promise<void> {
 
   for (const hint of hints) {
     try {
-      // Derive the token symbol from the hint key: `{chainId}-{SYMBOL}-{precommitment}`
-      const parts = hint.key.split('-');
-      if (parts.length < 3) continue;
-      const symbol = parts[1].toUpperCase();
-      const tokens = getTokens(chainId);
+      // Resolve symbol + chain. Merge hints (`merge-hint-{precommitment}`) carry them in the body;
+      // deposit hints encode them in the key (`{chainId}-{SYMBOL}-{precommitment}`). Without this,
+      // a merge hint parsed symbol="HINT" and was never recovered — stranding the merged secret if
+      // the process died between the merge tx mining and writeNote.
+      let symbol: string;
+      let hintChainId = chainId;
+      if (hint.key.startsWith('merge-hint-')) {
+        if (!hint.symbol) continue;
+        symbol = String(hint.symbol).toUpperCase();
+        if (hint.chainId != null) hintChainId = Number(hint.chainId);
+      } else {
+        const parts = hint.key.split('-');
+        if (parts.length < 3) continue;
+        symbol = parts[1].toUpperCase();
+      }
+      const tokens = getTokens(hintChainId);
       const tok = tokens[symbol];
       const tokenAddress = symbol === 'ETH' ? NATIVE : tok?.address;
       if (!tokenAddress) continue;
@@ -158,13 +171,13 @@ export async function recoverPendingHints(signer: Signer): Promise<void> {
       const commitment = poseidonHash(amountWei, BigInt(hint.precommitment));
       const commitmentStr = commitment.toString();
 
-      const leafSet = await getLeafSet(tokenAddress, chainId);
+      const leafSet = await getLeafSet(tokenAddress, hintChainId);
       if (!leafSet.has(commitmentStr)) {
         console.log(`[recovery] Precommitment ${hint.precommitment.slice(0, 12)}… not on-chain yet — keeping hint`);
         continue;
       }
 
-      const finalKey = `${chainId}-${symbol}-${commitmentStr}`;
+      const finalKey = `${hintChainId}-${symbol}-${commitmentStr}`;
 
       await writeNote(finalKey, {
         nullifier:     hint.nullifier,
