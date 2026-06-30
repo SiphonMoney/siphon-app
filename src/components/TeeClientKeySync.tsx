@@ -10,8 +10,39 @@ import { getStoredClientKey, generateKeys, encryptPriceCents } from "@/lib/fhe";
 import { ensureClientKeyInDecryptor, isTeeAutonomousMode } from "@/lib/decryptorClient";
 import { ensureServerKeyUploaded } from "@/lib/strategySubmit";
 import { resolveWalletAddress } from "@/lib/walletAddress";
+import { createVaultOutputNote } from "@/lib/outputNoteResolver";
+import { NATIVE_TOKEN } from "@/lib/networks";
+import type { TokenInfo } from "@/lib/zkHandler";
+import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
+import { getSigner } from "@/lib/nexus";
 
 export default function TeeClientKeySync() {
+  // PROTOCOL ADMIN: generate N protocol fee-note precommitments (owned by the connected protocol
+  // wallet) and upload them to the executor's fee-vault sweep pool. Run while connected as the
+  // protocol/treasury wallet: `await window.__siphonGenFeePool(20, '<ADMIN_API_TOKEN>')`.
+  useEffect(() => {
+    (window as unknown as { __siphonGenFeePool?: (n: number, adminToken: string, asset?: string) => Promise<unknown> }).__siphonGenFeePool =
+      async (count = 20, adminToken = "", asset = "ETH") => {
+        // Fee notes are generated for ETH (the primary fee asset) by default.
+        const token: TokenInfo = { symbol: asset, address: asset === "ETH" ? NATIVE_TOKEN : "", decimals: asset === "ETH" ? 18 : 6 };
+        const signer = getSigner() ?? undefined;
+        const chainId = Number((await signer?.provider?.getNetwork())?.chainId ?? 11155111);
+        const precommitments: string[] = [];
+        for (let i = 0; i < count; i++) {
+          const out = await createVaultOutputNote(chainId, token, signer);
+          precommitments.push(out.precommitment);
+        }
+        const r = await fetch(`${getTradeExecutorBaseUrl()}/admin/fee-pool`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-ADMIN-TOKEN": adminToken },
+          body: JSON.stringify({ chain_id: chainId, asset, precommitments }),
+        });
+        const j = await r.json();
+        console.log("[FeePool] uploaded", precommitments.length, "precommitments:", j);
+        return j;
+      };
+  }, []);
+
   // DEV: manual resync — re-derive + re-upload the server key (to the executor) and the client
   // key (to the decryptor) from the CURRENT stored client key, so both match the ciphertexts the
   // browser produced. Call `await window.__siphonResync()` in the console.
