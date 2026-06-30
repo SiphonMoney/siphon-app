@@ -121,10 +121,20 @@ export async function executeQuickSwapPayAndRun(
     return { success: false, error: "Could not fetch ETH price for immediate limit trigger." };
   }
 
+  // Instant swap: bias the limit trigger PAST spot so the executor's FHE price check is already
+  // satisfied and the leg fires on the very next tick — instead of waiting for the live price to
+  // exactly meet spot (a one-cent tick against the side would otherwise leave it pending). The fill
+  // itself is still protected by max_slippage_bps (Uniswap min-out at the live price), so a wide
+  // trigger only removes the wait; it can never execute below slippage tolerance.
+  //   LIMIT_SELL fires when price >= upper_bound  → set the bound BELOW spot.
+  //   LIMIT_BUY  fires when price <= lower_bound  → set the bound ABOVE spot.
   const side = inferSideFromSwap(assetIn, assetOut);
+  const INSTANT_TRIGGER_MARGIN = 0.1; // 10% past spot — comfortably fires across normal volatility
+  const triggerPrice =
+    side === "buy" ? ethUsd * (1 + INSTANT_TRIGGER_MARGIN) : ethUsd * (1 - INSTANT_TRIGGER_MARGIN);
   const bounds = buildStrategyPayload("Limit Order", {
     side,
-    priceGoal: String(ethUsd),
+    priceGoal: String(triggerPrice),
   });
 
   const strategyPayload = {
