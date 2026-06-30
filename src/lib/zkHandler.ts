@@ -275,6 +275,26 @@ async function resolveVault(
   return info;
 }
 
+// Persistent incremental leaf cache. Leaves are an append-only, contiguously-indexed list, so
+// across reloads we only need to scan blocks newer than the last scan instead of re-reading from
+// the deploy block every time (those full re-scans were the eth_getLogs bursts that tripped the
+// free-RPC rate limit on every balance poll / swap / withdraw).
+const LEAF_PERSIST_PREFIX = 'siphon-leafscan-';
+function loadPersistedLeaves(key: string): { leaves: string[]; lastBlock: number } | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (Array.isArray(o.leaves) && typeof o.lastBlock === 'number') return o;
+  } catch { /* corrupt — ignore */ }
+  return null;
+}
+function savePersistedLeaves(key: string, leaves: string[], lastBlock: number): void {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(key, JSON.stringify({ leaves, lastBlock })); } catch { /* quota */ }
+}
+
 // --------- Helper: Get on-chain leaves ----------
 async function getOnChainLeaves(tokenAddress: string, chainId?: number): Promise<bigint[]> {
   zlog("getOnChainLeaves() tokenAddress:", tokenAddress);
@@ -287,26 +307,59 @@ async function getOnChainLeaves(tokenAddress: string, chainId?: number): Promise
   // topic[0] = keccak256("LeafInserted(uint256,uint256,uint256)")
   const LEAF_INSERTED_TOPIC = ethers.id("LeafInserted(uint256,uint256,uint256)");
   const latest = await provider.getBlockNumber();
-  const rawLogs = await getLogsChunked(
-    provider,
-    { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
-    vaultDeployBlock(net.chainId),
-    latest,
-  );
-  zlog("Fetched LeafInserted raw logs:", rawLogs.length);
-
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-  const parsed = rawLogs.map(log => {
-    const [index, leaf] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
-    return { index: BigInt(index.toString()), leaf: BigInt(leaf.toString()) };
-  });
+  const deployBlock = vaultDeployBlock(net.chainId);
 
-  parsed.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
+  const decodeSorted = (logs: ethers.Log[]) => {
+    const p = logs.map(log => {
+      const [index, leaf] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+      return { index: BigInt(index.toString()), leaf: BigInt(leaf.toString()) };
+    });
+    p.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
+    return p;
+  };
 
-  const leaves = parsed.map(p => p.leaf);
-  zlog("Parsed leaves count:", leaves.length);
+  // Resume from the last persisted scan if we have one; otherwise start at the deploy block.
+  const persistKey = `${LEAF_PERSIST_PREFIX}${net.chainId}:${merkleTreeAddress.toLowerCase()}`;
+  const cached = loadPersistedLeaves(persistKey);
+  let prior: string[] = [];
+  let fromBlock = deployBlock;
+  if (cached && cached.lastBlock >= deployBlock) {
+    prior = cached.leaves;
+    fromBlock = cached.lastBlock + 1;
+  }
 
-  return leaves;
+  let parsed: { index: bigint; leaf: bigint }[] = [];
+  if (fromBlock <= latest) {
+    const rawLogs = await getLogsChunked(
+      provider,
+      { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
+      fromBlock,
+      latest,
+    );
+    parsed = decodeSorted(rawLogs);
+  }
+
+  // Integrity guard: appended leaves must continue exactly where the cache ended (first new
+  // index === prior length). A gap/overlap means the cache is stale/reorged/corrupt → discard it
+  // and do one authoritative full rescan from the deploy block.
+  if (prior.length > 0 && parsed.length > 0 && Number(parsed[0].index) !== prior.length) {
+    zlog("Leaf cache discontinuity — full rescan");
+    const full = decodeSorted(await getLogsChunked(
+      provider,
+      { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
+      deployBlock,
+      latest,
+    ));
+    const leavesStr = full.map(p => p.leaf.toString());
+    savePersistedLeaves(persistKey, leavesStr, latest);
+    return leavesStr.map(s => BigInt(s));
+  }
+
+  const mergedStr = [...prior, ...parsed.map(p => p.leaf.toString())];
+  savePersistedLeaves(persistKey, mergedStr, latest);
+  zlog("Parsed leaves count:", mergedStr.length, `(+${parsed.length} new from block ${fromBlock})`);
+  return mergedStr.map(s => BigInt(s));
 }
 
 // --------- Resolve a pending "output note" from a vault-mode swap ----------
