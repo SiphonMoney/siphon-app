@@ -12,6 +12,9 @@ import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
+import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } from "../../../lib/multiLegBuilder";
+import { getOrCreateClientKey } from "../../../lib/fhe";
+import { NATIVE_TOKEN } from "../../../lib/networks";
 import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
 import { walletManager } from "../../extensions/walletManager";
 import { resolveWalletAddress } from "../../../lib/walletAddress";
@@ -696,6 +699,62 @@ export default function DetailsModal({
       const tokenMap = getTokens(fromChainId);
       const tokenInfo = tokenMap[(assetIn || 'USDC').toUpperCase()];
       if (!tokenInfo) throw new Error(`Token ${assetIn} not supported for ZK operations`);
+
+      // ── Multi-leg (TWAP / Grid): split the deposit into N shielded slice/rung legs, each with
+      // its own swap proof + encrypted trigger; submit legs[] (no single zk_proof). ──
+      if (strategyKind === 'TWAP' || strategyKind === 'Range') {
+        const outTokenMl = tokenMap[(assetOut || '').toUpperCase()];
+        if (!outTokenMl) throw new Error(`Unsupported output asset: ${assetOut}`);
+        const net = getNetwork(fromChainId);
+        const sliceCount = strategyKind === 'TWAP' ? (bounds.slices ?? 0) : (bounds.grid_levels ?? 0);
+        if (!sliceCount || sliceCount < 2) throw new Error(`Need ≥2 ${strategyKind === 'TWAP' ? 'slices' : 'grid levels'}`);
+
+        addLog(`Splitting deposit into ${sliceCount} ${strategyKind === 'TWAP' ? 'slices' : 'rungs'} + building proofs…`);
+        const clientKey = await getOrCreateClientKey(recipient);
+        const inAddr = tokenInfo.symbol === 'ETH' ? NATIVE_TOKEN : tokenInfo.address;
+        const outAddr = outTokenMl.symbol === 'ETH' ? NATIVE_TOKEN : outTokenMl.address;
+        const { pool, fee } = await resolveSwapPool(fromChainId, inAddr, outAddr, 3000);
+        const dstToken = outTokenMl.symbol === 'ETH' ? net.weth : outTokenMl.address;
+        const swap = { pool, dstToken, fee, minAmountOut: 0n };
+        const submitSplit = (s: Parameters<typeof submitSplitOnChain>[2]) => submitSplitOnChain(fromChainId, tokenInfo, s);
+
+        const multi = strategyKind === 'TWAP'
+          ? await buildTwapLegs({ chainId: fromChainId, inToken: tokenInfo, sliceCount, intervalSec: bounds.interval_sec ?? 60, swap, recipient, clientKeyHex: clientKey, submitSplit })
+          : await buildGridLegs({ chainId: fromChainId, inToken: tokenInfo, low: bounds.lower_bound ?? 0, high: bounds.upper_bound ?? 0, levels: sliceCount, swap, recipient, clientKeyHex: clientKey, submitSplit });
+
+        addLog(`Submitting ${multi.legs.length}-leg ${strategyKind}…`);
+        const mlResult = await submitEncryptedStrategy({
+          user_id: recipient,
+          strategy_type: strategyKind === 'TWAP' ? 'TWAP' : 'RANGE_GRID',
+          asset_in: assetIn || 'USDC',
+          asset_out: assetOut,
+          amount: effectiveAmount,
+          recipient_address: recipient,
+          legs: multi.legs,
+          interval_sec: bounds.interval_sec,
+          grid_levels: bounds.grid_levels,
+          max_slippage_bps: bounds.max_slippage_bps,
+          schedule_anchor: multi.scheduleAnchor,
+          is_private: true,
+          from_chain: String(fromChainId),
+          to_chain: String(toChainId ?? fromChainId),
+        }, {
+          onKeygen: () => addLog('Generating FHE keys…'),
+          onUploadKey: () => addLog('Uploading FHE server key…'),
+          onUploadClientKey: () => addLog('Sending client key to confidential VM…'),
+        });
+        if (mlResult.success) {
+          addLog(`✅ ${strategyKind} registered — ${multi.legs.length} legs (split ${multi.splitTxHash.slice(0, 10)}…)`);
+          showToast(`${strategyKind} running with ${multi.legs.length} legs`, 'success');
+          window.dispatchEvent(new CustomEvent('siphon:strategySubmitted', { detail: { strategyId: String(mlResult.data?.strategy_id ?? ''), userId: recipient } }));
+        } else {
+          addLog(`❌ ${mlResult.error}`);
+          showToast(mlResult.error || 'Multi-leg submit failed', 'error');
+        }
+        setIsExecuting(false);
+        setIsFading(false);
+        return;
+      }
 
       // Generate ZK proof for strategy execution using full deposit amount
       addLog(`Generating ZK proof on ${getNetwork(fromChainId).name}...`);

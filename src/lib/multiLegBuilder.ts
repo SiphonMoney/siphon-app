@@ -238,10 +238,13 @@ export async function buildTwapLegs(opts: {
   const { chainId, inToken, sliceCount, intervalSec, swap, recipient, clientKeyHex, submitSplit } = opts;
   const anchor = Math.floor(Date.now() / 1000);
   const encryptLeg = async (i: number) => {
-    const fireTime = BigInt(anchor + i * intervalSec); // unix seconds
+    // Encode the fire-time RELATIVE to the schedule anchor (k*interval seconds), so values stay
+    // small (e.g. 0, 60, 120). The scheduler compares against elapsed-since-anchor. Absolute unix
+    // time (~1.7e9) would exceed the FHE integer width and crashes the comparison.
+    const fireOffset = BigInt(i * intervalSec);
     return {
       eval_mode: "time" as const,
-      encrypted_lower_bound: await encryptPriceCents(fireTime, clientKeyHex),
+      encrypted_lower_bound: await encryptPriceCents(fireOffset, clientKeyHex),
     };
   };
   const res = await buildLegsFromSplit(chainId, inToken, sliceCount, swap, recipient, encryptLeg, submitSplit);
