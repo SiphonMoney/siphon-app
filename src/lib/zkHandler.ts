@@ -672,7 +672,11 @@ export async function generateSwapProof(
   // 1. on-chain leaves + root
   let leaves: bigint[];
   try {
-    leaves = [...await getLeafSet(tokenAddress, _chainId)].map(s => BigInt(s));
+    // NON-deduped, index-ordered leaves — the Merkle path depends on exact on-chain positions.
+    // getLeafSet returns a Set, which silently drops a DUPLICATE leaf value and shifts every later
+    // index by one → the circuit folds to a root that never existed on-chain (InvalidStateRoot /
+    // failed root check). Duplicate leaf values do occur (e.g. zero-value change notes).
+    leaves = await getOnChainLeaves(tokenAddress, _chainId);
   } catch {
     return { error: "Failed to fetch on-chain leaves for swap proof." };
   }
@@ -806,7 +810,11 @@ export async function generateSplitProof(
   // 1. on-chain leaves + root
   let leaves: bigint[];
   try {
-    leaves = [...await getLeafSet(tokenAddress, _chainId)].map(s => BigInt(s));
+    // NON-deduped, index-ordered leaves — the Merkle path depends on exact on-chain positions.
+    // getLeafSet returns a Set, which silently drops a DUPLICATE leaf value and shifts every later
+    // index by one → the circuit folds to a root that never existed on-chain (InvalidStateRoot /
+    // failed root check). Duplicate leaf values do occur (e.g. zero-value change notes).
+    leaves = await getOnChainLeaves(tokenAddress, _chainId);
   } catch {
     return { error: "Failed to fetch on-chain leaves for split." };
   }
@@ -958,8 +966,9 @@ export async function generateZKData(
   const tokenAddress = _token.symbol === 'ETH' ? NATIVE_TOKEN : _token.address;
   let leaves: bigint[] = [];
   try {
-    const leafSet = await getLeafSet(tokenAddress, _chainId);
-    leaves = [...leafSet].map((s) => BigInt(s));
+    // NON-deduped, index-ordered leaves (see swap path): a Set drops duplicate leaf values and
+    // shifts indices, producing a phantom Merkle root that the vault rejects (InvalidStateRoot).
+    leaves = await getOnChainLeaves(tokenAddress, _chainId);
     console.log("Found leaves count:", leaves.length);
   } catch (err) {
     console.error("Failed to fetch on-chain leaves:", err);
