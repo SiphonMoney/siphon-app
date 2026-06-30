@@ -24,6 +24,7 @@ import { ethers, Contract } from "ethers";
 import {
   generateSplitProof,
   generateSwapProof,
+  invalidateLeafCache,
   type TokenInfo,
   type SwapBinding,
   type SplitProofData,
@@ -104,6 +105,11 @@ export async function submitSplitOnChain(
   if (!receipt || receipt.status !== 1) {
     throw new Error(`split tx failed: ${tx.hash}`);
   }
+
+  // The 8 slice commitments are now on-chain leaves — bust the cached leaf scan so the per-leg
+  // swap proofs can prove membership (otherwise getLeafSet returns the pre-split set and the
+  // slice notes look "not on-chain").
+  try { invalidateLeafCache(asset); } catch { /* best-effort */ }
 
   // Persist the real slice notes (encrypted) keyed `${chainId}-${SYMBOL}-${commitment}`.
   const sliceNoteKeys: string[] = [];
