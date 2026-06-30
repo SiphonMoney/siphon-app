@@ -275,24 +275,25 @@ async function resolveVault(
   return info;
 }
 
-// Persistent incremental leaf cache. Leaves are an append-only, contiguously-indexed list, so
-// across reloads we only need to scan blocks newer than the last scan instead of re-reading from
-// the deploy block every time (those full re-scans were the eth_getLogs bursts that tripped the
-// free-RPC rate limit on every balance poll / swap / withdraw).
+// The leaf set is FUND-CRITICAL: the proof builder folds it into a Merkle root, and any gap /
+// wrong-order produces a root that never existed on-chain → InvalidStateRoot. The previous
+// incremental/persistent cache could leave a PERMANENT gap — a leaf in the same block as the
+// saved lastBlock that the RPC hadn't indexed when that block was first scanned is never re-read
+// (the next scan starts at lastBlock+1) — which silently corrupts every later index. We now FULL
+// SCAN every time (cheap on a paid RPC) and purge any stale cache from older builds once.
 const LEAF_PERSIST_PREFIX = 'siphon-leafscan-';
-function loadPersistedLeaves(key: string): { leaves: string[]; lastBlock: number } | null {
-  if (typeof localStorage === 'undefined') return null;
+let _leafCachePurged = false;
+function purgeStaleLeafScanCache(): void {
+  if (_leafCachePurged || typeof localStorage === 'undefined') return;
+  _leafCachePurged = true;
   try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    if (Array.isArray(o.leaves) && typeof o.lastBlock === 'number') return o;
-  } catch { /* corrupt — ignore */ }
-  return null;
-}
-function savePersistedLeaves(key: string, leaves: string[], lastBlock: number): void {
-  if (typeof localStorage === 'undefined') return;
-  try { localStorage.setItem(key, JSON.stringify({ leaves, lastBlock })); } catch { /* quota */ }
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(LEAF_PERSIST_PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch { /* ignore */ }
 }
 
 // --------- Helper: Get on-chain leaves ----------
@@ -303,63 +304,30 @@ async function getOnChainLeaves(tokenAddress: string, chainId?: number): Promise
   const { merkleTreeAddress } = await resolveVault(tokenAddress, net.chainId);
   zlog("MerkleTree address:", merkleTreeAddress);
 
+  purgeStaleLeafScanCache(); // drop any corrupt persisted incremental cache from older builds
+
   // LeafInserted(uint256 _index, uint256 _leaf, uint256 _root) — all non-indexed
   // topic[0] = keccak256("LeafInserted(uint256,uint256,uint256)")
   const LEAF_INSERTED_TOPIC = ethers.id("LeafInserted(uint256,uint256,uint256)");
   const latest = await provider.getBlockNumber();
+  const rawLogs = await getLogsChunked(
+    provider,
+    { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
+    vaultDeployBlock(net.chainId),
+    latest,
+  );
+  zlog("Fetched LeafInserted raw logs:", rawLogs.length);
+
   const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-  const deployBlock = vaultDeployBlock(net.chainId);
-
-  const decodeSorted = (logs: ethers.Log[]) => {
-    const p = logs.map(log => {
-      const [index, leaf] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
-      return { index: BigInt(index.toString()), leaf: BigInt(leaf.toString()) };
-    });
-    p.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
-    return p;
-  };
-
-  // Resume from the last persisted scan if we have one; otherwise start at the deploy block.
-  const persistKey = `${LEAF_PERSIST_PREFIX}${net.chainId}:${merkleTreeAddress.toLowerCase()}`;
-  const cached = loadPersistedLeaves(persistKey);
-  let prior: string[] = [];
-  let fromBlock = deployBlock;
-  if (cached && cached.lastBlock >= deployBlock) {
-    prior = cached.leaves;
-    fromBlock = cached.lastBlock + 1;
-  }
-
-  let parsed: { index: bigint; leaf: bigint }[] = [];
-  if (fromBlock <= latest) {
-    const rawLogs = await getLogsChunked(
-      provider,
-      { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
-      fromBlock,
-      latest,
-    );
-    parsed = decodeSorted(rawLogs);
-  }
-
-  // Integrity guard: appended leaves must continue exactly where the cache ended (first new
-  // index === prior length). A gap/overlap means the cache is stale/reorged/corrupt → discard it
-  // and do one authoritative full rescan from the deploy block.
-  if (prior.length > 0 && parsed.length > 0 && Number(parsed[0].index) !== prior.length) {
-    zlog("Leaf cache discontinuity — full rescan");
-    const full = decodeSorted(await getLogsChunked(
-      provider,
-      { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
-      deployBlock,
-      latest,
-    ));
-    const leavesStr = full.map(p => p.leaf.toString());
-    savePersistedLeaves(persistKey, leavesStr, latest);
-    return leavesStr.map(s => BigInt(s));
-  }
-
-  const mergedStr = [...prior, ...parsed.map(p => p.leaf.toString())];
-  savePersistedLeaves(persistKey, mergedStr, latest);
-  zlog("Parsed leaves count:", mergedStr.length, `(+${parsed.length} new from block ${fromBlock})`);
-  return mergedStr.map(s => BigInt(s));
+  const parsed = rawLogs.map(log => {
+    const [index, leaf] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+    return { index: BigInt(index.toString()), leaf: BigInt(leaf.toString()) };
+  });
+  // Order by tree index so the array position == on-chain leaf index (the Merkle path depends on it).
+  parsed.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
+  const leaves = parsed.map(p => p.leaf);
+  zlog("Parsed leaves count:", leaves.length);
+  return leaves;
 }
 
 // --------- Resolve a pending "output note" from a vault-mode swap ----------
@@ -1248,6 +1216,20 @@ export async function generateZKData(
     }
     pathElementsAll.push(pathElements);
     pathIndicesAll.push(pathIndices);
+  }
+
+  // Guard: the computed snapshot root MUST be a root the chain actually knows. A complete or merely
+  // lagging leaf set yields the live root or a recent historical one (knownRoots covers it); only a
+  // GAPPED/reordered set yields a phantom root the vault rejects with InvalidStateRoot — which, for
+  // a stored strategy, only surfaces later at the executor. Fail fast and clearly at build time
+  // instead of minting a broken strategy. (The executor's on-chain check is the ultimate backstop.)
+  if (snapshotRoot !== onChainRoot) {
+    try {
+      const known = await withRetry(() => merkleTreeContract.rootExists(snapshotRoot));
+      if (!known) {
+        return { error: 'Could not build a valid proof against the current chain state (note set out of sync) — refresh and retry in a moment.' };
+      }
+    } catch { /* check unavailable — let the on-chain verification be the backstop */ }
   }
 
   // 7. ASSEMBLE CIRCUIT INPUT AND GENERATE PROOF
