@@ -93,17 +93,20 @@ export const calculateExchange = (
   return outputAmount;
 };
 
-const RUN_FEE_MIN_USD = 0.35;
-const RUN_FEE_PER_HOUR_USD = 0.35;
+// Arming-fee params now come from the shared fee model (matches the backend).
+import { FEE, armingFeeUsd, executionFeeUsd } from "@/lib/feeModel";
+const RUN_FEE_MIN_USD = FEE.BASE_ARM_USD;
+const RUN_FEE_PER_HOUR_USD = FEE.PER_HOUR_ARM_USD;
 
-/** Spot output after slippage % and run fee (USD) deducted in output-token terms. */
+/** Spot output after slippage % and the EXECUTION fee (Part B) deducted in output-token terms.
+ * The arming fee (Part A) is upfront and shown separately, not deducted from the trade output. */
 export const calculateNetReceiveEstimate = (
   inputAmount: number,
   coinA: string,
   coinB: string,
   coinPrices: Record<string, number>,
   slippagePct: number,
-  runFeeUsd: number,
+  _runFeeUsd: number,   // kept for signature compat; net-receive uses the execution fee
 ): number => {
   const spot = calculateExchange(inputAmount, coinA, coinB, coinPrices);
   if (spot <= 0) return 0;
@@ -111,7 +114,12 @@ export const calculateNetReceiveEstimate = (
   const afterSlippage = spot * (1 - Math.max(0, slippagePct) / 100);
   const outSym = coinB.toUpperCase();
   const outPrice = coinPrices[outSym] ?? (outSym === "USDC" ? 1 : 0);
-  const feeInOut = outPrice > 0 ? runFeeUsd / outPrice : 0;
+
+  // Notional = input value in USD; execution fee is taken from the trade (Part B).
+  const inPrice = coinPrices[coinA.toUpperCase()] ?? (coinA.toUpperCase() === "USDC" ? 1 : 0);
+  const notionalUsd = inputAmount * inPrice;
+  const execFeeUsd = executionFeeUsd(notionalUsd);
+  const feeInOut = outPrice > 0 ? execFeeUsd / outPrice : 0;
 
   return Math.max(0, afterSlippage - feeInOut);
 };
@@ -146,10 +154,10 @@ export function durationToHours(duration: string): number {
 }
 
 /**
- * Run fee: $0.35 minimum + $0.35 per execution-window hour.
+ * Arming fee (Part A): BASE + PER_HOUR × window hours, capped at ARM_CAP. Charged upfront.
  */
 export const calculateRunFee = (duration: string): number => {
-  return RUN_FEE_MIN_USD + RUN_FEE_PER_HOUR_USD * durationToHours(duration);
+  return armingFeeUsd(durationToHours(duration));
 };
 
 /**
