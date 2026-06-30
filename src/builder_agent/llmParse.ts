@@ -5,6 +5,7 @@ import {
   applyFixedEthLoopBuy,
   applyFollowUpHeuristics,
   applyPercentDipPrice,
+  applyPercentTakeProfitPrice,
 } from "./inferToolsFromPrompt";
 import { mergeLlmOntoParsed, parsedToFlowSnapshot } from "./mergeLlmParsed";
 import {
@@ -108,6 +109,7 @@ export async function llmParse(
   parsed = augmentParsedFromPrompt(parsed, prompt);
   parsed = applyFollowUpHeuristics(parsed, prompt);
   parsed = applyPercentDipPrice(parsed, prompt, ethUsd);
+  parsed = applyPercentTakeProfitPrice(parsed, prompt, ethUsd);
   parsed = applyFixedEthLoopBuy(parsed, prompt, ethUsd);
   parsed = applyIntentFromMessage(prompt, parsed);
 

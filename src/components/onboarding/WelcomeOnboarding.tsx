@@ -41,6 +41,7 @@ const SCREENS: ReadonlyArray<{
 const FADE_MS = 450;
 const OVERLAY_FADE_MS = 600;
 const WHEEL_COOLDOWN_MS = 700;
+const SWIPE_THRESHOLD_PX = 52;
 
 interface WelcomeOnboardingProps {
   onComplete: () => void;
@@ -51,6 +52,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
   const [screenPhase, setScreenPhase] = useState<"entering" | "visible" | "exiting">("entering");
   const [overlayExiting, setOverlayExiting] = useState(false);
   const wheelLockedRef = useRef(false);
+  const touchStartYRef = useRef(0);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const screen = SCREENS[step];
@@ -112,8 +114,26 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
       else retreat();
     };
 
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartYRef.current = e.touches[0]?.clientY ?? 0;
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const endY = e.changedTouches[0]?.clientY ?? touchStartYRef.current;
+      const deltaY = touchStartYRef.current - endY;
+      if (Math.abs(deltaY) < SWIPE_THRESHOLD_PX) return;
+      if (deltaY > 0) advance();
+      else retreat();
+    };
+
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
   }, [advance, retreat]);
 
   useEffect(() => {
@@ -178,7 +198,8 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
 
       <footer key={step} className={styles.footer}>
         <div className={styles.scrollTip}>
-          <span>scroll</span>
+          <span className={styles.scrollHintDesktop}>scroll</span>
+          <span className={styles.scrollHintMobile}>swipe</span>
           {screen.hero && (
             <svg
               className={styles.scrollChevron}

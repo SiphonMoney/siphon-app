@@ -14,28 +14,36 @@ type SuggestionItem = { label: string; text: string };
 
 const BUILD_SUGGESTIONS: SuggestionItem[] = [
   {
+    label: "Suggest me",
+    text: "Suggest me a strategy based on what's happening in the market",
+  },
+  {
+    label: "Market",
+    text: "What's going on with the market right now?",
+  },
+  {
     label: "Limit order",
     text: "Deposit USDC and place a limit buy for ETH at my target price",
   },
   {
     label: "DCA loop",
-    text: "Deposit USDC once, then loop swap to ETH and withdraw on a daily cadence",
+    text: "Deposit USDC once, then loop swap to ETH every 24 hours until empty",
   },
   {
     label: "Stop-loss exit",
-    text: "Deposit ETH, sell when price hits my stop, swap to USDC and withdraw",
+    text: "Deposit ETH, stop loss when price hits my stop, swap to USDC and withdraw",
   },
   {
     label: "Loop until empty",
-    text: "Deposit 500 USDC on Base, loop swap to ETH and withdraw every 24 hours",
+    text: "Deposit 500 USDC, loop swap to ETH and withdraw every 24 hours",
   },
   {
     label: "Scheduled entry",
-    text: "Deposit ETH, wait 1 hour, then limit buy when price dips",
+    text: "Deposit USDC, wait 1 hour, then limit buy ETH when price dips 8%",
   },
   {
-    label: "Take profit chain",
-    text: "Limit buy ETH, take profit at 8%, swap to USDC, withdraw to wallet",
+    label: "Take profit",
+    text: "Deposit ETH, take profit at 8% above current price, swap to USDC and withdraw",
   },
   {
     label: "Recurring swap",
@@ -43,7 +51,7 @@ const BUILD_SUGGESTIONS: SuggestionItem[] = [
   },
   {
     label: "Exit to stables",
-    text: "When ETH hits my target, swap everything to USDC and withdraw",
+    text: "Deposit ETH, take profit at my target price, swap everything to USDC and withdraw",
   },
 ];
 

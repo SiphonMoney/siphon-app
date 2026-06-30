@@ -40,6 +40,47 @@ export function applyPercentDipPrice(
   return parsed;
 }
 
+const TAKE_PROFIT_PATTERNS = [
+  /take[\s-]?profit\s+(?:at|when|@)?\s*(\d+(?:\.\d+)?)\s*%/i,
+  /(\d+(?:\.\d+)?)\s*%\s*(?:gain|profit|above|over|up\s+from)/i,
+  /(\d+(?:\.\d+)?)\s*%\s*(?:above|over)\s+(?:now|current|today)(?:'s)?\s*price/i,
+];
+
+/** Compute take-profit priceGoal from "8% above current ETH price". */
+export function applyPercentTakeProfitPrice(
+  parsed: ParsedPrompt,
+  prompt: string,
+  ethUsd: number | null
+): ParsedPrompt {
+  if (!ethUsd || ethUsd <= 0) return parsed;
+  const trimmed = prompt.trim();
+  if (!/\btake[\s-]?profit\b/i.test(trimmed) && !/\b(?:gain|profit)\s+(?:at|target)\b/i.test(trimmed)) {
+    return parsed;
+  }
+
+  for (const pattern of TAKE_PROFIT_PATTERNS) {
+    const match = trimmed.match(pattern);
+    if (!match) continue;
+    const pct = parseFloat(match[1]);
+    if (!Number.isFinite(pct) || pct <= 0 || pct >= 100) continue;
+
+    const target = ethUsd * (1 + pct / 100);
+    return {
+      ...parsed,
+      useLoop: false,
+      strategy: "Take Profit",
+      side: "sell",
+      priceGoal: target.toFixed(2),
+      includeSwap: true,
+      toCoin: parsed.toCoin ?? "USDC",
+      coin: parsed.coin ?? "ETH",
+      includeWithdraw: parsed.includeWithdraw || /\bwithdraw\b/i.test(trimmed),
+    };
+  }
+
+  return parsed;
+}
+
 /** "buy 0.0636 ETH every 24h" in a USDC loop → USDC per-swap from live ETH price. */
 export function applyFixedEthLoopBuy(
   parsed: ParsedPrompt,

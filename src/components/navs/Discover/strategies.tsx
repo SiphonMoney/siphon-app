@@ -9,6 +9,7 @@ import { layoutStrategyNodes } from '../../../lib/builderLayout';
 import { formatGraphForPreview } from '../../../lib/repeatGraph';
 import { applySwapToWithdrawLink } from '../../../lib/graphLinks';
 import { REPEAT_GROUP_DEFAULT_SIZE, syncRepeatGroups } from '../../../lib/repeatGraph';
+import { stripNodeWrapperStyle } from '../../../lib/builderNodeStyle';
 
 export interface StrategyMetadata {
   name: string;
@@ -264,37 +265,6 @@ interface StrategyTemplateSpec {
   edges: StrategyEdgeTemplate[];
 }
 
-const BASE_NODE_STYLE = {
-  color: 'white',
-  borderRadius: '8px',
-  padding: '0.75rem',
-  minWidth: '200px',
-  textAlign: 'center' as const,
-  fontFamily: 'var(--font-source-code), monospace',
-  fontSize: '12px',
-  fontWeight: '600',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.5px'
-};
-
-const DEFAULT_NODE_STYLE = {
-  ...BASE_NODE_STYLE,
-  background: 'rgba(255, 255, 255, 0.12)',
-  border: '1px solid rgba(255, 255, 255, 0.3)'
-};
-
-const STRATEGY_NODE_STYLE = {
-  ...BASE_NODE_STYLE,
-  background: 'rgba(255, 193, 7, 0.2)',
-  border: '1px solid rgba(255, 193, 7, 0.5)'
-};
-
-const CONTROL_NODE_STYLE = {
-  ...BASE_NODE_STYLE,
-  background: 'rgba(59, 130, 246, 0.2)',
-  border: '1px solid rgba(59, 130, 246, 0.5)'
-};
-
 const EDGE_STYLE = { stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 2 };
 
 // Declarative library: graph specs only, composed into existing Build nodes.
@@ -399,11 +369,9 @@ function composeStrategyGraph(name: string): { nodes: Node[]; edges: Edge[] } {
 
   const nodes: Node[] = spec.nodes.map((node) => {
     const isRepeat = node.nodeType === 'repeatGroup' || node.data.type === 'repeatGroup';
-    const isStrategy = node.data.type === 'strategy';
-    const isControl = node.data.type === 'control';
     const isChild = Boolean(node.parentId);
 
-    return {
+    return stripNodeWrapperStyle({
       id: node.id,
       type: isRepeat ? 'repeatGroup' : 'custom',
       parentId: node.parentId,
@@ -418,20 +386,18 @@ function composeStrategyGraph(name: string): { nodes: Node[]; edges: Edge[] } {
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
       zIndex: isChild ? 10 : isRepeat ? 1 : 0,
-      style: isRepeat
+      ...(isRepeat
         ? {
-            width: REPEAT_GROUP_DEFAULT_SIZE.width,
-            height: REPEAT_GROUP_DEFAULT_SIZE.height,
-            padding: 0,
-            background: 'transparent',
-            border: 'none',
+            style: {
+              width: REPEAT_GROUP_DEFAULT_SIZE.width,
+              height: REPEAT_GROUP_DEFAULT_SIZE.height,
+              padding: 0,
+              background: 'transparent',
+              border: 'none',
+            },
           }
-        : isStrategy
-          ? STRATEGY_NODE_STYLE
-          : isControl
-            ? CONTROL_NODE_STYLE
-            : DEFAULT_NODE_STYLE,
-    };
+        : {}),
+    });
   });
 
   const edges: Edge[] = spec.edges.map((edge, idx) => ({
