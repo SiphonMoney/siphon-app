@@ -1091,6 +1091,11 @@ export async function generateZKData(
   const candidates: CandidateNote[] = [];
   // Diagnostics: explain a "Have 0.0" instead of failing opaquely.
   const diag = { metas: noteMetas.length, spent: 0, unreadable: 0, zero: 0, nullified: 0, ghost: 0, ok: 0, noSigner: !_zkSigner };
+  // Wrong-account / key-drift detection so an all-unreadable result yields a clear, actionable
+  // error ("reconnect the original account") instead of a bare "Have 0.0".
+  const _curWallet = _zkSigner ? (await _zkSigner.getAddress()).toLowerCase() : '';
+  const _drifted = _zkSigner ? await (await import('./noteAuth')).encKeyDrifted(_zkSigner) : false;
+  const foreignOwners = new Set<string>();
 
   for (const meta of noteMetas) {
     const key = meta.key;
@@ -1100,7 +1105,11 @@ export async function generateZKData(
     if (meta.spent === true || meta.spent === 'true') { diag.spent++; continue; }
 
     const data = _zkSigner ? await readNote(key, _zkSigner) : null;
-    if (!data) { diag.unreadable++; continue; } // metadata-only / undecryptable (no spendable secret)
+    if (!data) {
+      diag.unreadable++; // metadata-only / undecryptable (no spendable secret)
+      if (meta.owner && _curWallet && meta.owner !== _curWallet) foreignOwners.add(meta.owner);
+      continue;
+    }
 
     try {
       const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _token.decimals).toString());
@@ -1162,7 +1171,14 @@ export async function generateZKData(
     if (diag.noSigner) {
       return { error: `Wallet not connected for note decryption — reconnect and retry.` };
     }
-    if (diag.ok === 0 && diag.unreadable > 0) {
+    if (diag.ok === 0 && (diag.unreadable > 0 || _drifted)) {
+      if (foreignOwners.size > 0) {
+        const o = [...foreignOwners][0];
+        return { error: `These notes belong to account ${o.slice(0, 6)}…${o.slice(-4)} — connect that account to withdraw.` };
+      }
+      if (_drifted) {
+        return { error: `This wallet/device can't decrypt your Siphon notes — reconnect the exact account & device you deposited with, then retry.` };
+      }
       return { error: `Found ${diag.unreadable} ${_token.symbol} note(s) but their secrets aren't on this device (metadata-only). Restore via Import Notes, or these funds came from a swap whose secret wasn't saved.` };
     }
     return { error: `Insufficient balance. Have ${ethers.formatUnits(accumulated, _token.decimals)}, need ${_amount}.` };

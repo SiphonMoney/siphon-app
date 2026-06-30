@@ -37,11 +37,13 @@ export interface LocalNote {
   nullifierHash?: string;
   amount:         string;
   spent:          boolean | string;
+  owner?:         string; // plaintext depositing-wallet address — wrong-account hint, never secret
 }
 
 /** Write a note to localStorage with nullifier + secret encrypted. */
 export async function writeNote(key: string, note: StoredNote, signer: Signer): Promise<void> {
   const encKey = await deriveLocalKey(signer);
+  const owner = (await signer.getAddress()).toLowerCase(); // plaintext hint — never secret
   const row: LocalNote = {
     nullifier_enc:  await encryptLocal(encKey, note.nullifier),
     secret_enc:     await encryptLocal(encKey, note.secret),
@@ -50,6 +52,7 @@ export async function writeNote(key: string, note: StoredNote, signer: Signer): 
     nullifierHash:  note.nullifierHash,
     amount:         note.amount,
     spent:          note.spent,
+    owner,
   };
   localStorage.setItem(key, JSON.stringify(row));
 }
@@ -100,6 +103,7 @@ export interface NoteMeta {
   nullifierHash: string | undefined;
   amount:       string;
   spent:        boolean | string;
+  owner?:       string;
 }
 
 /**
@@ -193,6 +197,7 @@ export function scanNoteMeta(prefix: string): NoteMeta[] {
         nullifierHash: row.nullifierHash != null ? String(row.nullifierHash) : undefined,
         amount:        String(row.amount),
         spent:         row.spent,
+        owner:         row.owner != null ? String(row.owner) : undefined,
       });
     } catch { /* skip */ }
   }

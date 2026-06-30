@@ -101,6 +101,50 @@ export async function deriveEncKey(signer: Signer): Promise<CryptoKey> {
   return promise;
 }
 
+// ── Encryption-key drift canary ──────────────────────────────────────────────
+// Both the local note copy AND the Supabase backup are encrypted under this one wallet-signature
+// key. If the wallet ever derives a DIFFERENT key (a switched account/device, hardware-wallet
+// non-determinism, or a changed SIGN_ENC_KEY), every note silently fails to decrypt and looks
+// like "no funds". The canary lets the UI say "wrong account/device — reconnect" instead.
+const KEYCHECK_PREFIX = 'siphon-keycheck-';
+const CANARY_TEXT = 'siphon-canary-v1';
+
+/**
+ * Non-blocking drift check. Returns true ONLY when a well-formed canary exists for this wallet
+ * but the currently-derived key cannot decrypt it (genuine key drift). On first use (or a
+ * corrupt/missing canary) it (re)stores a fresh canary under the current key and returns false.
+ * Never throws — a true result is advisory, used to produce a clearer error, never to gate funds.
+ */
+export async function encKeyDrifted(signer: Signer): Promise<boolean> {
+  if (typeof localStorage === 'undefined') return false;
+  let wallet: string;
+  let key: CryptoKey;
+  try {
+    wallet = (await signer.getAddress()).toLowerCase();
+    key = await deriveEncKey(signer);
+  } catch {
+    return false;
+  }
+  const ckKey = `${KEYCHECK_PREFIX}${wallet}`;
+  let parsed: { enc_blob: string; iv: string } | null = null;
+  const stored = localStorage.getItem(ckKey);
+  if (stored) { try { parsed = JSON.parse(stored); } catch { parsed = null; } }
+  if (!parsed) {
+    // No canary yet (or corrupt) — (re)store one under the current key. Not drift.
+    try {
+      const enc = await encryptBlob(key, { c: CANARY_TEXT });
+      localStorage.setItem(ckKey, JSON.stringify(enc));
+    } catch { /* quota — non-fatal */ }
+    return false;
+  }
+  try {
+    const dec = await decryptBlob<{ c: string }>(key, parsed.enc_blob, parsed.iv);
+    return dec.c !== CANARY_TEXT;
+  } catch {
+    return true; // canary is well-formed but won't decrypt → the key drifted
+  }
+}
+
 export async function noteAuthHeaders(
   signer: Signer,
   tag: string,
