@@ -93,7 +93,12 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     const hasPending = typeof localStorage !== 'undefined' &&
       Object.keys(localStorage).some((k) => k.startsWith('siphon-pending-output-'));
     if (hasPending) {
-      try { await resolvePendingOutputNotes(); } catch { /* best-effort */ }
+      // On a user-initiated refresh (syncServerNotes), pass the signer so a pending vault-output
+      // note is FULLY resolved (secret written + server-synced) rather than left metadata-only.
+      // The 60s auto-poll stays signer-free (no wallet popup); it now preserves the secret so this
+      // signed pass can finish the job. (Avoids the no-signer poll stranding TWAP/grid output funds.)
+      const resolveSigner = options?.syncServerNotes && wallet && isInitialized() ? getSigner() : null;
+      try { await resolvePendingOutputNotes(resolveSigner); } catch { /* best-effort */ }
     }
     if (options?.syncServerNotes && wallet && isInitialized()) {
       try {

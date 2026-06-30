@@ -213,9 +213,19 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
       // tree and includes the newly-deposited leaf (otherwise the note looks "not on-chain").
       try { invalidateLeafCache(rec.tokenAddress); } catch { /* best-effort */ }
 
-      localStorage.removeItem(k);
+      // Only drop the pending record once the note is FULLY resolved (secret written via the
+      // signer branch). On the metadata-only branch (no signer / secret unavailable) KEEP it —
+      // rec.enc is the only local copy of the secret, and a later signed pass needs it. Deleting
+      // it here permanently strands the output funds (the normal TWAP/grid vault re-deposit case,
+      // since the 60s balance poll calls this with no signer).
+      const fullyResolved = !!(signer && nullifier && secret);
+      if (fullyResolved) {
+        localStorage.removeItem(k);
+        console.log(`[OutputNote] resolved ${rec.symbol} note: ${humanAmount} (commitment ${hit.commitment})`);
+      } else {
+        console.log(`[OutputNote] ${rec.symbol} note seen on-chain (${humanAmount}) but no signer — keeping encrypted secret for a signed pass`);
+      }
       resolved += 1;
-      console.log(`[OutputNote] resolved ${rec.symbol} note: ${humanAmount} (commitment ${hit.commitment})`);
     } catch (e) {
       console.warn('[OutputNote] resolve failed for', k, e);
     }

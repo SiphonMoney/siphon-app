@@ -1,6 +1,6 @@
 import { walletManager } from "@/components/extensions/walletManager";
 import { fetchCoinPrices } from "@/components/navs/Discover/price_utils";
-import { initializeWithProvider } from "@/lib/nexus";
+import { initializeWithProvider, getSigner } from "@/lib/nexus";
 import { createVaultOutputNote } from "@/lib/outputNoteResolver";
 import {
   getNetwork,
@@ -99,7 +99,7 @@ export async function executeQuickSwapPayAndRun(
     return { success: false, error: zkResult.error };
   }
 
-  const { withdrawalTxData, newDeposit, newDepositKey, spentDepositKey } = zkResult;
+  const { withdrawalTxData, newDeposit, newDepositKey, spentDepositKey, changeValue, changePoolId } = zkResult;
 
   let outputMode: "vault" | "address" = "address";
   let outputPrecommitment: string | undefined;
@@ -182,8 +182,45 @@ export async function executeQuickSwapPayAndRun(
     return { success: false, error: result.error ?? "Strategy submission failed." };
   }
 
-  if (newDeposit && newDepositKey) {
-    localStorage.setItem(newDepositKey, JSON.stringify({ ...newDeposit, spent: false }));
+  // Persist the change note DURABLY (encrypted localStorage via writeNote + server backup) — a raw
+  // setItem of the plaintext note has no nullifier_enc/secret_enc, so readNote rejects it and the
+  // change value is permanently unspendable. Mirrors the withdraw path in handler.ts. FUND-SAFETY.
+  if (changeValue > 0n && newDeposit && newDepositKey) {
+    const changeSigner = getSigner();
+    if (changeSigner) {
+      try {
+        const { writeNote } = await import("@/lib/localNoteStore");
+        await writeNote(newDepositKey, {
+          nullifier:     newDeposit.nullifier,
+          secret:        newDeposit.secret,
+          commitment:    newDeposit.commitment!,
+          precommitment: newDeposit.precommitment,
+          nullifierHash: newDeposit.nullifierHash ?? "",
+          amount:        newDeposit.amount,
+          spent:         false,
+        }, changeSigner);
+      } catch (e) { console.warn("[QuickSwap] change note write failed:", e); }
+      try {
+        const { postCommitment } = await import("@/lib/commitmentStore");
+        await postCommitment(changeSigner, {
+          nullifier:     newDeposit.nullifier,
+          secret:        newDeposit.secret,
+          commitment:    newDeposit.commitment!,
+          amount:        newDeposit.amount,
+          chainId,
+          nullifierHash: newDeposit.nullifierHash ?? "",
+          precommitment: newDeposit.precommitment,
+        }, tokenInfo.symbol, "change");
+      } catch (e) { console.warn("[QuickSwap] change note server save failed:", e); }
+      if (changePoolId) {
+        try {
+          const { resolvePrecommitment } = await import("@/lib/precommitmentStore");
+          await resolvePrecommitment(changeSigner, changePoolId);
+        } catch (e) { console.warn("[QuickSwap] pool resolve failed:", e); }
+      }
+    } else {
+      console.warn("[QuickSwap] no signer — change note NOT persisted durably (would strand change)");
+    }
   }
   if (spentDepositKey) {
     try {

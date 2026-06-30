@@ -982,9 +982,45 @@ export default function Build({
       onEncrypt:   () => console.log('[Strategy] Encrypting price conditions locally...'),
     });
     if (result.success) {
-      // Save the new change commitment — funds are not spent until on-chain tx confirms.
-      if (zkResult.newDepositKey && zkResult.newDeposit) {
-        localStorage.setItem(zkResult.newDepositKey, JSON.stringify({ ...zkResult.newDeposit, spent: false }));
+      // Persist the change note DURABLY (encrypted localStorage via writeNote + server backup).
+      // A raw setItem of the plaintext note has no nullifier_enc/secret_enc, so readNote rejects
+      // it and the change value becomes permanently unspendable. Mirrors handler.ts. FUND-SAFETY.
+      if (zkResult.changeValue > 0n && zkResult.newDepositKey && zkResult.newDeposit) {
+        const _chSigner = getSigner();
+        if (_chSigner) {
+          try {
+            const { writeNote } = await import('../../../lib/localNoteStore');
+            await writeNote(zkResult.newDepositKey, {
+              nullifier:     zkResult.newDeposit.nullifier,
+              secret:        zkResult.newDeposit.secret,
+              commitment:    zkResult.newDeposit.commitment!,
+              precommitment: zkResult.newDeposit.precommitment,
+              nullifierHash: zkResult.newDeposit.nullifierHash ?? '',
+              amount:        zkResult.newDeposit.amount,
+              spent:         false,
+            }, _chSigner);
+          } catch (e) { console.warn('[Strategy] change note write failed:', e); }
+          try {
+            const { postCommitment } = await import('../../../lib/commitmentStore');
+            await postCommitment(_chSigner, {
+              nullifier:     zkResult.newDeposit.nullifier,
+              secret:        zkResult.newDeposit.secret,
+              commitment:    zkResult.newDeposit.commitment!,
+              amount:        zkResult.newDeposit.amount,
+              chainId:       CHAIN_ID,
+              nullifierHash: zkResult.newDeposit.nullifierHash ?? '',
+              precommitment: zkResult.newDeposit.precommitment,
+            }, token.symbol, 'change');
+          } catch (e) { console.warn('[Strategy] change note server save failed:', e); }
+          if (zkResult.changePoolId) {
+            try {
+              const { resolvePrecommitment } = await import('../../../lib/precommitmentStore');
+              await resolvePrecommitment(_chSigner, zkResult.changePoolId);
+            } catch (e) { console.warn('[Strategy] pool resolve failed:', e); }
+          }
+        } else {
+          console.warn('[Strategy] no signer — change note NOT persisted durably (would strand change)');
+        }
       }
 
       const strategyId = String(result.data?.strategy_id ?? result.data?.payload_id ?? '');
