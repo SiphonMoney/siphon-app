@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaderEntries } from "./src/lib/botProtection";
 
 const nextConfig: NextConfig = {
   // snarkjs is ~300MB — never bundle it into server functions.
@@ -14,13 +15,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [
-          {
-            key: "X-Robots-Tag",
-            value:
-              "noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate",
-          },
-        ],
+        headers: securityHeaderEntries(),
       },
     ];
   },

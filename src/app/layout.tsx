@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Source_Code_Pro } from "next/font/google";
+import { ROBOTS_DIRECTIVES } from "@/lib/botProtection";
 import { AppProviders } from "./providers";
 import "./globals.css";
 
@@ -18,14 +19,24 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
     nocache: true,
+    noarchive: true,
+    nosnippet: true,
+    noimageindex: true,
+    notranslate: true,
     googleBot: {
       index: false,
       follow: false,
+      noarchive: true,
+      nosnippet: true,
       noimageindex: true,
+      notranslate: true,
       "max-video-preview": -1,
       "max-image-preview": "none",
       "max-snippet": -1,
     },
+  },
+  other: {
+    robots: ROBOTS_DIRECTIVES,
   },
   openGraph: {
     title: "Siphon Protocol - Fully Encrypted DeFi Execution Layer",

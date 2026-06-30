@@ -53,6 +53,11 @@ body {
   position: relative;
 }
 
+[data-sensitive] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Hide scrollbar for all browsers */
 body::-webkit-scrollbar {
   display: none;
