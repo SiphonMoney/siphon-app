@@ -35,6 +35,7 @@ import { encryptPrice, encryptPriceCents } from "./fhe";
 import { getNetwork, NATIVE_TOKEN, getZkWithdrawRecipient } from "./networks";
 import { getSigner } from "./nexus";
 import { createVaultOutputNote } from "./outputNoteResolver";
+import { getTradeExecutorBaseUrl } from "./tradeExecutorClient";
 import { writeNote, markNoteSpent } from "./localNoteStore";
 
 // The bundled Entrypoint.json predates the split() upgrade, so declare split explicitly.
@@ -113,8 +114,11 @@ export async function submitSplitOnChain(
   try { invalidateLeafCache(asset); } catch { /* best-effort */ }
 
   // Persist the real slice notes (encrypted) keyed `${chainId}-${SYMBOL}-${commitment}`.
+  // Skip the protocol arming-fee slice (no nullifier/secret on this device) so sliceNoteKeys holds
+  // only the USER slices the legs map to.
   const sliceNoteKeys: string[] = [];
   for (const slice of split.slices) {
+    if (!slice.nullifier) continue;
     const key = `${chainId}-${token.symbol}-${slice.commitment}`;
     await writeNote(
       key,
@@ -164,6 +168,8 @@ export interface MultiLegResult {
   legs: BuiltLeg[];
   splitTxHash: string;
   scheduleAnchor: number;         // unix seconds the TWAP fire-times were computed against
+  armingFeeWei?: string;          // Part A arming fee carved into the protocol fee slice (wei)
+  armingPrecommitment?: string;   // the protocol precommitment that slice was minted to
 }
 
 /** A single-slice withdraw proof → the leg's zk_proof wire shape. */
@@ -198,24 +204,42 @@ async function buildLegsFromSplit(
   sliceCount: number,
   encryptLeg: (legIndex: number, sliceAmountHuman: string) => Promise<Pick<BuiltLeg, "encrypted_upper_bound" | "encrypted_lower_bound" | "side" | "eval_mode" | "target_price">>,
   submitSplit: (split: SplitProofData) => Promise<{ txHash: string; sliceNoteKeys: string[] }>,
+  armingFeeWei: bigint = 0n,   // Part A: carve this from the deposit as a protocol fee slice
 ): Promise<MultiLegResult> {
   const scheduleAnchor = Math.floor(Date.now() / 1000);
   const executor = getZkWithdrawRecipient(chainId); // proofs withdraw to the executor wallet
   const signer = getSigner() ?? undefined;
 
-  // 1. Split one deposit note into N slice notes (private, on-chain).
-  const split = await generateSplitProof(chainId, inToken, sliceCount);
+  // Part A: fetch a protocol precommitment for the arming-fee slice (best-effort — if the pool is
+  // empty or fees are off, fall back to no fee slice so creation never blocks).
+  let feeSlice: { amountWei: bigint; precommitment: string } | undefined;
+  let armingPrecommitment: string | undefined;
+  if (armingFeeWei > 0n) {
+    try {
+      const r = await fetch(`${getTradeExecutorBaseUrl()}/fee-pool/next?chain_id=${chainId}&asset=${inToken.symbol}`);
+      const j = await r.json();
+      if (j?.precommitment) {
+        feeSlice = { amountWei: armingFeeWei, precommitment: String(j.precommitment) };
+        armingPrecommitment = String(j.precommitment);
+      }
+    } catch { /* pool unavailable — skip the arming fee this time */ }
+  }
+
+  // 1. Split one deposit note into N slice notes (+ optional protocol fee slice), private, on-chain.
+  const split = await generateSplitProof(chainId, inToken, sliceCount, undefined, feeSlice);
   if ("error" in split) throw new Error(`split proof failed: ${split.error}`);
   const { txHash: splitTxHash, sliceNoteKeys } = await submitSplit(split);
   if (sliceNoteKeys.length < sliceCount) {
     throw new Error(`split produced ${sliceNoteKeys.length} slice notes, need ${sliceCount}`);
   }
+  // User slices only (the fee slice has no nullifier and is skipped in submitSplit).
+  const userSlices = split.slices.filter((s) => s.nullifier);
 
   // 2+3+4. Per slice: withdraw proof (this slice → executor) + output vault note + encrypted trigger.
   const legs: BuiltLeg[] = [];
   for (let i = 0; i < sliceCount; i++) {
     const noteKey = sliceNoteKeys[i];
-    const slice = split.slices[i];
+    const slice = userSlices[i];
     const sliceAmountHuman = ethers.formatUnits(slice.amountWei, inToken.decimals);
 
     const zk = await generateZKData(chainId, inToken, sliceAmountHuman, executor, undefined, noteKey);
@@ -234,7 +258,11 @@ async function buildLegsFromSplit(
     });
   }
 
-  return { legs, splitTxHash, scheduleAnchor };
+  return {
+    legs, splitTxHash, scheduleAnchor,
+    armingFeeWei: armingPrecommitment ? armingFeeWei.toString() : undefined,
+    armingPrecommitment,
+  };
 }
 
 /**
@@ -249,8 +277,9 @@ export async function buildTwapLegs(opts: {
   intervalSec: number;
   clientKeyHex: string;
   submitSplit: (split: SplitProofData) => Promise<{ txHash: string; sliceNoteKeys: string[] }>;
+  armingFeeWei?: bigint;
 }): Promise<MultiLegResult> {
-  const { chainId, inToken, outToken, sliceCount, intervalSec, clientKeyHex, submitSplit } = opts;
+  const { chainId, inToken, outToken, sliceCount, intervalSec, clientKeyHex, submitSplit, armingFeeWei = 0n } = opts;
   const anchor = Math.floor(Date.now() / 1000);
   const encryptLeg = async (i: number) => {
     // Encode the fire-time RELATIVE to the schedule anchor (k*interval seconds), so values stay
@@ -262,7 +291,7 @@ export async function buildTwapLegs(opts: {
       encrypted_lower_bound: await encryptPriceCents(fireOffset, clientKeyHex),
     };
   };
-  const res = await buildLegsFromSplit(chainId, inToken, outToken, sliceCount, encryptLeg, submitSplit);
+  const res = await buildLegsFromSplit(chainId, inToken, outToken, sliceCount, encryptLeg, submitSplit, armingFeeWei);
   return { ...res, scheduleAnchor: anchor };
 }
 
@@ -279,8 +308,9 @@ export async function buildGridLegs(opts: {
   levels: number;
   clientKeyHex: string;
   submitSplit: (split: SplitProofData) => Promise<{ txHash: string; sliceNoteKeys: string[] }>;
+  armingFeeWei?: bigint;
 }): Promise<MultiLegResult> {
-  const { chainId, inToken, outToken, low, high, levels, clientKeyHex, submitSplit } = opts;
+  const { chainId, inToken, outToken, low, high, levels, clientKeyHex, submitSplit, armingFeeWei = 0n } = opts;
   const rungs = computeRangeGridLegs(low, high, levels);
   const encryptLeg = async (i: number) => {
     const rung = rungs[i];
@@ -289,5 +319,5 @@ export async function buildGridLegs(opts: {
       ? { eval_mode: "price" as const, side: "LIMIT_BUY" as const, target_price: rung.price, encrypted_lower_bound: encBound }
       : { eval_mode: "price" as const, side: "LIMIT_SELL" as const, target_price: rung.price, encrypted_upper_bound: encBound };
   };
-  return buildLegsFromSplit(chainId, inToken, outToken, levels, encryptLeg, submitSplit);
+  return buildLegsFromSplit(chainId, inToken, outToken, levels, encryptLeg, submitSplit, armingFeeWei);
 }

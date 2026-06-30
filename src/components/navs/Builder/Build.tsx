@@ -77,6 +77,7 @@ import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } fro
 import { getOrCreateClientKey } from "../../../lib/fhe";
 import { getSigner } from "../../../lib/nexus";
 import { reserveStrategyNotes } from "../../../lib/strategyNoteReservation";
+import { armingFeeUsd } from "../../../lib/feeModel";
 import { validateRecipientAddress, chainLabelToId, createDefaultLimitOrderTree } from "./BuildNodes";
 import {
   resolveLimitOrderConditionTree,
@@ -812,18 +813,27 @@ export default function Build({
         const clientKey = await getOrCreateClientKey(recipient);
         const submitSplit = (s: Parameters<typeof submitSplitOnChain>[2]) => submitSplitOnChain(CHAIN_ID, token, s);
 
+        // Part A: upfront arming fee, carved from the deposit as a protocol fee slice (shielded).
+        const windowHours = strategyKind === 'TWAP'
+          ? (sliceCount * (payloadBounds.interval_sec ?? 60)) / 3600
+          : 24; // grids are open-ended → default 24h window
+        const inUsd = token.symbol === 'ETH' ? (ethUsd ?? 0) : (token.symbol === 'USDC' ? 1 : 0);
+        const armingFeeWei = inUsd > 0
+          ? BigInt(Math.floor(armingFeeUsd(windowHours) / inUsd * 10 ** token.decimals))
+          : 0n;
+
         // Each leg withdraws its slice → swaps → re-deposits the output into the asset_out vault
         // as a private note (output_mode='vault'), matching the single-strategy shielded flow.
         const multi = strategyKind === 'TWAP'
           ? await buildTwapLegs({
               chainId: CHAIN_ID, inToken: token, outToken, sliceCount,
               intervalSec: payloadBounds.interval_sec ?? 60,
-              clientKeyHex: clientKey, submitSplit,
+              clientKeyHex: clientKey, submitSplit, armingFeeWei,
             })
           : await buildGridLegs({
               chainId: CHAIN_ID, inToken: token, outToken,
               low: payloadBounds.lower_bound ?? 0, high: payloadBounds.upper_bound ?? 0,
-              levels: sliceCount, clientKeyHex: clientKey, submitSplit,
+              levels: sliceCount, clientKeyHex: clientKey, submitSplit, armingFeeWei,
             });
 
         const mlStrategyData = {
@@ -841,6 +851,8 @@ export default function Build({
           schedule_anchor:   multi.scheduleAnchor,
           is_private:        true,
           output_mode:       'vault' as const,
+          arming_fee_wei:    multi.armingFeeWei,
+          arming_precommitment: multi.armingPrecommitment,
           to_chain:          toChain,
           from_chain:        String(getSelectedChainId()),
         };

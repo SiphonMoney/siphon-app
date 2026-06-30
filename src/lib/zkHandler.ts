@@ -680,8 +680,13 @@ export async function generateSplitProof(
   _token: TokenInfo,
   _sliceCount: number,
   _noteKey?: string,
+  // Part A arming fee: carve slice[0] as a PROTOCOL-owned note (precommitment from the fee pool).
+  // Only the precommitment is needed (the split circuit commits Poseidon(value, precommitment));
+  // the protocol holds the secret. User slices then split (V - armingFee).
+  _feeSlice?: { amountWei: bigint; precommitment: string },
 ): Promise<SplitProofData | { error: string }> {
-  if (_sliceCount < 1 || _sliceCount > SPLIT_N) return { error: `sliceCount must be 1..${SPLIT_N}` };
+  const maxUser = _feeSlice ? SPLIT_N - 1 : SPLIT_N;
+  if (_sliceCount < 1 || _sliceCount > maxUser) return { error: `sliceCount must be 1..${maxUser}` };
 
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
@@ -728,15 +733,29 @@ export async function generateSplitProof(
   }
   if (!chosen) return { error: `No spendable ${_token.symbol} note found to split.` };
 
-  // 3. slice amounts: equal, remainder folded into the last real slice (conservation)
+  // 3. slice amounts. With a fee slice: slice[0] = armingFee (protocol), user slices split the rest.
   const V = chosen.amountWei;
-  const base = V / BigInt(_sliceCount);
+  const armingFee = _feeSlice ? _feeSlice.amountWei : 0n;
+  if (armingFee >= V) return { error: "Arming fee exceeds deposit." };
+  const userV = V - armingFee;
+  const base = userV / BigInt(_sliceCount);
 
-  // 4. build 8 output notes (real slices + zero pad)
+  // 4. build 8 output notes (fee slice + user slices + zero pad)
   const outValue: bigint[] = [];
   const outNote: SplitSliceNote[] = [];
   for (let i = 0; i < SPLIT_N; i++) {
-    const v = i >= _sliceCount ? 0n : (i < _sliceCount - 1 ? base : V - base * BigInt(_sliceCount - 1));
+    if (_feeSlice && i === 0) {
+      // Protocol-owned arming-fee slice — precommitment only (no nullifier/secret on this device).
+      outValue.push(armingFee);
+      outNote.push({
+        nullifier: "", secret: "", precommitment: _feeSlice.precommitment,
+        commitment: pHash(armingFee, BigInt(_feeSlice.precommitment)).toString(),
+        amountWei: armingFee.toString(),
+      });
+      continue;
+    }
+    const u = _feeSlice ? i - 1 : i;   // user-slice index (shifted past the fee slice)
+    const v = u >= _sliceCount ? 0n : (u < _sliceCount - 1 ? base : userV - base * BigInt(_sliceCount - 1));
     const cd = await generateCommitmentData(_chainId, _token, ethers.formatUnits(v, _token.decimals));
     outValue.push(v);
     outNote.push({
