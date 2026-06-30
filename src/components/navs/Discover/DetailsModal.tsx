@@ -13,7 +13,7 @@ import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
 import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } from "../../../lib/multiLegBuilder";
-import { armingFeeUsd } from "../../../lib/feeModel";
+import { armingFeeUsd, FEE } from "../../../lib/feeModel";
 import { getOrCreateClientKey } from "../../../lib/fhe";
 import { NATIVE_TOKEN } from "../../../lib/networks";
 import { normalizeStrategyKind, resolvePositionPct } from "../../../lib/strategySpec";
@@ -753,6 +753,7 @@ export default function DetailsModal({
           output_mode: 'vault' as const,
           arming_fee_wei: multi.armingFeeWei,
           arming_precommitment: multi.armingPrecommitment,
+          execution_window_sec: Math.round(runDurationHours * 3600),
           from_chain: String(fromChainId),
           to_chain: String(toChainId ?? fromChainId),
         }, {
@@ -1086,7 +1087,7 @@ export default function DetailsModal({
                     <dd>${baseFee.toFixed(2)}</dd>
                   </div>
                   <div className="builder-run-receipt-cost-row">
-                    <dt>Hourly fee ($0.35 × {runDurationHours}h)</dt>
+                    <dt>Hourly fee (${FEE.PER_HOUR_ARM_USD.toFixed(2)} × {runDurationHours}h)</dt>
                     <dd>${hourlyFee.toFixed(2)}</dd>
                   </div>
                   <div className="builder-run-receipt-cost-row">
@@ -1117,11 +1118,20 @@ export default function DetailsModal({
                     </dd>
                   </div>
                   <div className="builder-run-receipt-cost-row">
-                    <dt>Run fee (total)</dt>
+                    <dt>Arming fee (upfront, non-refundable)</dt>
                     <dd>
                       ${totalCost.toFixed(2)} USD
                       <span className="builder-run-receipt-cost-sub">
                         ≈ {(totalCost / ethUsd).toFixed(6)} ETH
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="builder-run-receipt-cost-row">
+                    <dt>Execution fee (per fill)</dt>
+                    <dd>
+                      {(FEE.EXEC_BPS / 100).toFixed(2)}% of trade
+                      <span className="builder-run-receipt-cost-sub">
+                        min ${FEE.MIN_EXEC_USD.toFixed(2)} + ${FEE.GAS_REIMBURSE_USD.toFixed(2)} gas · taken from each leg
                       </span>
                     </dd>
                   </div>

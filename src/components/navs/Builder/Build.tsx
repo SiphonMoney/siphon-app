@@ -863,6 +863,8 @@ export default function Build({
           output_mode:       'vault' as const,
           arming_fee_wei:    multi.armingFeeWei,
           arming_precommitment: multi.armingPrecommitment,
+          // Expire + return funds after a generous window (schedule duration ×3, min 24h).
+          execution_window_sec: Math.max(Math.round(windowHours * 3600 * 3), 86400),
           to_chain:          toChain,
           from_chain:        String(getSelectedChainId()),
         };

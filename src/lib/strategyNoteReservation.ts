@@ -37,8 +37,10 @@ export async function reconcileReservedNotes(
     if (!raw) continue;
 
     const st = (s.status || "").toUpperCase();
+    // EXPIRED/FAILED/CANCELLED → revert to 'false' so unspent funds return to the user.
     const terminal: "true" | "false" | null =
-      st === "EXECUTED" ? "true" : (st === "FAILED" || st === "CANCELLED" ? "false" : null);
+      st === "EXECUTED" ? "true"
+        : (st === "FAILED" || st === "CANCELLED" || st === "EXPIRED" ? "false" : null);
     if (!terminal) continue;
 
     let ids: string[] = [];
