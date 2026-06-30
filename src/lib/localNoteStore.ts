@@ -81,15 +81,16 @@ export async function readNote(key: string, signer: Signer): Promise<StoredNote 
 }
 
 /**
- * Mark a note spent without decrypting — reads raw row, sets spent flag, rewrites.
- * Safe to call without a signer since it doesn't touch encrypted fields.
+ * Set a note's spent flag without decrypting — reads raw row, sets the flag, rewrites.
+ * Safe to call without a signer since it doesn't touch the encrypted fields, so spent:true can be
+ * reverted to spent:false (e.g. when a strategy that reserved the note fails) with no data loss.
  */
-export function markNoteSpent(key: string): void {
+export function markNoteSpent(key: string, spent: boolean = true): void {
   const raw = localStorage.getItem(key);
   if (!raw) return;
   try {
     const row = JSON.parse(raw);
-    localStorage.setItem(key, JSON.stringify({ ...row, spent: true }));
+    localStorage.setItem(key, JSON.stringify({ ...row, spent }));
   } catch { /* best-effort */ }
 }
 

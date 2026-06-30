@@ -1051,6 +1051,17 @@ export default function Build({
         for (const k of zkResult.spentDepositKeys ?? []) { try { localStorage.removeItem(k); } catch {} }
       }
 
+      // Mark the input notes spent:true LOCALLY now so a concurrent withdraw can't re-select and
+      // double-spend them in the arm→execute window. markNoteSpent preserves the encrypted secret;
+      // reconcileReservedNotes reverts them to spent:false if the strategy FAILS, and they're
+      // deleted for good on siphon:strategyExecuted.
+      if (strategyId && (zkResult.spentDepositKeys ?? []).length > 0) {
+        try {
+          const { markNoteSpent } = await import('../../../lib/localNoteStore');
+          for (const k of zkResult.spentDepositKeys ?? []) markNoteSpent(k, true);
+        } catch { /* best-effort */ }
+      }
+
       // Strategy is registered with the trade-executor and runs server-side.
       if (strategyId) {
         window.dispatchEvent(

@@ -47,5 +47,20 @@ export async function reconcileReservedNotes(
     try { ids = JSON.parse(raw); } catch { ids = []; }
     await Promise.allSettled(ids.map((id) => markCommitmentSpent(signer, id, terminal)));
     try { localStorage.removeItem(RESERVED_KEY(s.id)); } catch { /* ignore */ }
+
+    // The input notes were marked spent:true LOCALLY at submit to block the withdrawal race. If the
+    // strategy didn't execute, return them to spendable (on-chain they're untouched). The server-
+    // side markCommitmentSpent(..,'false') above is the backstop if this device misses this pass.
+    if (terminal === "false") {
+      try {
+        const cleanupRaw = localStorage.getItem(`siphon-pending-cleanup-${s.id}`);
+        if (cleanupRaw) {
+          const localKeys: string[] = JSON.parse(cleanupRaw);
+          const { markNoteSpent } = await import("./localNoteStore");
+          for (const k of localKeys) markNoteSpent(k, false);
+          localStorage.removeItem(`siphon-pending-cleanup-${s.id}`);
+        }
+      } catch { /* best-effort */ }
+    }
   }
 }
