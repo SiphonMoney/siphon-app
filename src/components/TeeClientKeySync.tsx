@@ -6,11 +6,42 @@
  */
 
 import { useEffect } from "react";
-import { getStoredClientKey } from "@/lib/fhe";
+import { getStoredClientKey, generateKeys, encryptPriceCents } from "@/lib/fhe";
 import { ensureClientKeyInDecryptor, isTeeAutonomousMode } from "@/lib/decryptorClient";
+import { ensureServerKeyUploaded } from "@/lib/strategySubmit";
 import { resolveWalletAddress } from "@/lib/walletAddress";
 
 export default function TeeClientKeySync() {
+  // DEV: manual resync — re-derive + re-upload the server key (to the executor) and the client
+  // key (to the decryptor) from the CURRENT stored client key, so both match the ciphertexts the
+  // browser produced. Call `await window.__siphonResync()` in the console.
+  useEffect(() => {
+    (window as unknown as { __siphonResync?: () => Promise<string> }).__siphonResync = async () => {
+      const userId = resolveWalletAddress();
+      if (!userId) return "no wallet connected";
+      const clientKey = getStoredClientKey(userId);
+      if (!clientKey) return "no stored client key for " + userId;
+      await ensureServerKeyUploaded(userId, clientKey);
+      await ensureClientKeyInDecryptor(userId, clientKey);
+      return "resynced server+client key for " + userId.toLowerCase();
+    };
+
+    // DEV self-test: generate a FRESH wasm keypair, encrypt fire_time=0, and round-trip it
+    // through the native engine + decryptor. If triggered=true, wasm keys ARE engine-compatible.
+    (window as unknown as { __siphonFheSelfTest?: () => Promise<unknown> }).__siphonFheSelfTest = async () => {
+      const { clientKey, serverKey } = await generateKeys(); // fresh matched pair (compressed server key)
+      const ct0 = await encryptPriceCents(0n, clientKey);    // fire_time = 0
+      const r = await fetch("http://localhost:5005/debugEval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server_key: serverKey, client_key: clientKey, encrypted_lower_bound: ct0, current_time: 100 }),
+      });
+      const j = await r.json();
+      console.log("[FHE SELF-TEST]", j);
+      return j;
+    };
+  }, []);
+
   useEffect(() => {
     if (!isTeeAutonomousMode()) return;
 
