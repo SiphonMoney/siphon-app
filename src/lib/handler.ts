@@ -289,21 +289,12 @@ export async function deposit(_token: string, _amount: string) {
       /* activity log is best-effort */
     }
 
-    // Auto-merge if this deposit pushed the unspent note count to ≥6.
-    // consolidateIfNeeded self-gates (returns early if count < threshold).
-    (async () => {
-      try {
-        const { consolidateIfNeeded } = await import('./noteConsolidator');
-        const result = await consolidateIfNeeded(currentChainId(), tokenInfo);
-        if ('merged' in result && result.merged) {
-          console.log('[deposit] Auto-merged notes after deposit:', result.key);
-        } else if ('error' in result) {
-          console.warn('[deposit] Auto-merge failed (non-blocking):', result.error);
-        }
-      } catch (e) {
-        console.warn('[deposit] Auto-merge threw (non-blocking):', e);
-      }
-    })();
+    // Auto-merge-after-deposit is DISABLED. It consolidated notes in a fire-and-forget background
+    // tx, but its not-yet-on-chain merged note created a race: a strategy/withdraw built right
+    // after a deposit found its spendable notes already spent into a pending merged leaf → repeated
+    // "no spendable note" failures with every deposit. Deposits now create plain, immediately
+    // usable notes. Consolidation, if ever needed, should be a manual, explicitly-confirmed action
+    // (consolidateIfNeeded in noteConsolidator.ts) — never an implicit race against the next action.
 
     return { success: true, executeTransaction: receipt.hash };
 
