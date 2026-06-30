@@ -27,6 +27,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // publicnode is best for live reads/broadcasts (high limit) but rejects historical eth_getLogs
+  // as "archive" without a paid token. For log queries, push it to the back so an archive-capable
+  // node (drpc / rpc.sepolia.org) is tried first and we don't waste a hop on a guaranteed reject.
+  if (body.includes('eth_getLogs')) {
+    urls = [...urls].sort((a, b) =>
+      (a.includes('publicnode') ? 1 : 0) - (b.includes('publicnode') ? 1 : 0));
+  }
+
   let lastText = '';
   let lastStatus = 502;
 
@@ -42,10 +50,17 @@ export async function POST(req: NextRequest) {
         lastText = text;
         lastStatus = res.status;
 
-        if (res.status === 429) {
+        // Rate limited — either an HTTP 429, or (Infura free-tier) a JSON-RPC -32005 / "Too Many
+        // Requests" wrapped in a 200. Back off + retry this node, then fall through to the next.
+        if (res.status === 429 || text.includes('-32005') || text.includes('Too Many Requests')) {
           await sleep(300 * 2 ** attempt);
           continue;
         }
+
+        // Some free nodes (publicnode) reject historical eth_getLogs as an "archive" request
+        // without a paid token (-32602). That's deterministic for this node, not transient — skip
+        // straight to the next upstream (e.g. drpc) instead of retrying or surfacing it.
+        if (text.includes('Archive requests require') || text.includes('personal token')) break;
 
         // HTTP-level failure (e.g. 401/403 from a restricted key, 5xx) — don't surface it to
         // the client; fall through to the next upstream RPC. A 2xx (even one carrying a

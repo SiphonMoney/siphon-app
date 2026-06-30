@@ -144,6 +144,40 @@ export async function markCommitmentSpent(
   });
 }
 
+/**
+ * Prune fully-spent commitments to keep the table small.
+ *
+ * Only deletes rows that are `spent='true'` AND older than `olderThanDays` (default 7). Such a row
+ * is dead weight: every spend path filters `spent==='true'` out, and if a leaf were ever rediscovered
+ * the on-chain nullifier check ([zkHandler] vault.nullifiers) re-marks it spent — the secret is never
+ * needed again once withdrawn. The age buffer leaves time for any mis-flag to be noticed first.
+ * NEVER touches `'false'` (spendable) or `'pending'` (reserved) rows. Best-effort; returns count.
+ */
+export async function pruneSpentCommitments(signer: Signer, olderThanDays = 7): Promise<number> {
+  const tag = await deriveCommTag(signer);
+
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (SUPABASE_URL && SUPABASE_KEY) {
+    // The public anon key is RLS-restricted to INSERT/UPDATE/SELECT — DELETE returns 401. Pruning a
+    // hosted Supabase therefore runs server-side via pg_cron (see supabase/prune_spent_commitments.sql),
+    // not from the client. Skip here to avoid a guaranteed-401 every cycle.
+    return 0;
+  }
+
+  // Fallback: trade executor
+  const headers = await noteAuthHeaders(signer, tag);
+  const res = await fetch(`${getTradeExecutorBaseUrl()}/commitments/prune`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ older_than_days: olderThanDays }),
+  });
+  if (!res.ok) return 0;
+  const json = await res.json().catch(() => ({}));
+  return Number(json?.deleted ?? 0);
+}
+
 export async function exportCommitments(signer: Signer): Promise<DecryptedCommitment[]> {
   const tag     = await deriveCommTag(signer);
   const key     = await deriveEncKey(signer);

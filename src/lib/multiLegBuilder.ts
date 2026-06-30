@@ -225,11 +225,33 @@ async function buildLegsFromSplit(
         const asset = inToken.symbol === "ETH" ? NATIVE_TOKEN : inToken.address;
         const ep = new Contract(net.entrypoint, ["function deposit(address,uint256,uint256) payable returns (uint256)"], signer);
         // Explicit gas → skip MetaMask's eth_estimateGas (its Infura RPC rate-limits under load).
-        const tx = await ep.deposit(asset, armingFeeWei, BigInt(j.precommitment),
-          { gasLimit: 600000n, ...(inToken.symbol === "ETH" ? { value: armingFeeWei } : {}) });
+        // deposit() does a depth-32 Poseidon Merkle insert (~977k gas measured) — each level is an
+        // external PoseidonT3 call, so the 63/64 forwarding rule starves a too-low limit and the
+        // insert reverts (status 0) with gasUsed < limit. 1.5M gives headroom; unused gas refunds.
+        const overrides = { gasLimit: 1_500_000n, ...(inToken.symbol === "ETH" ? { value: armingFeeWei } : {}) };
+        // MetaMask smart/delegated accounts (EIP-7702) cap concurrent unconfirmed txs; if one is
+        // briefly in-flight the submit is rejected with -32603 "in-flight transaction limit reached".
+        // Back off and retry — the prior tx confirms and frees the slot.
+        let tx;
+        for (let attempt = 0; ; attempt++) {
+          try { tx = await ep.deposit(asset, armingFeeWei, BigInt(j.precommitment), overrides); break; }
+          catch (err) {
+            const msg = String((err as { message?: string })?.message || err);
+            if (msg.includes("in-flight transaction limit") && attempt < 4) {
+              await new Promise(res => setTimeout(res, 4000));
+              continue;
+            }
+            throw err;
+          }
+        }
         await tx.wait();
         armingPrecommitment = String(j.precommitment);
         armingCollectedWei = armingFeeWei;
+        // This deposit inserts a leaf and bumps the on-chain Merkle root. generateSplitProof below
+        // reads stateRoot live but leaves from cache — drop the stale cache so the split's path and
+        // root come from the SAME post-deposit snapshot (else Split circuit `root === stateRoot` at
+        // line 55 fails). Same vault the split note lives in, so this is the cache key to clear.
+        try { invalidateLeafCache(asset); } catch { /* best-effort */ }
       }
     } catch (e) { console.warn("[Fee] arming-fee deposit skipped:", e); }
   }

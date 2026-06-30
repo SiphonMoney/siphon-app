@@ -8,8 +8,12 @@
 import { useEffect } from "react";
 import { getStrategies } from "@/lib/strategyApi";
 import { reconcileReservedNotes } from "@/lib/strategyNoteReservation";
+import { pruneSpentCommitments } from "@/lib/commitmentStore";
 import { resolveWalletAddress } from "@/lib/walletAddress";
 import { getSigner } from "@/lib/nexus";
+
+const PRUNE_KEY = "siphon-last-prune";
+const PRUNE_EVERY_MS = 6 * 60 * 60 * 1000; // sweep spent commitments at most every 6h
 
 export default function StrategyNoteReconciler() {
   useEffect(() => {
@@ -26,6 +30,14 @@ export default function StrategyNoteReconciler() {
             signer,
             strategies.map((s) => ({ id: s.id, status: s.status })),
           );
+        }
+
+        // Throttled space reclaim: delete long-spent commitment rows (>7d) at most every 6h.
+        let last = 0;
+        try { last = Number(localStorage.getItem(PRUNE_KEY) || 0); } catch { /* ignore */ }
+        if (Date.now() - last > PRUNE_EVERY_MS) {
+          try { localStorage.setItem(PRUNE_KEY, String(Date.now())); } catch { /* ignore */ }
+          void pruneSpentCommitments(signer).catch(() => {});
         }
       } catch {
         /* best-effort; retried next tick */

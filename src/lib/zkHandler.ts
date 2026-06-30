@@ -706,6 +706,37 @@ export async function generateSplitProof(
   const zeros: bigint[] = [0n];
   for (let i = 1; i < TREE_DEPTH; i++) zeros[i] = pHash(zeros[i - 1], zeros[i - 1]);
 
+  // 1b. Sync server commitments into localStorage so the split can see notes created on another
+  // device / after a localStorage clear — mirrors generateZKData's hydration. Without this a note
+  // that exists only in Supabase (spent='false') is invisible to the localStorage-only scan below,
+  // surfacing as a false "No spendable ETH note found to split" even though the balance shows funds.
+  try {
+    const { fetchCommitments } = await import('./commitmentStore');
+    const { writeNote } = await import('./localNoteStore');
+    const serverComms = await fetchCommitments(signer);
+    for (const c of serverComms) {
+      if (c.spent !== 'false') continue;
+      const key = `${c.decrypted.chainId}-${c.asset}-${c.decrypted.commitment}`;
+      const existing = localStorage.getItem(key);
+      const needsWrite = !existing || (() => {
+        try { return !JSON.parse(existing).nullifier_enc; } catch { return true; }
+      })();
+      if (needsWrite) {
+        await writeNote(key, {
+          nullifier:     c.decrypted.nullifier,
+          secret:        c.decrypted.secret,
+          commitment:    c.decrypted.commitment,
+          amount:        c.decrypted.amount,
+          nullifierHash: c.decrypted.nullifierHash ?? '',
+          precommitment: c.decrypted.precommitment ?? '',
+          spent:         false,
+        }, signer);
+      }
+    }
+  } catch (e) {
+    console.warn('[split] server commitment hydration failed, using localStorage only', e);
+  }
+
   // 2. select the note to split (specific key, or largest unspent note)
   const { scanNoteMeta, readNote, markNoteSpent } = await import('./localNoteStore');
   const metas = scanNoteMeta(`${_chainId}-${_token.symbol}-`);
@@ -750,9 +781,26 @@ export async function generateSplitProof(
 
   // 5. witness
   const { pathElements, pathIndices } = buildMerklePath(leaves, chosen.leafIndex, zeros, pHash);
+
+  // Derive stateRoot by folding the chosen leaf up its OWN path — same snapshot as `leaves`, so the
+  // circuit's `merkleChecker.root === stateRoot` (split.circom L55) can never fail on a snapshot
+  // skew. A live getRoot() can disagree with a cached/lagging leaf set (and eth_call vs eth_getLogs
+  // may even hit different nodes), which is exactly what broke after the arming deposit inserted a
+  // leaf. knownRoots is never evicted on-chain (append-only history), so this root — the current one
+  // when leaves are fresh, or a recent historical one when they lag — always passes the on-chain check.
+  let computedRoot = leaves[chosen.leafIndex]; // the chosen note's leaf (bigint), fold it up its path
+  for (let lvl = 0; lvl < pathIndices.length; lvl++) {
+    computedRoot = pathIndices[lvl] === 1
+      ? pHash(pathElements[lvl], computedRoot)
+      : pHash(computedRoot, pathElements[lvl]);
+  }
+  if (computedRoot !== onChainRoot) {
+    console.debug('[split] leaf set lags live root — proving against recent historical root (knownRoots covers it)');
+  }
+
   const nullifierHash = pHash1(BigInt(chosen.data.nullifier));
   const circuitInput = {
-    stateRoot:     onChainRoot.toString(),
+    stateRoot:     computedRoot.toString(),
     nullifierHash: nullifierHash.toString(),
     outCommitment: outNote.map(o => o.commitment),
     inValue:       V.toString(),
@@ -770,7 +818,7 @@ export async function generateSplitProof(
   const outCommitments = publicSignals.slice(2, 2 + SPLIT_N);
 
   return {
-    stateRoot:     onChainRoot.toString(),
+    stateRoot:     computedRoot.toString(),
     nullifierHash: nullifierHash.toString(),
     outCommitments,
     pA: proof.pA as [string, string],
@@ -1006,24 +1054,30 @@ export async function generateZKData(
   const changeCommitmentBig = BigInt(F.toObject(poseidon([changeValue, changePrecommitment])));
 
   // 6. BUILD MERKLE PATHS FOR EACH INPUT NOTE
+  // stateRoot MUST come from the SAME leaf snapshot as the paths, or the withdrawal circuit's
+  // root===stateRoot check fails. A live getRoot() (eth_call) can disagree with a cached/lagging
+  // leaf set (eth_getLogs), which may even resolve to a different RPC node. So fold the leaf set to
+  // its root and prove against THAT; knownRoots is never evicted on-chain, so a slightly stale root
+  // (when leaves lag) still passes the on-chain check.
   const pathElementsAll: bigint[][] = [];
   const pathIndicesAll: number[][] = [];
+  let snapshotRoot = onChainRoot;
   for (const note of selectedNotes) {
     const { pathElements, pathIndices } = buildMerklePath(leaves, note.leafIndex, zeros, poseidonHash);
     const computedRoot = (() => {
       let levelNodes = leaves.slice();
-      let idx = note.leafIndex;
       for (let level = 0; level < TREE_DEPTH; level++) {
         const next: bigint[] = [];
         for (let i = 0; i < levelNodes.length; i += 2) {
           next.push(poseidonHash(levelNodes[i], i + 1 < levelNodes.length ? levelNodes[i + 1] : zeros[level]));
         }
-        levelNodes = next; idx = Math.floor(idx / 2);
+        levelNodes = next;
       }
       return levelNodes[0];
     })();
+    snapshotRoot = computedRoot; // all notes share one tree → identical root; prove against the leaf snapshot
     if (computedRoot !== onChainRoot) {
-      console.warn(`[Proof] ⚠️ computed root for note[${note.leafIndex}] != on-chain root`);
+      console.debug(`[Proof] leaf set lags live root for note[${note.leafIndex}] — proving against recent historical root (knownRoots covers it)`);
     }
     pathElementsAll.push(pathElements);
     pathIndicesAll.push(pathIndices);
@@ -1041,7 +1095,7 @@ export async function generateZKData(
 
   const circuitInput: Record<string, unknown> = {
     withdrawnValue:   withdrawnValueTotal.toString(),
-    stateRoot:        onChainRoot.toString(),
+    stateRoot:        snapshotRoot.toString(),
     changeCommitment: changeCommitmentBig.toString(),
     nullifierHash:    nullifierHashesInput,
     recipient:        BigInt(_recipient).toString(),
@@ -1072,7 +1126,7 @@ export async function generateZKData(
     nullifierHash:    nullifierHashes[0],
     changeCommitment: changeCommitmentOnChain.toString(),
     newCommitment:    changeCommitmentOnChain.toString(),
-    stateRoot:        onChainRoot.toString(),
+    stateRoot:        snapshotRoot.toString(), // MUST equal the proof's public stateRoot (publicSignals[1])
     pA:               rawProof.pA as [string, string],
     pB:               rawProof.pB as [[string, string], [string, string]],
     pC:               rawProof.pC as [string, string],

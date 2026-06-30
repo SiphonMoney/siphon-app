@@ -23,12 +23,15 @@ export function getServerRpcUrls(chainId: number): string[] {
     ]);
   }
   if (chainId === 11155111) {
+    // High-limit public nodes FIRST; the env override (often Infura free-tier, which returns its
+    // 429 as a JSON-RPC -32005 inside a 200 and throttles every read) is a fallback only.
     return uniqueUrls([
+      NETWORKS[11155111].rpcUrl,                          // ethereum-sepolia-rpc.publicnode.com
+      'https://ethereum-sepolia-rpc.publicnode.com',
+      'https://sepolia.drpc.org',
+      'https://rpc.sepolia.org',
       process.env.ETH_SEPOLIA_RPC,
       process.env.ETH_RPC_URL,
-      NETWORKS[11155111].rpcUrl,
-      'https://sepolia.drpc.org',
-      'https://ethereum-sepolia-rpc.publicnode.com',
     ]);
   }
   throw new Error(`Unsupported chainId: ${chainId}`);
