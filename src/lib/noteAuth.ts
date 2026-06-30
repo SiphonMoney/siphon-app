@@ -78,7 +78,10 @@ async function _deriveEncKeyOnce(signer: Signer, wallet: string): Promise<Crypto
   const sig  = await signer.signMessage(SIGN_ENC_KEY);
   const raw  = new TextEncoder().encode(sig);
   const hash = await crypto.subtle.digest('SHA-256', raw);
-  const key  = await crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  // extractable: true — we immediately exportKey() below to cache the raw bytes in sessionStorage.
+  // (Was false, which made exportKey throw InvalidAccessError and silently broke note encryption /
+  // server backup, so swap-output notes never became spendable.)
+  const key  = await crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
   _encKeyCache.set(wallet, key);
   // Store raw key bytes as hex for sessionStorage re-import.
   const exported = await crypto.subtle.exportKey('raw', key);
