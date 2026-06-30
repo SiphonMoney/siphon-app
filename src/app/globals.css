@@ -1021,13 +1021,61 @@ canvas:not(#particleCanvas):not(#scannerCanvas) {
    oversized at 100% browser zoom (you'd otherwise drop to ~75% to see it all). Scale
    the whole UI down progressively below 1600px so everything is visible at 100%.
    Large monitors (>1600px) are unaffected; mobile breakpoints (<768px) still apply.
-   `zoom` reflows correctly (unlike transform: scale) and keeps the fixed nav/canvas aligned. */
+   `zoom` reflows correctly (unlike transform: scale) and keeps the fixed nav/canvas aligned.
+
+   React Flow mixes offsetWidth with getBoundingClientRect for handle math — page-level
+   zoom breaks edge anchors. On the builder, keep html at 1:1 and zoom chrome only.
+   Never zoom `.dapp-main-container` — the React Flow canvas lives inside it. */
+:root {
+  --ui-zoom: 1;
+}
+
 @media (max-width: 1600px) {
-  html { zoom: 0.85; }
+  html {
+    zoom: 0.85;
+    --ui-zoom: 0.85;
+  }
 }
 @media (max-width: 1440px) {
-  html { zoom: 0.78; }
+  html {
+    zoom: 0.78;
+    --ui-zoom: 0.78;
+  }
 }
 @media (max-width: 1280px) {
-  html { zoom: 0.7; }
+  html {
+    zoom: 0.7;
+    --ui-zoom: 0.7;
+  }
+}
+
+html:has(.blueprint-view--fullscreen) {
+  zoom: 1;
+}
+
+@media (max-width: 1600px) {
+  html:has(.blueprint-view--fullscreen) .dapp-nav-chrome,
+  html:has(.blueprint-view--fullscreen) .blueprint-workspace > :not(.blueprint-stage),
+  html:has(.blueprint-view--fullscreen) .blueprint-stage > :not(.blueprint-canvas) {
+    zoom: 0.85;
+  }
+}
+@media (max-width: 1440px) {
+  html:has(.blueprint-view--fullscreen) .dapp-nav-chrome,
+  html:has(.blueprint-view--fullscreen) .blueprint-workspace > :not(.blueprint-stage),
+  html:has(.blueprint-view--fullscreen) .blueprint-stage > :not(.blueprint-canvas) {
+    zoom: 0.78;
+  }
+}
+@media (max-width: 1280px) {
+  html:has(.blueprint-view--fullscreen) .dapp-nav-chrome,
+  html:has(.blueprint-view--fullscreen) .blueprint-workspace > :not(.blueprint-stage),
+  html:has(.blueprint-view--fullscreen) .blueprint-stage > :not(.blueprint-canvas) {
+    zoom: 0.7;
+  }
+}
+
+/* Discover / modal previews still use page zoom — compensate their React Flow layer. */
+html:not(:has(.blueprint-view--fullscreen)) .strategy-preview-flow {
+  zoom: calc(1 / var(--ui-zoom));
 }

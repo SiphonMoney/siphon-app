@@ -14,6 +14,8 @@ import {
   NodeChange,
   EdgeChange,
   useReactFlow,
+  useStore,
+  useUpdateNodeInternals,
   type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -57,6 +59,7 @@ import {
   resolvePositionPct,
 } from "../../../lib/strategySpec";
 import { layoutStrategyNodes, getModalStepNodes, randomBuilderNodePosition } from "../../../lib/builderLayout";
+import { stripNodeWrapperStyle } from "../../../lib/builderNodeStyle";
 import { formatGraphForPreview } from "../../../lib/repeatGraph";
 import { buildRunModeValuesFromNodes } from "../../../lib/runModeValues";
 import {
@@ -107,15 +110,26 @@ interface NodeContextMenuState {
 
 function BlueprintFlowViewport({ nodes }: { nodes: Node[] }) {
   const { fitView, setCenter } = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
+  const flowDomNode = useStore((state) => state.domNode);
   const nodeStructureKey = nodes.map((node) => node.id).join("|");
 
+  const refreshNodeMeasurements = useCallback(() => {
+    nodes.forEach((node) => updateNodeInternals(node.id));
+  }, [nodes, updateNodeInternals]);
+
   const alignView = useCallback(() => {
+    refreshNodeMeasurements();
     if (nodes.length === 0) {
       void setCenter(0, 0, { zoom: 0.85, duration: 0 });
       return;
     }
     void fitView({ padding: 0.35, duration: 200, maxZoom: 0.8 });
-  }, [nodes.length, setCenter, fitView]);
+  }, [nodes.length, setCenter, fitView, refreshNodeMeasurements]);
+
+  const remeasureNodes = useCallback(() => {
+    refreshNodeMeasurements();
+  }, [refreshNodeMeasurements]);
 
   useEffect(() => {
     alignView();
@@ -134,6 +148,24 @@ function BlueprintFlowViewport({ nodes }: { nodes: Node[] }) {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [alignView]);
+
+  useEffect(() => {
+    const queries = [1600, 1440, 1280].map((width) =>
+      window.matchMedia(`(max-width: ${width}px)`),
+    );
+    const onBreakpointChange = () => alignView();
+    queries.forEach((query) => query.addEventListener("change", onBreakpointChange));
+    return () => {
+      queries.forEach((query) => query.removeEventListener("change", onBreakpointChange));
+    };
+  }, [alignView]);
+
+  useEffect(() => {
+    if (!flowDomNode) return;
+    const observer = new ResizeObserver(() => remeasureNodes());
+    observer.observe(flowDomNode);
+    return () => observer.disconnect();
+  }, [flowDomNode, remeasureNodes]);
 
   return null;
 }
@@ -359,19 +391,23 @@ export default function Build({
   
   // Normalize node to ensure it has all required properties
   const normalizeNode = useCallback((node: Node): Node => {
+    const normalized = stripNodeWrapperStyle(node);
     return {
-      ...node,
-      type: node.type || (node.data?.type === 'repeatGroup' ? 'repeatGroup' : 'custom'),
-      draggable: node.draggable !== undefined ? node.draggable : true,
-      selectable: node.selectable !== undefined ? node.selectable : true,
-      connectable: node.connectable !== undefined ? node.connectable : true,
-      sourcePosition: node.sourcePosition || Position.Right,
-      targetPosition: node.targetPosition || Position.Left,
-      extent: node.extent ?? (node.parentId ? 'parent' : undefined),
+      ...normalized,
+      type: normalized.type || (normalized.data?.type === 'repeatGroup' ? 'repeatGroup' : 'custom'),
+      draggable: normalized.draggable !== undefined ? normalized.draggable : true,
+      selectable: normalized.selectable !== undefined ? normalized.selectable : true,
+      connectable: normalized.connectable !== undefined ? normalized.connectable : true,
+      sourcePosition: normalized.sourcePosition || Position.Right,
+      targetPosition: normalized.targetPosition || Position.Left,
+      extent: normalized.extent ?? (normalized.parentId ? 'parent' : undefined),
     };
   }, []);
 
-  const syncRepeatState = useCallback((nds: Node[]) => sortAndSyncRepeat(nds), []);
+  const syncRepeatState = useCallback(
+    (nds: Node[]) => sortAndSyncRepeat(nds.map(stripNodeWrapperStyle)),
+    [],
+  );
 
   const onLoadStrategyTemplate = useCallback((strategyName: string) => {
     const graph = loadStrategyGraphByName(strategyName);
@@ -462,28 +498,6 @@ export default function Build({
         maxSlippageBps: null,
         intervals: null,
         repeatCount: null,
-      },
-      style: {
-        background: isStrategy
-          ? 'rgba(255, 193, 7, 0.2)'
-          : isControl
-            ? 'rgba(59, 130, 246, 0.2)'
-            : 'rgba(255, 255, 255, 0.12)',
-        border: isStrategy
-          ? '1px solid rgba(255, 193, 7, 0.5)'
-          : isControl
-            ? '1px solid rgba(59, 130, 246, 0.5)'
-            : '1px solid rgba(255, 255, 255, 0.3)',
-        color: 'white',
-        borderRadius: '8px',
-        padding: '0.75rem',
-        minWidth: opts?.parentId ? '180px' : '200px',
-        textAlign: 'center',
-        fontFamily: 'var(--font-source-code), monospace',
-        fontSize: '12px',
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
       },
       draggable: true,
       selectable: true,
@@ -672,7 +686,7 @@ export default function Build({
       if (!source) return nds;
 
       const blockType = (source.data.type as string) || "block";
-      const duplicate: Node = {
+      const duplicate: Node = stripNodeWrapperStyle({
         ...source,
         id: `${blockType}-${Date.now()}`,
         position: {
@@ -680,9 +694,8 @@ export default function Build({
           y: source.position.y + 48,
         },
         data: { ...source.data },
-        style: source.style ? { ...source.style } : source.style,
         selected: true,
-      };
+      });
 
       return [
         ...nds.map((node) => ({ ...node, selected: false })),

@@ -19,24 +19,6 @@ function estimateToAmount(amount: string, from: string, to: string): string | nu
   return (parseFloat(amount) * (pFrom / pTo)).toFixed(4);
 }
 
-function blockStyle(type: BlockType): Node["style"] {
-  const isStrategy = type === "strategy";
-  return {
-    background: isStrategy ? "rgba(255, 193, 7, 0.2)" : "rgba(255, 255, 255, 0.12)",
-    border: isStrategy ? "1px solid rgba(255, 193, 7, 0.5)" : "1px solid rgba(255, 255, 255, 0.3)",
-    color: "white",
-    borderRadius: "8px",
-    padding: "0.75rem",
-    minWidth: "200px",
-    textAlign: "center",
-    fontFamily: "var(--font-source-code), monospace",
-    fontSize: "12px",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
-  };
-}
-
 export type FlowSegment = BlockType | "schedule";
 
 export function isScheduleControlNode(node: Node): boolean {
@@ -96,7 +78,6 @@ export function createScheduleNode(
       maxSlippageBps: null,
       intervals: null,
     },
-    style: blockStyle("strategy"),
     draggable: true,
     selectable: true,
     connectable: true,
@@ -224,7 +205,6 @@ export function createBlockNodeForType(
     type: "custom",
     position,
     data: buildBlockData(type, parsed),
-    style: blockStyle(type),
     draggable: true,
     selectable: true,
     connectable: true,

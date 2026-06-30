@@ -125,6 +125,7 @@ export default function DappPage() {
               }}
             >
               <div
+                className="dapp-nav-chrome"
                 style={{
                   width: "100%",
                   pointerEvents: "auto",

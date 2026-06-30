@@ -889,6 +889,20 @@ body.build-view-expanded .dapp-main-container nav button {
   min-height: 0;
 }
 
+.blueprint-canvas .react-flow__node {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-sizing: border-box;
+}
+
+.blueprint-canvas .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.9);
+}
+
 .blueprint-canvas .react-flow__renderer {
   width: 100%;
   height: 100%;

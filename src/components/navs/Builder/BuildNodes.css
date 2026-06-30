@@ -4,12 +4,31 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 8px;
   padding: 0.75rem;
-  min-width: 200px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  box-sizing: border-box;
   font-family: var(--font-source-code), monospace;
   transition:
     border-color 0.55s ease,
     border-width 0.55s ease,
     box-shadow 0.55s ease;
+}
+
+.custom-node--strategy {
+  background: rgba(255, 193, 7, 0.2);
+  border-color: rgba(255, 193, 7, 0.5);
+}
+
+.custom-node--control {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.custom-node--in-group {
+  width: 200px;
+  min-width: 180px;
+  max-width: 200px;
 }
 
 .custom-node.sim-checking {

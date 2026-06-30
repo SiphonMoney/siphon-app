@@ -34,6 +34,7 @@ function CustomNodeFlow(props: NodeProps) {
   return (
     <CustomNode
       id={props.id}
+      parentId={props.parentId}
       data={props.data}
       updateNodeData={ctx.updateNodeData}
       tokens={ctx.tokens}

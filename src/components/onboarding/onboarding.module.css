@@ -9,6 +9,7 @@
   background: #000000;
   transition: opacity 0.6s ease;
   overflow: hidden;
+  touch-action: none;
 }
 
 .overlayExiting {
@@ -124,6 +125,20 @@
   animation:
     scrollHeroAppear 0.9s ease 0.45s both,
     scrollHeroPulse 2.2s ease-in-out 1.35s infinite;
+}
+
+.scrollHintMobile {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .scrollHintDesktop {
+    display: none;
+  }
+
+  .scrollHintMobile {
+    display: inline;
+  }
 }
 
 .scrollChevron {

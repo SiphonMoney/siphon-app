@@ -367,6 +367,7 @@ const tokens = ['ETH', 'USDC', 'SOL', 'USDT', 'WBTC', 'XMR'];
 interface CustomNodeProps {
   data: NodeData;
   id: string;
+  parentId?: string;
   updateNodeData?: (nodeId: string, field: string, value: string) => void;
   tokens?: string[];
   isTokenActive?: (token: string) => boolean;
@@ -642,7 +643,7 @@ function TreeBuilderNode({
   );
 }
 
-export function CustomNode({ data, id, updateNodeData, tokens: propTokens = tokens, isTokenActive, simStatus, simShaking, simExiting }: CustomNodeProps) {
+export function CustomNode({ data, id, parentId, updateNodeData, tokens: propTokens = tokens, isTokenActive, simStatus, simShaking, simExiting }: CustomNodeProps) {
   const handleChange = (field: string, value: string) => {
     if ((field === 'coin' || field === 'toCoin') && value && isTokenActive && !isTokenActive(value)) {
       return;
@@ -652,8 +653,24 @@ export function CustomNode({ data, id, updateNodeData, tokens: propTokens = toke
     }
   };
 
+  const typeModifier =
+    data.type === 'strategy'
+      ? 'custom-node--strategy'
+      : data.type === 'control'
+        ? 'custom-node--control'
+        : '';
+
   return (
-    <div className={`custom-node ${simHighlightClass(simStatus, simShaking, simExiting)}`}>
+    <div
+      className={[
+        'custom-node',
+        typeModifier,
+        parentId ? 'custom-node--in-group' : '',
+        simHighlightClass(simStatus, simShaking, simExiting),
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <Handle type="target" position={Position.Left} />
       <div className="node-content">
         <div className="node-title">{data.label}</div>
