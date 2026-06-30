@@ -30,14 +30,14 @@ export const NETWORKS: Record<number, NetworkConfig> = {
     badgeLabel: 'Base',
     entrypoint:
       process.env.NEXT_PUBLIC_ENTRYPOINT_ADDRESS?.trim() ||
-      '0xE0bbD38d9d15336CD9C971d96eB5C91254D76D12', // multi-note+split deploy 2026-06-30 (old single-note: 0x2f7d2379…)
+      '0xe4645c9f3c479524B3B6F411B3Bcb9E0d2c28788', // multi-note+split redeploy 2026-06-30 (verifiers match frontend zkey; superseded 0xE0bbD38d which had a mismatched verifier build)
     weth: '0x4200000000000000000000000000000000000006',
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     swapRouter: '0x2626664c2603336E57B271c5C0b26F421741e481',
     uniswapV3Factory: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD',
     rpcUrl: 'https://mainnet.base.org',
     explorer: 'https://basescan.org',
-    deployBlock: parseInt(process.env.NEXT_PUBLIC_BASE_MAINNET_DEPLOY_BLOCK || '48021000', 10),
+    deployBlock: parseInt(process.env.NEXT_PUBLIC_BASE_MAINNET_DEPLOY_BLOCK || '48026000', 10),
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   },
   11155111: {
