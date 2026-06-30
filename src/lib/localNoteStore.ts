@@ -146,13 +146,13 @@ export async function recoverPendingHints(signer: Signer): Promise<void> {
 
   for (const hint of hints) {
     try {
-      // Resolve symbol + chain. Merge hints (`merge-hint-{precommitment}`) carry them in the body;
-      // deposit hints encode them in the key (`{chainId}-{SYMBOL}-{precommitment}`). Without this,
-      // a merge hint parsed symbol="HINT" and was never recovered — stranding the merged secret if
-      // the process died between the merge tx mining and writeNote.
+      // Resolve symbol + chain. Merge/change hints (`merge-hint-` / `change-hint-{precommitment}`)
+      // carry them in the body; deposit hints encode them in the key (`{chainId}-{SYMBOL}-{pre}`).
+      // Without this, such a hint parsed symbol="HINT"/"CHANGE" and was never recovered — stranding
+      // the merged/change secret if the process died between the tx mining and writeNote.
       let symbol: string;
       let hintChainId = chainId;
-      if (hint.key.startsWith('merge-hint-')) {
+      if (hint.key.startsWith('merge-hint-') || hint.key.startsWith('change-hint-')) {
         if (!hint.symbol) continue;
         symbol = String(hint.symbol).toUpperCase();
         if (hint.chainId != null) hintChainId = Number(hint.chainId);

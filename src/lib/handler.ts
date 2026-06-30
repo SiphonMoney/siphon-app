@@ -405,6 +405,25 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       return { success: false, error: message };
     }
 
+    // Pre-tx change-note backup. The durable writeNote below runs only AFTER tx.wait(), so a tab
+    // close / crash in the mine→persist window would strand the change value. Write a recoverable
+    // plaintext hint NOW (the secret is already known); recoverPendingHints finalizes it from chain
+    // state, and it's removed once the durable write succeeds. FUND-SAFETY.
+    if (zkData.changeValue > 0n && zkData.newDeposit?.precommitment) {
+      try {
+        localStorage.setItem(`change-hint-${zkData.newDeposit.precommitment}`, JSON.stringify({
+          nullifier:     zkData.newDeposit.nullifier,
+          secret:        zkData.newDeposit.secret,
+          precommitment: zkData.newDeposit.precommitment,
+          nullifierHash: zkData.newDeposit.nullifierHash ?? '',
+          amount:        zkData.newDeposit.amount,
+          chainId:       currentChainId(),
+          symbol:        token.symbol,
+          pending:       true,
+        }));
+      } catch { /* quota — non-fatal */ }
+    }
+
     // 3) Send actual withdrawal transaction
     try {
       console.log("Sending withdraw transaction...");
@@ -475,6 +494,8 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
           console.warn('Encrypted change note write failed:', e);
         }
         console.log("Saved change commitment locally:", zkData.newDepositKey);
+        // Durable copy is now written — drop the pre-tx recovery hint.
+        try { localStorage.removeItem(`change-hint-${zkData.newDeposit.precommitment}`); } catch { /* ignore */ }
 
         // Sync change note to Supabase commitments table (best-effort)
         try {
