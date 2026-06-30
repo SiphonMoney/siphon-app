@@ -34,9 +34,13 @@ import { encryptPrice, encryptPriceCents } from "./fhe";
 import { getNetwork, NATIVE_TOKEN } from "./networks";
 import { getSigner } from "./nexus";
 import { writeNote, markNoteSpent } from "./localNoteStore";
-import entrypointArtifact from "./abi/Entrypoint.json";
 
-const ENTRYPOINT_ABI = entrypointArtifact.abi as ethers.InterfaceAbi;
+// The bundled Entrypoint.json predates the split() upgrade, so declare split explicitly.
+// Entrypoint.split(address asset, uint256 stateRoot, uint256 nullifierHash,
+//   uint256[8] outCommitments, uint[2] pA, uint[2][2] pB, uint[2] pC)
+const SPLIT_ABI = [
+  "function split(address _asset, uint256 _stateRoot, uint256 _nullifierHash, uint256[8] _outCommitments, uint256[2] _pA, uint256[2][2] _pB, uint256[2] _pC)",
+];
 
 const V3_FACTORY_ABI = [
   "function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)",
@@ -86,7 +90,7 @@ export async function submitSplitOnChain(
   const net = getNetwork(chainId);
   const asset = token.symbol === "ETH" ? NATIVE_TOKEN : token.address;
 
-  const entrypoint = new Contract(net.entrypoint, ENTRYPOINT_ABI, signer);
+  const entrypoint = new Contract(net.entrypoint, SPLIT_ABI, signer);
   const tx = await entrypoint.split(
     asset,
     split.stateRoot,
