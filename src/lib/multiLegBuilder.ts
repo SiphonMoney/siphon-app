@@ -224,8 +224,9 @@ async function buildLegsFromSplit(
         const net = getNetwork(chainId);
         const asset = inToken.symbol === "ETH" ? NATIVE_TOKEN : inToken.address;
         const ep = new Contract(net.entrypoint, ["function deposit(address,uint256,uint256) payable returns (uint256)"], signer);
+        // Explicit gas → skip MetaMask's eth_estimateGas (its Infura RPC rate-limits under load).
         const tx = await ep.deposit(asset, armingFeeWei, BigInt(j.precommitment),
-          inToken.symbol === "ETH" ? { value: armingFeeWei } : {});
+          { gasLimit: 600000n, ...(inToken.symbol === "ETH" ? { value: armingFeeWei } : {}) });
         await tx.wait();
         armingPrecommitment = String(j.precommitment);
         armingCollectedWei = armingFeeWei;

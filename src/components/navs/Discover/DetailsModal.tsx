@@ -713,10 +713,9 @@ export default function DetailsModal({
         const clientKey = await getOrCreateClientKey(recipient);
         const submitSplit = (s: Parameters<typeof submitSplitOnChain>[2]) => submitSplitOnChain(fromChainId, tokenInfo, s);
 
-        // Part A: upfront arming fee, carved from the deposit as a protocol fee slice (shielded).
-        const windowHoursMl = strategyKind === 'TWAP'
-          ? (sliceCount * (bounds.interval_sec ?? 60)) / 3600
-          : 24;
+        // Part A: upfront arming fee, sized by the EXECUTION WINDOW the user selected (matches the
+        // cost-review display + the expiry window), not the TWAP schedule.
+        const windowHoursMl = runDurationHours;
         let inUsdMl = coinPrices[tokenInfo.symbol.toUpperCase()] ?? (tokenInfo.symbol === 'USDC' ? 1 : 0);
         if (tokenInfo.symbol === 'ETH' && inUsdMl <= 0) {
           try {
