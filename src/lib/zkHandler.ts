@@ -987,7 +987,7 @@ export async function generateZKData(
   if (signer) {
     try {
       const { fetchCommitments } = await import('./commitmentStore');
-      const { writeNote } = await import('./localNoteStore');
+      const { writeNote, readNote } = await import('./localNoteStore');
       const serverComms = await fetchCommitments(signer);
       for (const c of serverComms) {
         const key = `${c.decrypted.chainId}-${c.asset}-${c.decrypted.commitment}`;
@@ -998,10 +998,13 @@ export async function generateZKData(
           // entry (no nullifier_enc) — vault-mode output notes are stored as metadata-only until
           // resolvePendingOutputNotes runs, but generateZKData's old guard skipped them because
           // the key existed. Check for nullifier_enc to detect the unencrypted stub.
-          const existing = localStorage.getItem(key);
-          const needsWrite = !existing || (() => {
-            try { return !JSON.parse(existing).nullifier_enc; } catch { return true; }
-          })();
+          // Overwrite from the server copy if the local note is absent, metadata-only, OR present
+          // but UNDECRYPTABLE (e.g. a nullifier_enc corrupted by the old exportKey bug). readNote
+          // returns null in all three cases; a readable local note is left untouched. The previous
+          // guard only checked whether nullifier_enc *existed*, so a corrupt-but-present local note
+          // blocked the server's good copy and stayed permanently unreadable.
+          const existingReadable = await readNote(key, signer);
+          const needsWrite = !existingReadable;
           if (needsWrite) {
             await writeNote(key, {
               nullifier:     c.decrypted.nullifier,
