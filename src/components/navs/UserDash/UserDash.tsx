@@ -76,6 +76,18 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   }, [activeChainId, switchingChain]);
 
   const fetchVaultBalances = useCallback(async (options?: { syncServerNotes?: boolean }) => {
+    // Show local note totals INSTANTLY (pure localStorage read, no RPC) so funds appear right
+    // away instead of sitting on "Updating…" until the full chain scan finishes. The on-chain
+    // reconcile below refines this a moment later. Only fills when nothing is shown yet, so the
+    // 60s poll doesn't flicker a reconciled value back to the raw local total.
+    {
+      const localNow = getLocalVaultNoteTotals(activeChainId);
+      const quick: Record<string, number> = {};
+      for (const sym of ['ETH', 'USDC']) {
+        if ((localNow[sym] ?? 0) > 0) quick[sym] = localNow[sym];
+      }
+      setSiphonVaultBalances((prev) => prev ?? quick);
+    }
     // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
     // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
     const hasPending = typeof localStorage !== 'undefined' &&

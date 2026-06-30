@@ -361,7 +361,23 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
   try {
     // 1) Generate ZK data using zkHandler
     console.log("Generating ZK data for withdrawal...");
-    const zkDataResult = await generateZKData(currentChainId(), tokenInfo, _amount, _recipient);
+    let zkDataResult = await generateZKData(currentChainId(), tokenInfo, _amount, _recipient);
+
+    // No spendable note found locally? The secret may live only on the server (e.g. a swap-output
+    // note whose local copy is metadata-only). Pull server notes into localStorage in the
+    // decryptable format and retry once before surfacing "Insufficient balance".
+    if ('error' in zkDataResult && /insufficient balance/i.test(zkDataResult.error)) {
+      try {
+        const { syncWalletNotesFromServer } = await import('./syncWalletNotes');
+        const n = await syncWalletNotesFromServer(signer);
+        if (n > 0) {
+          console.log(`[withdraw] synced ${n} server note(s), retrying…`);
+          zkDataResult = await generateZKData(currentChainId(), tokenInfo, _amount, _recipient);
+        }
+      } catch (e) {
+        console.warn('[withdraw] server note sync failed:', e);
+      }
+    }
 
     if ('error' in zkDataResult) {
       return { success: false, error: zkDataResult.error };
