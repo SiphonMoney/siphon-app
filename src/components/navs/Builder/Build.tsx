@@ -817,10 +817,20 @@ export default function Build({
         const windowHours = strategyKind === 'TWAP'
           ? (sliceCount * (payloadBounds.interval_sec ?? 60)) / 3600
           : 24; // grids are open-ended → default 24h window
-        const inUsd = token.symbol === 'ETH' ? (ethUsd ?? 0) : (token.symbol === 'USDC' ? 1 : 0);
+        let inUsd = token.symbol === 'ETH' ? (ethUsd ?? 0) : (token.symbol === 'USDC' ? 1 : 0);
+        if (token.symbol === 'ETH' && inUsd <= 0) {
+          // Price hook not loaded yet — fetch ETH/USD directly so the arming fee still applies.
+          try {
+            const pr = await fetch('https://hermes.pyth.network/v2/updates/price/latest?ids[]=0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace');
+            const pj = await pr.json();
+            const p = pj?.parsed?.[0]?.price;
+            if (p) inUsd = Number(p.price) * 10 ** Number(p.expo);
+          } catch { /* keep 0 → graceful: no arming fee this time */ }
+        }
         const armingFeeWei = inUsd > 0
           ? BigInt(Math.floor(armingFeeUsd(windowHours) / inUsd * 10 ** token.decimals))
           : 0n;
+        console.log('[Fee] arming fee:', armingFeeUsd(windowHours), 'USD,', armingFeeWei.toString(), 'wei (ethUsd=', inUsd, ')');
 
         // Each leg withdraws its slice → swaps → re-deposits the output into the asset_out vault
         // as a private note (output_mode='vault'), matching the single-strategy shielded flow.
