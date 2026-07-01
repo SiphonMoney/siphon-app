@@ -1214,14 +1214,35 @@ export async function generateZKData(
       // for repair from the authoritative precommitment row, rather than minting a doomed proof.
       if (data.nullifier && data.secret) {
         try {
-          const { leaf } = await reconstructLeaf(BigInt(data.nullifier), BigInt(data.secret), amountWei);
+          const { leaf, precommitment: rePre } = await reconstructLeaf(BigInt(data.nullifier), BigInt(data.secret), amountWei);
+          console.log('[withdraw-diag] leaf self-check', {
+            key,
+            amountWei: amountWei.toString(),
+            nullifier: String(data.nullifier),
+            secretHead: String(data.secret).slice(0, 12) + '…',
+            storedPrecommitment: String(data.precommitment ?? ''),
+            recomputedPrecommitment: rePre.toString(),
+            precommitmentMatches: String(data.precommitment ?? '') === rePre.toString(),
+            jsLeaf: leaf.toString(),
+            storedCommitment: String(data.commitment),
+            leafMatchesCommitment: leaf === commitment,
+            leafIndex: foundIndex,
+            leafAtIndex: leaves[foundIndex]?.toString(),
+          });
           if (leaf !== commitment) {
             console.warn('[withdraw] note secret does NOT reproduce on-chain leaf — quarantining for repair:', key);
             diag.badsecret++;
             _inconsistent.push({ key, precommitment: data.precommitment ?? '', commitment: data.commitment, amountWei });
             continue;
           }
-        } catch { /* if we can't recompute, let the circuit be the backstop */ }
+        } catch (e) {
+          // Could NOT recompute (bad secret/nullifier format, etc.) — this note would fail the
+          // circuit opaquely. Quarantine it for repair rather than minting a doomed proof.
+          console.warn('[withdraw] reconstructLeaf threw — quarantining for repair:', key, e);
+          diag.badsecret++;
+          _inconsistent.push({ key, precommitment: data.precommitment ?? '', commitment: data.commitment, amountWei });
+          continue;
+        }
       }
 
       candidates.push({ key, data: { ...data, precommitment: data.precommitment ?? '' }, amountWei, leafIndex: foundIndex });
@@ -1396,6 +1417,33 @@ export async function generateZKData(
     pathElements:    pathElementsAll.map(pe => pe.map(v => v.toString())),
     pathIndices:     pathIndicesAll.map(pi => pi.map(String)),
   };
+
+  // DIAGNOSTIC: replicate the circuit's Merkle computation in JS — fold each note's reconstructed
+  // leaf up its path and compare to the stateRoot we pass. If foldedRootMatchesStateRoot is false,
+  // the circuit WILL assert at line 67 and this shows exactly why (wrong leaf vs wrong path). If it
+  // is TRUE but the prover still asserts, the fault is in the snarkjs wasm/zkey artifact, not inputs.
+  try {
+    for (let i = 0; i < selectedNotes.length; i++) {
+      const n = selectedNotes[i];
+      const inPre = BigInt(F.toObject(poseidon([BigInt(n.data.nullifier), BigInt(n.data.secret)])));
+      const inLeaf = BigInt(F.toObject(poseidon([n.amountWei, inPre])));
+      let cur = inLeaf;
+      const pe = pathElementsAll[i], pi = pathIndicesAll[i];
+      for (let l = 0; l < pe.length; l++) {
+        cur = pi[l] === 0 ? poseidonHash(cur, pe[l]) : poseidonHash(pe[l], cur);
+      }
+      console.log('[withdraw-diag] merkle path check', {
+        note: n.key,
+        leafIndex: n.leafIndex,
+        inLeaf: inLeaf.toString(),
+        leafAtIndex: leaves[n.leafIndex]?.toString(),
+        inLeafMatchesTreeLeaf: inLeaf === leaves[n.leafIndex],
+        foldedRoot: cur.toString(),
+        stateRoot: snapshotRoot.toString(),
+        foldedRootMatchesStateRoot: cur === snapshotRoot,
+      });
+    }
+  } catch (e) { console.warn('[withdraw-diag] merkle path check failed', e); }
 
   console.log("[Proof] Generating Groth16 W" + N + " proof locally (snarkjs)…");
   const result = await prepareWithdrawalTransactionMulti(circuitInput, N);
