@@ -360,12 +360,19 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
     // "insufficient balance" and the metadata-only ("secrets aren't on this device") cases.
     if ('error' in zkDataResult && /insufficient balance|secrets aren't on this device|metadata-only/i.test(zkDataResult.error)) {
       try {
+        // The note may be a vault-output note (e.g. a limit-order swap's USDC) that's only
+        // metadata-only locally — resolve it WITH a signer (writes the secret from the pending
+        // record / server), then pull any other server-backed notes, then retry once. This lets a
+        // withdraw self-heal instead of the user having to manually click ↻ first.
+        try {
+          const { resolvePendingOutputNotes } = await import('./outputNoteResolver');
+          const r = await resolvePendingOutputNotes(signer);
+          if (r > 0) console.log(`[withdraw] resolved ${r} pending output note(s)`);
+        } catch (e) { console.warn('[withdraw] output-note resolve failed:', e); }
         const { syncWalletNotesFromServer } = await import('./syncWalletNotes');
         const n = await syncWalletNotesFromServer(signer);
-        if (n > 0) {
-          console.log(`[withdraw] synced ${n} server note(s), retrying…`);
-          zkDataResult = await generateZKData(currentChainId(), tokenInfo, _amount, _recipient);
-        }
+        console.log(`[withdraw] synced ${n} server note(s), retrying…`);
+        zkDataResult = await generateZKData(currentChainId(), tokenInfo, _amount, _recipient);
       } catch (e) {
         console.warn('[withdraw] server note sync failed:', e);
       }

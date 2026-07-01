@@ -93,11 +93,25 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     const hasPending = typeof localStorage !== 'undefined' &&
       Object.keys(localStorage).some((k) => k.startsWith('siphon-pending-output-'));
     if (hasPending) {
-      // On a user-initiated refresh (syncServerNotes), pass the signer so a pending vault-output
-      // note is FULLY resolved (secret written + server-synced) rather than left metadata-only.
-      // The 60s auto-poll stays signer-free (no wallet popup); it now preserves the secret so this
-      // signed pass can finish the job. (Avoids the no-signer poll stranding TWAP/grid output funds.)
-      const resolveSigner = options?.syncServerNotes && wallet && isInitialized() ? getSigner() : null;
+      // Resolve pending vault-output notes (e.g. a limit-order swap's USDC output) into spendable
+      // notes. Pass the signer on an explicit refresh, OR automatically on the background poll when
+      // the enc key is already cached — so a just-landed swap output resolves WITHOUT a wallet popup
+      // instead of sitting "metadata-only" until the user manually clicks ↻. Only falls back to the
+      // signer-free (secret-preserving) path when signing would actually prompt.
+      let resolveSigner: ReturnType<typeof getSigner> = null;
+      if (wallet && isInitialized()) {
+        const s = getSigner();
+        if (s) {
+          if (options?.syncServerNotes) {
+            resolveSigner = s;
+          } else {
+            try {
+              const { isEncKeyCached } = await import('../../../lib/noteAuth');
+              if (isEncKeyCached(await s.getAddress())) resolveSigner = s;
+            } catch { /* ignore */ }
+          }
+        }
+      }
       try { await resolvePendingOutputNotes(resolveSigner); } catch { /* best-effort */ }
     }
     if (options?.syncServerNotes && wallet && isInitialized()) {

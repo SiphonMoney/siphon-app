@@ -101,6 +101,17 @@ export async function deriveEncKey(signer: Signer): Promise<CryptoKey> {
   return promise;
 }
 
+/**
+ * True if the AES enc-key for `wallet` is already derived/cached (in-memory or sessionStorage), so
+ * deriving it again won't trigger a signature prompt. Lets background polls opt into signed work
+ * (e.g. resolving a pending vault-output note into a spendable one) WITHOUT a wallet popup.
+ */
+export function isEncKeyCached(wallet: string): boolean {
+  const w = wallet.toLowerCase();
+  if (_encKeyCache.has(w)) return true;
+  return !!_ssGet('enc-key', w);
+}
+
 // ── Encryption-key drift canary ──────────────────────────────────────────────
 // Both the local note copy AND the Supabase backup are encrypted under this one wallet-signature
 // key. If the wallet ever derives a DIFFERENT key (a switched account/device, hardware-wallet
