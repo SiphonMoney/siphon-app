@@ -282,6 +282,12 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
         const { nullifier, secret, precommitment, asset, chainId } = sp.decrypted;
         if (!precommitment || !asset) continue;
         const symbol = String(asset).toUpperCase();
+        // Spare-pool precommitments are chain-agnostic change-note placeholders stored with
+        // asset:'POOL', chainId:0 as a sentinel — never tied to an on-chain deposit. They only
+        // reach here because the flat pending-status query doesn't filter by asset type. Skip them:
+        // getTokens(0)/getNetwork(0) throws "Unsupported chainId: 0", which (though caught per-entry)
+        // slowed this loop and on Sepolia starved real output notes from resolving (empty balance).
+        if (symbol === 'POOL' || !chainId) continue;
         const tok = getTokens(chainId)[symbol];
         const tokenAddress = symbol === 'ETH' ? NATIVE : tok?.address;
         if (!tokenAddress) continue;
