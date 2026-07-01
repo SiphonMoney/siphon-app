@@ -117,7 +117,7 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
     const k = localStorage.key(i);
     if (k && k.startsWith(PENDING_PREFIX)) pendingKeys.push(k);
   }
-  if (pendingKeys.length === 0) return 0;
+  if (pendingKeys.length === 0 && !signer) return 0; // with a signer, still run server-side recovery below
 
   // Fetch the server's pending precommitment list once so we don't make a
   // round-trip + wallet sig request per resolved note inside the loop.
@@ -230,5 +230,50 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
       console.warn('[OutputNote] resolve failed for', k, e);
     }
   }
+
+  // Server-side recovery: an output note whose LOCAL pending record was already deleted (e.g. by an
+  // older no-signer poll before the keep-secret fix) can still be rebuilt from the Supabase
+  // precommitment, which holds the nullifier+secret. Finalize any pending precommitment whose
+  // deposit is now on-chain and isn't already spendable locally.
+  if (signer && serverPending.length > 0) {
+    const { getTokens } = await import('./networks');
+    const { writeNote } = await import('./localNoteStore');
+    const { resolvePrecommitment } = await import('./precommitmentStore');
+    const NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+    for (const sp of serverPending) {
+      try {
+        const { nullifier, secret, precommitment, asset, chainId } = sp.decrypted;
+        if (!precommitment || !asset) continue;
+        const symbol = String(asset).toUpperCase();
+        const tok = getTokens(chainId)[symbol];
+        const tokenAddress = symbol === 'ETH' ? NATIVE : tok?.address;
+        if (!tokenAddress) continue;
+        const hit = await resolveOutputNote(tokenAddress, precommitment, chainId);
+        if (!hit) continue; // deposit not on-chain yet
+        const noteKey = `${chainId}-${symbol}-${hit.commitment}`;
+        const existing = localStorage.getItem(noteKey);
+        const alreadyReadable = existing
+          ? (() => { try { return !!JSON.parse(existing).nullifier_enc; } catch { return false; } })()
+          : false;
+        if (alreadyReadable) continue; // already spendable
+        const humanAmount = ethers.formatUnits(hit.amount, tok ? tok.decimals : 18);
+        // nullifierHash left '' — the withdraw path recomputes it from the nullifier.
+        await writeNote(noteKey, {
+          nullifier, secret, commitment: hit.commitment, precommitment, nullifierHash: '',
+          amount: humanAmount, spent: false,
+        }, signer);
+        try {
+          await postCommitment(signer, { nullifier, secret, commitment: hit.commitment, amount: humanAmount, chainId }, symbol, 'vault-output');
+        } catch { /* best-effort */ }
+        try { await resolvePrecommitment(signer, sp.id); } catch { /* best-effort */ }
+        try { invalidateLeafCache(tokenAddress); } catch { /* best-effort */ }
+        resolved += 1;
+        console.log(`[OutputNote] recovered ${symbol} note from server precommitment: ${humanAmount} (commitment ${hit.commitment})`);
+      } catch (e) {
+        console.warn('[OutputNote] server recovery failed for precommitment', sp.id, e);
+      }
+    }
+  }
+
   return resolved;
 }
