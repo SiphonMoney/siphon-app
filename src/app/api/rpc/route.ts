@@ -27,12 +27,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // publicnode is best for live reads/broadcasts (high limit) but rejects historical eth_getLogs
-  // as "archive" without a paid token. For log queries, push it to the back so an archive-capable
-  // node (drpc / rpc.sepolia.org) is tried first and we don't waste a hop on a guaranteed reject.
+  // For log queries, push nodes that CAP eth_getLogs on their free tier to the BACK so a
+  // large-range-capable node is tried FIRST and we don't waste a round-trip on a guaranteed reject:
+  //   - publicnode rejects historical getLogs as "archive" without a paid token
+  //   - free-tier Alchemy caps getLogs at a 10-BLOCK range (rejects our 9000-block chunks)
+  //   - free-tier Infura throttles
+  // e.g. on Base this makes the reliable 10k-range public node (mainnet.base.org) the first hop
+  // instead of wasting one on the free Alchemy key set as BASE_MAINNET_RPC. Paid Alchemy still
+  // works when it's the only option — it just isn't tried first for logs.
   if (body.includes('eth_getLogs')) {
-    urls = [...urls].sort((a, b) =>
-      (a.includes('publicnode') ? 1 : 0) - (b.includes('publicnode') ? 1 : 0));
+    const capped = (u: string) =>
+      u.includes('publicnode') || u.includes('alchemy') || u.includes('infura');
+    urls = [...urls].sort((a, b) => (capped(a) ? 1 : 0) - (capped(b) ? 1 : 0));
   }
 
   let lastText = '';
