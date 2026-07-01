@@ -194,6 +194,30 @@ export function modField(value: bigint): bigint {
   return value % FIELD_SIZE;
 }
 
+/**
+ * Recompute a note's on-chain leaf from its raw secret material, using the EXACT Poseidon
+ * convention the withdrawal circuit and the on-chain PoseidonT3 use:
+ *   precommitment = Poseidon(nullifierMod, secretMod)
+ *   leaf          = Poseidon(amountWei, precommitment)
+ * Inputs are field-reduced first (mirroring generateCommitmentData) so an unreduced value from a
+ * recovery source still hashes identically. Returns { precommitment, leaf } as decimal strings.
+ *
+ * A note whose stored (nullifier, secret, amount) do NOT reproduce its on-chain leaf is corrupt
+ * (a stale artifact from an older resolve); feeding it to the circuit fails the Merkle assert with
+ * a cryptic error, so the withdraw path uses this to quarantine + repair such notes instead.
+ */
+export async function reconstructLeaf(
+  nullifier: bigint,
+  secret: bigint,
+  amountWei: bigint,
+): Promise<{ precommitment: bigint; leaf: bigint }> {
+  const poseidon = await buildPoseidon();
+  const F = poseidon.F;
+  const precommitment = BigInt(F.toObject(poseidon([modField(nullifier), modField(secret)])));
+  const leaf = BigInt(F.toObject(poseidon([modField(amountWei), precommitment])));
+  return { precommitment, leaf };
+}
+
 export function encodeProof(proof: (string | bigint)[]): string {
   const hexParts = proof.map(p => {
     const bn = (typeof p === 'bigint') ? p : BigInt(p);
@@ -383,6 +407,44 @@ export async function resolveOutputNote(
       return {
         amount: BigInt(amount.toString()).toString(),
         commitment: BigInt(commitment.toString()).toString(),
+      };
+    }
+  }
+  return null;
+}
+
+// Reverse of resolveOutputNote: recover the precommitment (and amount) for a known on-chain
+// commitment by reading the Deposited event. Needed to repair a note whose stored precommitment
+// was lost (e.g. syncWalletNotesFromServer writes precommitment:'') — the precommitment is the key
+// to fetch the authoritative nullifier/secret from the precommitment backup row.
+// Returns { amount, precommitment } (decimal strings) or null if the commitment isn't on-chain.
+export async function resolvePrecommitmentByCommitment(
+  tokenAddress: string,
+  commitment: string,
+  chainId?: number,
+): Promise<{ amount: string; precommitment: string } | null> {
+  const net = getNetwork(chainId ?? getSelectedChainId());
+  const provider = getReadProvider(net.chainId);
+  const { vault } = await resolveVault(tokenAddress, net.chainId);
+  const vaultAddress = vault.target as string;
+
+  const DEPOSITED_TOPIC = ethers.id("Deposited(address,uint256,uint256,uint256)");
+  const latest = await provider.getBlockNumber();
+  const logs = await getLogsChunked(
+    provider,
+    { address: vaultAddress, topics: [DEPOSITED_TOPIC] },
+    vaultDeployBlock(net.chainId),
+    latest,
+  );
+
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+  const target = BigInt(commitment).toString();
+  for (const log of logs) {
+    const [amount, comm, pre] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+    if (BigInt(comm.toString()).toString() === target) {
+      return {
+        amount: BigInt(amount.toString()).toString(),
+        precommitment: BigInt(pre.toString()).toString(),
       };
     }
   }
@@ -1085,8 +1147,12 @@ export async function generateZKData(
     leafIndex: number;
   }
   const candidates: CandidateNote[] = [];
+  // Notes whose commitment IS on-chain but whose stored secret material doesn't reproduce that
+  // leaf (corrupt/stale artifact from an older resolve). Kept out of candidates (the circuit would
+  // reject them with a bare Merkle assert) and handed to the repair path below.
+  const _inconsistent: Array<{ key: string; precommitment: string; commitment: string; amountWei: bigint }> = [];
   // Diagnostics: explain a "Have 0.0" instead of failing opaquely.
-  const diag = { metas: noteMetas.length, spent: 0, unreadable: 0, zero: 0, nullified: 0, ghost: 0, ok: 0, noSigner: !_zkSigner };
+  const diag = { metas: noteMetas.length, spent: 0, unreadable: 0, zero: 0, nullified: 0, ghost: 0, badsecret: 0, ok: 0, noSigner: !_zkSigner };
   // Wrong-account / key-drift detection so an all-unreadable result yields a clear, actionable
   // error ("reconnect the original account") instead of a bare "Have 0.0".
   const _curWallet = _zkSigner ? (await _zkSigner.getAddress()).toLowerCase() : '';
@@ -1141,6 +1207,23 @@ export async function generateZKData(
         continue;
       }
 
+      // Self-consistency: the withdrawal circuit reconstructs the leaf from (amount, nullifier,
+      // secret) and asserts it's in the tree. A note whose stored secret material does NOT
+      // reproduce its on-chain leaf passes the commitment-membership check above but fails the
+      // in-circuit Merkle assert (the cryptic "Withdrawal line 67"). Detect it HERE and quarantine
+      // for repair from the authoritative precommitment row, rather than minting a doomed proof.
+      if (data.nullifier && data.secret) {
+        try {
+          const { leaf } = await reconstructLeaf(BigInt(data.nullifier), BigInt(data.secret), amountWei);
+          if (leaf !== commitment) {
+            console.warn('[withdraw] note secret does NOT reproduce on-chain leaf — quarantining for repair:', key);
+            diag.badsecret++;
+            _inconsistent.push({ key, precommitment: data.precommitment ?? '', commitment: data.commitment, amountWei });
+            continue;
+          }
+        } catch { /* if we can't recompute, let the circuit be the backstop */ }
+      }
+
       candidates.push({ key, data: { ...data, precommitment: data.precommitment ?? '' }, amountWei, leafIndex: foundIndex });
       diag.ok++;
     } catch (e) {
@@ -1164,6 +1247,32 @@ export async function generateZKData(
   }
 
   if (accumulated < withdrawnValueTotal) {
+    // A quarantined note (on-chain but with secret material that doesn't reproduce its leaf) is
+    // repairable from the authoritative precommitment row. Attempt the repair inline so the
+    // withdraw self-heal's single retry re-reads a now-consistent note and succeeds — instead of
+    // failing later with the cryptic in-circuit Merkle assert.
+    if (_inconsistent.length > 0 && _zkSigner) {
+      const { repairInconsistentOutputNote } = await import('./outputNoteResolver');
+      let repaired = 0;
+      for (const bad of _inconsistent) {
+        try {
+          const ok = await repairInconsistentOutputNote(_zkSigner, {
+            precommitment: bad.precommitment,
+            commitment:    bad.commitment,
+            amountWei:     bad.amountWei,
+            chainId:       _chainId,
+            symbol:        _token.symbol,
+            tokenAddress,
+            decimals:      _token.decimals,
+          });
+          if (ok) repaired++;
+        } catch (e) { console.warn('[withdraw] repair failed for', bad.key, e); }
+      }
+      if (repaired > 0) {
+        return { error: `Repaired ${repaired} ${_token.symbol} note(s) whose saved secret was out of sync — retry the withdrawal now.` };
+      }
+      return { error: `A ${_token.symbol} note is on-chain but its saved secret can't be recovered from your backup — this note may be unspendable. (${diag.badsecret} affected)` };
+    }
     if (diag.noSigner) {
       return { error: `Wallet not connected for note decryption — reconnect and retry.` };
     }

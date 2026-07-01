@@ -16,8 +16,8 @@
  * so nothing here trusts the executor or server.
  */
 import { ethers, Signer } from 'ethers';
-import { generateCommitmentData, resolveOutputNote, invalidateLeafCache, type TokenInfo } from './zkHandler';
-import { postPrecommitment } from './precommitmentStore';
+import { generateCommitmentData, resolveOutputNote, invalidateLeafCache, reconstructLeaf, type TokenInfo } from './zkHandler';
+import { postPrecommitment, fetchPrecommitmentByValue } from './precommitmentStore';
 import { postCommitment } from './commitmentStore';
 import { deriveEncKey, encryptBlob, decryptBlob } from './noteAuth';
 
@@ -160,7 +160,23 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
         } catch { /* ignore — fall through to metadata-only note */ }
       }
 
-      if (signer && nullifier && secret) {
+      // Consistency gate: the recovered (nullifier, secret) MUST reproduce the on-chain leaf
+      // (Poseidon(amount, Poseidon(nullifier, secret)) === commitment), or the note is unspendable
+      // — the withdraw circuit would reject it with a bare Merkle assert. If a recovery source
+      // handed us mismatched secrets, refuse to write a poisoned note and keep the pending record
+      // so a later pass / explicit repair (from the authoritative precommitment row) can fix it.
+      let secretsConsistent = false;
+      if (nullifier && secret) {
+        try {
+          const { leaf } = await reconstructLeaf(BigInt(nullifier), BigInt(secret), BigInt(hit.amount));
+          secretsConsistent = leaf === BigInt(hit.commitment);
+          if (!secretsConsistent) {
+            console.warn(`[OutputNote] recovered secret for ${rec.precommitment} does NOT reproduce leaf ${hit.commitment} — not writing a poisoned note; keeping pending for repair`);
+          }
+        } catch { /* treat as inconsistent — fall through to metadata-only */ }
+      }
+
+      if (signer && nullifier && secret && secretsConsistent) {
         // Full resolved note — encrypt nullifier + secret.
         const { writeNote } = await import('./localNoteStore');
         await writeNote(noteKey, {
@@ -184,8 +200,9 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
         }));
       }
 
-      // Resolve on Supabase: write spendable commitment, mark precommitment resolved.
-      if (signer) {
+      // Resolve on Supabase: write spendable commitment, mark precommitment resolved — ONLY when
+      // the secrets are consistent (never push a poisoned note to the server backup).
+      if (signer && secretsConsistent) {
         try {
           await postCommitment(
             signer,
@@ -214,11 +231,11 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
       try { invalidateLeafCache(rec.tokenAddress); } catch { /* best-effort */ }
 
       // Only drop the pending record once the note is FULLY resolved (secret written via the
-      // signer branch). On the metadata-only branch (no signer / secret unavailable) KEEP it —
-      // rec.enc is the only local copy of the secret, and a later signed pass needs it. Deleting
-      // it here permanently strands the output funds (the normal TWAP/grid vault re-deposit case,
-      // since the 60s balance poll calls this with no signer).
-      const fullyResolved = !!(signer && nullifier && secret);
+      // signer branch AND self-consistent). On the metadata-only / inconsistent branch KEEP it —
+      // rec.enc is the only local copy of the secret, and a later signed pass / repair needs it.
+      // Deleting it here permanently strands the output funds (the normal TWAP/grid vault
+      // re-deposit case, since the 60s balance poll calls this with no signer).
+      const fullyResolved = !!(signer && nullifier && secret && secretsConsistent);
       if (fullyResolved) {
         localStorage.removeItem(k);
         console.log(`[OutputNote] resolved ${rec.symbol} note: ${humanAmount} (commitment ${hit.commitment})`);
@@ -250,12 +267,42 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
         if (!tokenAddress) continue;
         const hit = await resolveOutputNote(tokenAddress, precommitment, chainId);
         if (!hit) continue; // deposit not on-chain yet
+
+        // The precommitment row's (nullifier, secret) is the AUTHORITATIVE source (written once at
+        // strategy creation, never mutated). Verify it reproduces the on-chain leaf before writing.
+        let authConsistent = false;
+        try {
+          const { leaf } = await reconstructLeaf(BigInt(nullifier), BigInt(secret), BigInt(hit.amount));
+          authConsistent = leaf === BigInt(hit.commitment);
+        } catch { authConsistent = false; }
+        if (!authConsistent) {
+          console.warn(`[OutputNote] server precommitment ${precommitment} secrets don't reproduce leaf ${hit.commitment} — skipping (backup itself is inconsistent)`);
+          continue;
+        }
+
         const noteKey = `${chainId}-${symbol}-${hit.commitment}`;
         const existing = localStorage.getItem(noteKey);
-        const alreadyReadable = existing
-          ? (() => { try { return !!JSON.parse(existing).nullifier_enc; } catch { return false; } })()
-          : false;
-        if (alreadyReadable) continue; // already spendable
+        // A note is "already good" only if it's readable AND its stored secret reproduces the leaf.
+        // A readable-but-inconsistent note (a stale artifact from an older resolve) must be REPAIRED
+        // by overwriting it with the authoritative secrets above — NOT skipped. The old code skipped
+        // any readable note, which froze corrupt notes in place forever (unspendable "phantom" funds).
+        let alreadyGood = false;
+        if (existing) {
+          try {
+            const parsed = JSON.parse(existing);
+            if (parsed.nullifier_enc) {
+              const { readNote } = await import('./localNoteStore');
+              const cur = await readNote(noteKey, signer);
+              if (cur?.nullifier && cur?.secret) {
+                const { leaf } = await reconstructLeaf(BigInt(cur.nullifier), BigInt(cur.secret), BigInt(hit.amount));
+                alreadyGood = leaf === BigInt(hit.commitment);
+              }
+            }
+          } catch { alreadyGood = false; }
+        }
+        if (alreadyGood) continue; // already spendable & consistent
+        if (existing) console.log(`[OutputNote] repairing readable-but-inconsistent note ${noteKey} from authoritative precommitment`);
+
         const humanAmount = ethers.formatUnits(hit.amount, tok ? tok.decimals : 18);
         // nullifierHash left '' — the withdraw path recomputes it from the nullifier.
         await writeNote(noteKey, {
@@ -276,4 +323,81 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
   }
 
   return resolved;
+}
+
+/**
+ * Repair a single spendable note whose stored secret material no longer reproduces its on-chain
+ * leaf (a corrupt/stale artifact from an older resolve). The authoritative (nullifier, secret) is
+ * the precommitment row written at strategy-creation time — fetched here by VALUE regardless of
+ * status (pending/in_use/resolved), since a once-resolved precommitment is excluded from the
+ * `?status=pending` recovery loop above. Verifies the authoritative secrets actually reproduce the
+ * leaf before overwriting, so a repair can never make things worse. Returns true if repaired.
+ */
+export async function repairInconsistentOutputNote(
+  signer: Signer,
+  params: {
+    precommitment: string;
+    commitment: string;
+    amountWei: bigint;
+    chainId: number;
+    symbol: string;
+    tokenAddress: string;
+    decimals: number;
+  },
+): Promise<boolean> {
+  const { commitment, amountWei, chainId, symbol, tokenAddress, decimals } = params;
+  let { precommitment } = params;
+
+  // If the note didn't carry a precommitment (e.g. it came via syncWalletNotesFromServer, which
+  // writes precommitment:''), recover it from the on-chain Deposited event for this commitment.
+  if (!precommitment) {
+    try {
+      const { resolvePrecommitmentByCommitment } = await import('./zkHandler');
+      const onchain = await resolvePrecommitmentByCommitment(tokenAddress, commitment, chainId);
+      if (onchain?.precommitment) precommitment = onchain.precommitment;
+    } catch (e) { console.warn('[OutputNote] repair: on-chain precommitment lookup failed:', e); }
+  }
+  if (!precommitment) {
+    console.warn('[OutputNote] cannot repair note without a precommitment (stored or on-chain):', commitment);
+    return false;
+  }
+  let auth;
+  try {
+    auth = await fetchPrecommitmentByValue(signer, precommitment);
+  } catch (e) {
+    console.warn('[OutputNote] repair: precommitment fetch failed:', e);
+    return false;
+  }
+  if (!auth) {
+    console.warn(`[OutputNote] repair: no server precommitment row for ${precommitment} — secret not recoverable`);
+    return false;
+  }
+  const { nullifier, secret } = auth.decrypted;
+  if (!nullifier || !secret) return false;
+
+  // The authoritative secrets MUST reproduce the on-chain leaf, or they're not the right ones.
+  try {
+    const { leaf } = await reconstructLeaf(BigInt(nullifier), BigInt(secret), amountWei);
+    if (leaf !== BigInt(commitment)) {
+      console.warn(`[OutputNote] repair: authoritative secrets for ${precommitment} still don't reproduce leaf ${commitment} — cannot repair`);
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  const humanAmount = ethers.formatUnits(amountWei, decimals);
+  const noteKey = `${chainId}-${symbol}-${commitment}`;
+  const { writeNote } = await import('./localNoteStore');
+  await writeNote(noteKey, {
+    nullifier, secret, commitment, precommitment, nullifierHash: '',
+    amount: humanAmount, spent: false,
+  }, signer);
+  // Best-effort: refresh the server commitment backup with the corrected secrets.
+  try {
+    await postCommitment(signer, { nullifier, secret, commitment, amount: humanAmount, chainId }, symbol, 'vault-output');
+  } catch { /* best-effort */ }
+  try { invalidateLeafCache(tokenAddress); } catch { /* best-effort */ }
+  console.log(`[OutputNote] repaired ${symbol} note ${noteKey} from authoritative precommitment ${precommitment}`);
+  return true;
 }

@@ -358,7 +358,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
     // note whose local copy is metadata-only). Pull server notes into localStorage in the
     // decryptable format and retry once before surfacing the error. Match both the plain
     // "insufficient balance" and the metadata-only ("secrets aren't on this device") cases.
-    if ('error' in zkDataResult && /insufficient balance|secrets aren't on this device|metadata-only/i.test(zkDataResult.error)) {
+    if ('error' in zkDataResult && /insufficient balance|secrets aren't on this device|metadata-only|out of sync/i.test(zkDataResult.error)) {
       try {
         // The note may be a vault-output note (e.g. a limit-order swap's USDC) that's only
         // metadata-only locally — resolve it WITH a signer (writes the secret from the pending
