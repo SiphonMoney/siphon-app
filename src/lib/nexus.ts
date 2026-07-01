@@ -82,13 +82,38 @@ export async function initializeWithProvider(eip1193Provider: Eip1193Provider, f
       const chainId = getSelectedChainId();
 
       const commits = await fetchCommitments(_signer);
+
+      // Only re-hydrate notes that are actually leaves in the CURRENT vault. Notes deposited to a
+      // superseded entrypoint (e.g. 0xE0bbD38d) re-hydrate as unspendable "ghosts" and clutter the
+      // balance — skip them so the wallet shows a clean, spendable slate. Filtered notes stay on the
+      // server, so this is non-destructive (they'd return if the vault ever recognised them).
+      const { getLeafSet } = await import('./zkHandler');
+      const { getTokens } = await import('./networks');
+      const NATIVE = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+      const leafSets = new Map<string, Set<string> | null>();
+      const leafSetFor = async (symbol: string, cid: number): Promise<Set<string> | null> => {
+        const k = `${cid}:${symbol.toUpperCase()}`;
+        if (leafSets.has(k)) return leafSets.get(k) ?? null;
+        const addr = symbol.toUpperCase() === 'ETH' ? NATIVE : getTokens(cid)[symbol.toUpperCase()]?.address;
+        let set: Set<string> | null = null;
+        try { if (addr) set = await getLeafSet(addr, cid); } catch { set = null; }
+        leafSets.set(k, set);
+        return set;
+      };
+
       let synced = 0;
+      let skippedGhost = 0;
       for (const c of commits) {
         try {
           if (c.spent === 'true') continue;
           const d = c.decrypted;
           if (!d.commitment || !d.nullifier || !d.secret) continue;
-          const noteKey = `${d.chainId ?? chainId}-${c.asset}-${d.commitment}`;
+          const cid = d.chainId ?? chainId;
+          // Skip old-vault / dust notes — only filter when the leaf scan actually succeeded
+          // (non-null with entries) so a flaky scan can never drop a genuine current-vault note.
+          const set = await leafSetFor(c.asset, cid);
+          if (set && set.size > 0 && !set.has(String(d.commitment))) { skippedGhost++; continue; }
+          const noteKey = `${cid}-${c.asset}-${d.commitment}`;
           const existing = localStorage.getItem(noteKey);
           const readable = existing
             ? (() => { try { return !!JSON.parse(existing).nullifier_enc; } catch { return false; } })()
@@ -106,7 +131,7 @@ export async function initializeWithProvider(eip1193Provider: Eip1193Provider, f
           synced++;
         } catch { /* skip rows that fail to decrypt */ }
       }
-      console.log(`[sync] Re-hydrated ${synced} note(s) from server (of ${commits.length} commitments)`);
+      console.log(`[sync] Re-hydrated ${synced} spendable note(s), skipped ${skippedGhost} old-vault/dust (of ${commits.length} server commitments)`);
 
       // Also rebuild any pending vault-output notes (TWAP/grid swap outputs) from the server.
       try {
