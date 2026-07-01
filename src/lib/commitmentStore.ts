@@ -112,6 +112,42 @@ export async function fetchCommitments(signer: Signer): Promise<DecryptedCommitm
   );
 }
 
+/**
+ * Sum of the user's NON-spent Supabase-backed notes, per asset, for a chain. This is the
+ * "withdrawable per your encrypted backup" figure — used as a resilient balance fallback when the
+ * on-chain reconcile (leaf scan + nullifier checks) can't run because RPC is throttled/down. It is
+ * DISPLAY-only and deliberately server-authoritative: it may slightly over-count (a note the chain
+ * would reveal as spent-but-not-yet-flagged, or old-vault dust), but the withdraw path still does
+ * full on-chain verification + self-heal, so showing this can never spend anything that isn't
+ * really there — whereas collapsing to "No funds" on an RPC hiccup wrongly looks like fund loss.
+ *
+ * Dedupes by commitment (a commitment can appear as both a 'deposit' and a 'change'/'vault-output'
+ * row) so nothing is double-counted. Returns { ETH: n, USDC: n } (human units).
+ */
+export async function getServerBackedVaultTotals(
+  signer: Signer,
+  chainId: number,
+): Promise<Record<string, number>> {
+  const commits = await fetchCommitments(signer);
+  const totals: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const c of commits) {
+    if (c.spent === 'true' || c.spent === 'pending') continue; // spent or in-flight
+    const d = c.decrypted;
+    if (!d?.commitment || !d.amount) continue;
+    if ((d.chainId ?? chainId) !== chainId) continue;
+    const sym = String(c.asset || '').toUpperCase();
+    if (sym !== 'ETH' && sym !== 'USDC') continue;
+    const dedupeKey = `${sym}:${d.commitment}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    const amt = Number(d.amount);
+    if (!Number.isFinite(amt) || amt <= 0) continue;
+    totals[sym] = (totals[sym] ?? 0) + amt;
+  }
+  return totals;
+}
+
 export async function markCommitmentSpent(
   signer: Signer,
   id: string,

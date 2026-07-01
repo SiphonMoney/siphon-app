@@ -35,6 +35,9 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [walletBalances, setWalletBalances] = useState<UnifiedBalance[] | null>(null);
   const [siphonVaultBalances, setSiphonVaultBalances] = useState<{ [token: string]: number } | null>(null);
+  // true = balance confirmed against the chain; false = shown from encrypted backup because RPC
+  // couldn't verify (so the empty state reads "verifying…" not "No funds detected").
+  const [balanceVerified, setBalanceVerified] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDepositMode, setIsDepositMode] = useState(true);
   const [isNotesBusy, setIsNotesBusy] = useState(false);
@@ -122,9 +125,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       }
     }
     // On-chain reconcile refines the balance (drops spent / not-yet-indexed notes), but a
-    // throttled RPC must never leave the panel stuck on "Updating…". Cap it with a timeout and
-    // fall back to local note totals (computed from localStorage, no RPC) on any failure.
+    // throttled RPC must never leave the panel stuck on "Updating…" or — worse — collapse to
+    // "No funds detected" when the funds are safely in your encrypted backup. Cap it with a
+    // timeout; on failure fall back to note totals WITHOUT zeroing the balance.
     let details: Record<string, number> = {};
+    let reconcileOk = false;
     try {
       const reconciled = await Promise.race([
         getSpendableVaultBalance(activeChainId, TOKEN_MAP),
@@ -133,19 +138,47 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
         ),
       ]);
       details = reconciled.details;
+      reconcileOk = true;
     } catch (e) {
-      console.warn('[balance] on-chain reconcile unavailable, showing local note totals:', e);
+      console.warn('[balance] on-chain reconcile unavailable, falling back to note/server totals:', e);
     }
     const local = getLocalVaultNoteTotals(activeChainId); // after reconcile so spent-marks apply
+
+    // Supabase-backed fallback: if the on-chain reconcile could NOT run, the balance must reflect
+    // what your encrypted backup says is withdrawable — NOT an empty localStorage (which is empty
+    // right after a cache clear, before re-hydration finishes). Only fetched when the reconcile
+    // failed AND a signer is available without a wallet popup (enc key already derived), so the
+    // 60s poll never prompts. The chain stays authoritative for actually spending (withdraw does
+    // full verification); this is display-only resilience.
+    let server: Record<string, number> = {};
+    if (!reconcileOk && wallet && isInitialized()) {
+      try {
+        const s = getSigner();
+        if (s) {
+          const { isEncKeyCached } = await import('../../../lib/noteAuth');
+          if (isEncKeyCached(await s.getAddress())) {
+            const { getServerBackedVaultTotals } = await import('../../../lib/commitmentStore');
+            server = await getServerBackedVaultTotals(s, activeChainId);
+            console.log('[balance] RPC down — using Supabase-backed totals:', server);
+          }
+        }
+      } catch (e) { console.warn('[balance] server-backed fallback failed:', e); }
+    }
+
     const display: Record<string, number> = {};
     for (const sym of ['ETH', 'USDC']) {
       const onChain = details[sym] ?? 0;
-      const fromNotes = local[sym] ?? 0;
-      const amount = onChain > 0 ? onChain : fromNotes;
+      // Prefer the verified on-chain figure; if the reconcile ran cleanly, trust it (0 is real).
+      // If it did NOT run, show the best available backup total (localStorage, else Supabase) so a
+      // transient RPC failure never reads as lost funds.
+      const amount = reconcileOk
+        ? onChain
+        : Math.max(local[sym] ?? 0, server[sym] ?? 0);
       if (amount > 0) display[sym] = amount;
     }
     setSiphonVaultBalances(display);
-    console.log("Private balance (on-chain reconciled):", display);
+    setBalanceVerified(reconcileOk);
+    console.log(`Private balance (${reconcileOk ? 'on-chain reconciled' : 'unverified — RPC down, from backup'}):`, display);
   }, [activeChainId, wallet]);
 
   // Manual refresh: bust the cached leaf scan first so a just-landed deposit is picked up
@@ -535,6 +568,10 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                       <div className="userdash-balance-currency">{tokenSymbol}</div>
                     </div>
                   ))
+              ) : !balanceVerified ? (
+                <div className="userdash-balance-loading" style={{ opacity: 0.6, fontStyle: 'italic' }}>
+                  Verifying on-chain… (network busy — your notes are backed up)
+                </div>
               ) : (
                 <div className="userdash-balance-loading">No funds detected</div>
               )}
