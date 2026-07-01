@@ -47,10 +47,20 @@ export async function createVaultOutputNote(
   chainId: number,
   token: TokenInfo,
   signer?: Signer | null,
-): Promise<{ precommitment: string }> {
+): Promise<{ precommitment: string; backedUp: boolean }> {
   // Amount is irrelevant to the precommitment (= H(nullifier, secret)); pass '0'.
   const cd = await generateCommitmentData(chainId, token, '0');
   const tokenAddress = token.symbol === 'ETH' ? '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' : token.address;
+
+  // CRITICAL: the note's secret MUST be durably backed up (Supabase precommitment row) or the funds
+  // are stranded the moment the browser cache is cleared — the executor only ever gets the PUBLIC
+  // precommitment, never the nullifier/secret. Several callers (Discover/DetailsModal, quickSwapRun)
+  // pass no signer, which silently skipped the backup entirely. Fall back to the connected signer so
+  // the backup is never skipped just because a caller forgot to thread the signer through.
+  let s = signer ?? null;
+  if (!s) {
+    try { const { getSigner } = await import('./nexus'); s = getSigner(); } catch { /* none */ }
+  }
 
   const pending: PendingOutputNote = {
     nullifier: cd.nullifier,
@@ -63,16 +73,16 @@ export async function createVaultOutputNote(
     decimals: token.decimals,
   };
   // Encrypt {nullifier,secret} with the wallet-derived key and keep it in the pending record too.
-  // This is the local fallback so a Supabase upload failure can't permanently strand the funds —
-  // the resolver recovers the secret from here if the server copy is missing. Plaintext secret
-  // still never touches localStorage (only the AES-GCM ciphertext does).
+  // Local fallback so a Supabase upload failure can't permanently strand the funds — the resolver
+  // recovers the secret from here if the server copy is missing. Plaintext secret still never
+  // touches localStorage (only the AES-GCM ciphertext does).
   let enc: { enc_blob: string; iv: string } | undefined;
-  if (signer) {
+  if (s) {
     try {
-      const key = await deriveEncKey(signer);
+      const key = await deriveEncKey(s);
       enc = await encryptBlob(key, { nullifier: cd.nullifier, secret: cd.secret });
     } catch (e) {
-      console.warn('[OutputNote] local secret encryption failed (Supabase will be the only copy):', e);
+      console.warn('[OutputNote] local secret encryption failed (will rely on server copy):', e);
     }
   }
   localStorage.setItem(pendingKey(chainId, token.symbol, cd.precommitment), JSON.stringify({
@@ -85,22 +95,32 @@ export async function createVaultOutputNote(
     ...(enc ? { enc } : {}),
   }));
 
-  // Upload to Supabase so the precommitment survives across devices/clears.
-  if (signer) {
-    try {
-      await postPrecommitment(signer, {
-        nullifier:     cd.nullifier,
-        secret:        cd.secret,
-        precommitment: cd.precommitment,
-        asset:         token.symbol,
-        chainId,
-      });
-    } catch (e) {
-      console.warn('[OutputNote] precommitment server upload failed (localStorage still holds it):', e);
+  // Upload to Supabase (via the executor) so the secret survives across devices / cache clears.
+  // Retry a few times — this is the durable backup and must not fail silently on a transient blip.
+  let backedUp = false;
+  if (s) {
+    for (let attempt = 0; attempt < 3 && !backedUp; attempt++) {
+      try {
+        await postPrecommitment(s, {
+          nullifier:     cd.nullifier,
+          secret:        cd.secret,
+          precommitment: cd.precommitment,
+          asset:         token.symbol,
+          chainId,
+        });
+        backedUp = true;
+        console.log(`[OutputNote] precommitment backed up to server: ${cd.precommitment}`);
+      } catch (e) {
+        console.warn(`[OutputNote] precommitment upload attempt ${attempt + 1}/3 failed:`, e);
+        await new Promise(r => setTimeout(r, 500 * 2 ** attempt));
+      }
     }
   }
+  if (!backedUp) {
+    console.error(`[OutputNote] ⚠️ precommitment NOT backed up to server (no signer / upload failed) — this note's funds are recoverable ONLY from this browser until you clear cache. precommitment=${cd.precommitment}`);
+  }
 
-  return { precommitment: cd.precommitment };
+  return { precommitment: cd.precommitment, backedUp };
 }
 
 /**

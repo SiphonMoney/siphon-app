@@ -548,9 +548,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
               </div>
             </div>
             <div className="userdash-balance-content-multi">
-              {isVaultRefreshing ? (
-                <div className="userdash-balance-loading" style={{ opacity: 0.6, fontStyle: 'italic' }}>Updating...</div>
-              ) : siphonVaultBalances !== null &&
+              {/* Show the balance whenever we HAVE one — even mid-refresh — so a slow/hung RPC scan
+                  can never hide a known balance behind a permanent "Updating…". The ↻ spinner in the
+                  header already signals that a refresh is in flight. "Updating…" only shows when we
+                  genuinely have nothing to display yet. */}
+              {siphonVaultBalances !== null &&
                 Object.entries(siphonVaultBalances).some(([, amount]) => amount > 0) ? (
                 // Sort and filter balances to show ETH then USDC
                 Object.entries(siphonVaultBalances)
@@ -568,6 +570,8 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                       <div className="userdash-balance-currency">{tokenSymbol}</div>
                     </div>
                   ))
+              ) : isVaultRefreshing ? (
+                <div className="userdash-balance-loading" style={{ opacity: 0.6, fontStyle: 'italic' }}>Updating...</div>
               ) : !balanceVerified ? (
                 <div className="userdash-balance-loading" style={{ opacity: 0.6, fontStyle: 'italic' }}>
                   Verifying on-chain… (network busy — your notes are backed up)
