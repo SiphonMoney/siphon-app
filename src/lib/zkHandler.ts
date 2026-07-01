@@ -17,8 +17,12 @@ const TREE_DEPTH = 32;
 // hit the SELECTED chain (Eth Sepolia / Base Sepolia) regardless of the wallet's current network.
 const vaultDeployBlock = (chainId?: number): number => getNetwork(chainId).deployBlock;
 // Initial getLogs window. Shrinks automatically when an RPC rejects the range (free tiers
-// cap this — Alchemy free is 10 blocks, others 50/2k/10k). Override per-RPC if needed.
-const GETLOGS_CHUNK = parseInt(process.env.NEXT_PUBLIC_GETLOGS_CHUNK || '2000', 10);
+// cap this — Alchemy FREE is only 10 blocks, others 50/2k/10k). Default 9000 fits the public
+// Base node's 10k cap so the full ~27k-block leaf scan is ~3 calls, not ~14. The /api/rpc proxy
+// fast-fails a free-tier Alchemy 400 (range too large) and falls through to the public node, so a
+// large chunk is safe even when BASE_MAINNET_RPC points at a free Alchemy key. Too many small
+// calls through the serverless proxy is what made the leaf scan hang / time out.
+const GETLOGS_CHUNK = parseInt(process.env.NEXT_PUBLIC_GETLOGS_CHUNK || '9000', 10);
 
 /** Retry a provider call with exponential backoff when the RPC rate-limits (HTTP 429). */
 async function withRetry<T>(fn: () => Promise<T>, tries = 6): Promise<T> {
@@ -340,37 +344,61 @@ function hasPendingMergeFor(symbol: string): boolean {
 }
 
 // --------- Helper: Get on-chain leaves ----------
+// Short-TTL cache of the ORDERED leaf array (NOT a deduped Set — the Merkle path depends on the
+// exact index ordering, incl. any duplicate leaf values). Shared by the balance poll AND the
+// withdraw so they don't each fire a full chunked getLogs scan through the slow serverless proxy;
+// an in-flight promise map collapses concurrent callers onto ONE scan. A slightly stale set only
+// ever MISSES a brand-new leaf — the note being spent is an existing leaf at a stable index, and a
+// lagging set folds to a recent historical root the vault still accepts. invalidateLeafCache()
+// (called after deposits / output-note resolves) clears it so new deposits show promptly.
+const orderedLeavesCache = new Map<string, { leaves: bigint[]; ts: number }>();
+const orderedLeavesInflight = new Map<string, Promise<bigint[]>>();
+const ORDERED_LEAVES_TTL_MS = 45_000;
+
 async function getOnChainLeaves(tokenAddress: string, chainId?: number): Promise<bigint[]> {
   zlog("getOnChainLeaves() tokenAddress:", tokenAddress);
   const net = getNetwork(chainId ?? getSelectedChainId());
-  const provider = getReadProvider(net.chainId);
-  const { merkleTreeAddress } = await resolveVault(tokenAddress, net.chainId);
-  zlog("MerkleTree address:", merkleTreeAddress);
+  const cacheKey = `${net.chainId}:${tokenAddress.toLowerCase()}`;
 
-  purgeStaleLeafScanCache(); // drop any corrupt persisted incremental cache from older builds
+  const cached = orderedLeavesCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < ORDERED_LEAVES_TTL_MS) return cached.leaves;
+  const inflight = orderedLeavesInflight.get(cacheKey);
+  if (inflight) return inflight;
 
-  // LeafInserted(uint256 _index, uint256 _leaf, uint256 _root) — all non-indexed
-  // topic[0] = keccak256("LeafInserted(uint256,uint256,uint256)")
-  const LEAF_INSERTED_TOPIC = ethers.id("LeafInserted(uint256,uint256,uint256)");
-  const latest = await provider.getBlockNumber();
-  const rawLogs = await getLogsChunked(
-    provider,
-    { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
-    vaultDeployBlock(net.chainId),
-    latest,
-  );
-  zlog("Fetched LeafInserted raw logs:", rawLogs.length);
+  const scan = (async (): Promise<bigint[]> => {
+    const provider = getReadProvider(net.chainId);
+    const { merkleTreeAddress } = await resolveVault(tokenAddress, net.chainId);
+    zlog("MerkleTree address:", merkleTreeAddress);
 
-  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-  const parsed = rawLogs.map(log => {
-    const [index, leaf] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
-    return { index: BigInt(index.toString()), leaf: BigInt(leaf.toString()) };
-  });
-  // Order by tree index so the array position == on-chain leaf index (the Merkle path depends on it).
-  parsed.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
-  const leaves = parsed.map(p => p.leaf);
-  zlog("Parsed leaves count:", leaves.length);
-  return leaves;
+    purgeStaleLeafScanCache(); // drop any corrupt persisted incremental cache from older builds
+
+    // LeafInserted(uint256 _index, uint256 _leaf, uint256 _root) — all non-indexed
+    // topic[0] = keccak256("LeafInserted(uint256,uint256,uint256)")
+    const LEAF_INSERTED_TOPIC = ethers.id("LeafInserted(uint256,uint256,uint256)");
+    const latest = await provider.getBlockNumber();
+    const rawLogs = await getLogsChunked(
+      provider,
+      { address: merkleTreeAddress, topics: [LEAF_INSERTED_TOPIC] },
+      vaultDeployBlock(net.chainId),
+      latest,
+    );
+    zlog("Fetched LeafInserted raw logs:", rawLogs.length);
+
+    const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+    const parsed = rawLogs.map(log => {
+      const [index, leaf] = abiCoder.decode(['uint256', 'uint256', 'uint256'], log.data);
+      return { index: BigInt(index.toString()), leaf: BigInt(leaf.toString()) };
+    });
+    // Order by tree index so the array position == on-chain leaf index (the Merkle path depends on it).
+    parsed.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
+    const leaves = parsed.map(p => p.leaf);
+    zlog("Parsed leaves count:", leaves.length);
+    orderedLeavesCache.set(cacheKey, { leaves, ts: Date.now() });
+    return leaves;
+  })().finally(() => orderedLeavesInflight.delete(cacheKey));
+
+  orderedLeavesInflight.set(cacheKey, scan);
+  return scan;
 }
 
 // --------- Resolve a pending "output note" from a vault-mode swap ----------
@@ -471,9 +499,13 @@ export function invalidateLeafCache(tokenAddress?: string) {
     const cacheKey = `${getNetwork().chainId}:${tokenAddress.toLowerCase()}`;
     leavesCache.delete(cacheKey);
     leavesInflight.delete(cacheKey);
+    orderedLeavesCache.delete(cacheKey);
+    orderedLeavesInflight.delete(cacheKey);
   } else {
     leavesCache.clear();
     leavesInflight.clear();
+    orderedLeavesCache.clear();
+    orderedLeavesInflight.clear();
   }
 }
 
