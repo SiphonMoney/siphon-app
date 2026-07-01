@@ -148,6 +148,34 @@ export async function getServerBackedVaultTotals(
   return totals;
 }
 
+/**
+ * Mark EVERY Supabase commitment row for a given commitment value as spent, by looking it up via
+ * the decrypted commitment (the rows are keyed by opaque id and the commitment lives inside the
+ * encrypted blob, so we must fetch+decrypt+match). Used after a confirmed withdraw so a spent note
+ * can never re-hydrate or inflate the Supabase-backed balance — even when the caller never had the
+ * row's id (a re-hydrated/synced note has no serverCommitmentId mapping). Best-effort; never throws.
+ * Returns the number of rows marked.
+ */
+export async function markCommitmentSpentByCommitment(
+  signer: Signer,
+  commitment: string,
+): Promise<number> {
+  try {
+    const commits = await fetchCommitments(signer);
+    const target = String(commitment);
+    const matches = commits.filter(c => String(c.decrypted?.commitment) === target && c.spent !== 'true');
+    let n = 0;
+    for (const m of matches) {
+      try { await markCommitmentSpent(signer, m.id, 'true'); n++; }
+      catch (e) { console.warn('[commitment] mark-spent-by-commitment failed for', m.id, e); }
+    }
+    return n;
+  } catch (e) {
+    console.warn('[commitment] markCommitmentSpentByCommitment failed:', e);
+    return 0;
+  }
+}
+
 export async function markCommitmentSpent(
   signer: Signer,
   id: string,

@@ -199,6 +199,22 @@ export function modField(value: bigint): bigint {
 }
 
 /**
+ * Parse a value to bigint, returning null for '', whitespace, undefined/null, or any string that
+ * BigInt() can't parse. This exists because `BigInt('')` silently returns 0n (the ONE falsy string
+ * that doesn't throw) — a note with an empty secret would otherwise compute a WRONG leaf
+ * (Poseidon(amount, Poseidon(nullifier, 0))) and fail the circuit's Merkle assert opaquely at
+ * "Withdrawal line 67". safeBigInt makes that corruption explicit so the note is quarantined+repaired
+ * instead of proved. Also returns null-ish handling: callers additionally treat 0n as invalid, since
+ * a real nullifier/secret is never zero.
+ */
+export function safeBigInt(v: unknown): bigint | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (s === '') return null;
+  try { return BigInt(s); } catch { return null; }
+}
+
+/**
  * Recompute a note's on-chain leaf from its raw secret material, using the EXACT Poseidon
  * convention the withdrawal circuit and the on-chain PoseidonT3 use:
  *   precommitment = Poseidon(nullifierMod, secretMod)
@@ -1239,42 +1255,48 @@ export async function generateZKData(
         continue;
       }
 
-      // Self-consistency: the withdrawal circuit reconstructs the leaf from (amount, nullifier,
-      // secret) and asserts it's in the tree. A note whose stored secret material does NOT
-      // reproduce its on-chain leaf passes the commitment-membership check above but fails the
-      // in-circuit Merkle assert (the cryptic "Withdrawal line 67"). Detect it HERE and quarantine
-      // for repair from the authoritative precommitment row, rather than minting a doomed proof.
-      if (data.nullifier && data.secret) {
+      // Self-consistency gate (UNCONDITIONAL — the circuit's own check, mirrored). The withdrawal
+      // circuit reconstructs the leaf from (amount, nullifier, secret) and asserts it's in the tree.
+      // A note whose stored secret material does NOT reproduce its on-chain leaf passes the
+      // commitment-membership check above but fails the in-circuit Merkle assert (the cryptic
+      // "Withdrawal line 67"). This MUST run for EVERY note — NOT gated on `data.nullifier &&
+      // data.secret` truthiness: an empty-string secret is falsy (slips a truthiness guard) AND
+      // BigInt('')===0n (silently computes a WRONG leaf downstream), which is exactly how a corrupt
+      // note reached the prover before. safeBigInt() returns null for ''/whitespace/garbage; a real
+      // nullifier/secret is never 0n either. Any of those → quarantine for repair from the
+      // authoritative Supabase precommitment row, never mint a doomed proof.
+      const nBig = safeBigInt(data.nullifier);
+      const sBig = safeBigInt(data.secret);
+      let leafReproducesOnChain = false;
+      if (nBig !== null && sBig !== null && nBig !== 0n && sBig !== 0n) {
         try {
-          const { leaf, precommitment: rePre } = await reconstructLeaf(BigInt(data.nullifier), BigInt(data.secret), amountWei);
+          const { leaf, precommitment: rePre } = await reconstructLeaf(nBig, sBig, amountWei);
+          const onChainLeaf = leaves[foundIndex]; // the exact value the circuit must reproduce
           console.log('[withdraw-diag] leaf self-check', {
             key,
             amountWei: amountWei.toString(),
-            nullifier: String(data.nullifier),
-            secretHead: String(data.secret).slice(0, 12) + '…',
-            storedPrecommitment: String(data.precommitment ?? ''),
             recomputedPrecommitment: rePre.toString(),
             precommitmentMatches: String(data.precommitment ?? '') === rePre.toString(),
             jsLeaf: leaf.toString(),
-            storedCommitment: String(data.commitment),
-            leafMatchesCommitment: leaf === commitment,
+            onChainLeaf: onChainLeaf?.toString(),
+            leafReproducesOnChain: leaf === onChainLeaf,
             leafIndex: foundIndex,
-            leafAtIndex: leaves[foundIndex]?.toString(),
           });
-          if (leaf !== commitment) {
-            console.warn('[withdraw] note secret does NOT reproduce on-chain leaf — quarantining for repair:', key);
-            diag.badsecret++;
-            _inconsistent.push({ key, precommitment: data.precommitment ?? '', commitment: data.commitment, amountWei });
-            continue;
-          }
+          leafReproducesOnChain = leaf === onChainLeaf;
         } catch (e) {
-          // Could NOT recompute (bad secret/nullifier format, etc.) — this note would fail the
-          // circuit opaquely. Quarantine it for repair rather than minting a doomed proof.
-          console.warn('[withdraw] reconstructLeaf threw — quarantining for repair:', key, e);
-          diag.badsecret++;
-          _inconsistent.push({ key, precommitment: data.precommitment ?? '', commitment: data.commitment, amountWei });
-          continue;
+          console.warn('[withdraw] reconstructLeaf threw:', key, e);
+          leafReproducesOnChain = false;
         }
+      } else {
+        console.warn('[withdraw] note has empty/zero secret material — quarantining for repair:', key,
+          { nullifierNull: nBig === null, secretNull: sBig === null, nullifierZero: nBig === 0n, secretZero: sBig === 0n });
+      }
+      if (!leafReproducesOnChain) {
+        // Corrupt/empty secret — the note can't produce a valid proof. Quarantine it for repair
+        // from Supabase; NEVER hand it to the prover (it would fail the Merkle assert at line 67).
+        diag.badsecret++;
+        _inconsistent.push({ key, precommitment: data.precommitment ?? '', commitment: data.commitment, amountWei });
+        continue;
       }
 
       candidates.push({ key, data: { ...data, precommitment: data.precommitment ?? '' }, amountWei, leafIndex: foundIndex });

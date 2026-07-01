@@ -454,7 +454,7 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       // 4) Mark ALL spent notes — localStorage, server commitments table, and nullifier registry
       try {
         const { markNoteSpent } = await import('./localNoteStore');
-        const { markCommitmentSpent } = await import('./commitmentStore');
+        const { markCommitmentSpent, markCommitmentSpentByCommitment } = await import('./commitmentStore');
         const { getTradeExecutorBaseUrl } = await import('./tradeExecutorClient');
         for (const key of zkData.spentDepositKeys) {
           markNoteSpent(key);
@@ -463,6 +463,16 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
             markCommitmentSpent(signer, serverId, 'true').catch(e =>
               console.warn('Failed to mark server commitment spent:', key, e)
             );
+          } else {
+            // No pre-known server id (a re-hydrated/synced note) — mark spent by the commitment
+            // value so the used note leaves the Supabase spendable set and can't re-hydrate or
+            // inflate the backup balance. Key format: `${chainId}-${symbol}-${commitment}`.
+            const commitment = key.split('-')[2];
+            if (commitment) {
+              markCommitmentSpentByCommitment(signer, commitment)
+                .then(n => n > 0 && console.log(`[withdraw] marked ${n} Supabase commitment(s) spent by value for`, key))
+                .catch(e => console.warn('Failed to mark server commitment spent by value:', key, e));
+            }
           }
         }
         // Log each spent nullifier to the registry so the trade executor's double-spend guard
