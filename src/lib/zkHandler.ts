@@ -1346,6 +1346,15 @@ export async function generateZKData(
       if (repaired > 0) {
         return { error: `Repaired ${repaired} ${_token.symbol} note(s) whose saved secret was out of sync — retry the withdrawal now.` };
       }
+      // Repair failed for the inconsistent note(s). But if there are OTHER notes that are merely
+      // metadata-only (an unresolved vault-output whose encrypted secret is still in the pending
+      // record), a SIGNED resolve can make them spendable — don't let one unrecoverable note block
+      // a perfectly good one. Surface a retryable "out of sync" error so the withdraw self-heal runs
+      // resolvePendingOutputNotes(signer) and retries; the unspendable note is simply skipped if the
+      // resolved note covers the amount.
+      if (diag.unreadable > 0) {
+        return { error: `Resolving your ${_token.symbol} notes — out of sync, retry in a moment.` };
+      }
       return { error: `A ${_token.symbol} note is on-chain but its saved secret can't be recovered from your backup — this note may be unspendable. (${diag.badsecret} affected)` };
     }
     if (diag.noSigner) {
