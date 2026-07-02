@@ -597,16 +597,21 @@ export async function getSpendableVaultBalance(
 
   // Collect candidate notes using plaintext metadata only — no decryption needed for balance.
   const { scanNoteMeta } = await import('./localNoteStore');
-  const notesByToken: Record<string, Array<{ commitment?: string; nullifierHash?: string; amount: string }>> = {};
+  const notesByToken: Record<string, Array<{ commitment?: string; nullifierHash?: string; amount: string; storageKey: string }>> = {};
+  const newNotePrefix = `siphon-note-${chainId}-`;
   for (const meta of scanNoteMeta(`${chainId}-`)) {
-    if (meta.spent === true || meta.spent === 'true') continue;
+    if (meta.spent === 'true') continue;
     const parts = meta.key.split('-');
-    if (parts.length < 3) continue;
-    const sym = parts[1].toUpperCase();
+    // new format: siphon-note-{chainId}-{SYM}-{commitment} → sym at index 3
+    // legacy:     {chainId}-{SYM}-{commitment}              → sym at index 1
+    const symIdx = meta.key.startsWith(newNotePrefix) ? 3 : 1;
+    if (parts.length <= symIdx) continue;
+    const sym = parts[symIdx].toUpperCase();
     (notesByToken[sym] ||= []).push({
       commitment:    meta.commitment,
       nullifierHash: meta.nullifierHash,
       amount:        meta.amount,
+      storageKey:    meta.key,
     });
   }
 
@@ -630,12 +635,12 @@ export async function getSpendableVaultBalance(
 
     // Candidate notes that are actually on-chain (commitment in the leaf set), deduped.
     const counted = new Set<string>();
-    const candidates: Array<{ commitment: string; nullifierHash?: string; amount: string }> = [];
+    const candidates: Array<{ commitment: string; nullifierHash?: string; amount: string; storageKey: string }> = [];
     for (const n of notes) {
       if (!n.commitment || !leaves.has(n.commitment)) continue; // phantom / not on-chain
       if (counted.has(n.commitment)) continue;                   // dedupe stale duplicate keys
       counted.add(n.commitment);
-      candidates.push({ commitment: n.commitment, nullifierHash: n.nullifierHash, amount: n.amount });
+      candidates.push({ commitment: n.commitment, nullifierHash: n.nullifierHash, amount: n.amount, storageKey: n.storageKey });
     }
 
     // One Multicall3 round-trip for every nullifier check (was one eth_call per note → slow,
@@ -655,10 +660,10 @@ export async function getSpendableVaultBalance(
       spentByNh = new Map(); // treat all as unspent → never hides a real note
     }
 
-    const { markNoteSpent } = await import('./localNoteStore');
+    const { markNoteSpentByKey } = await import('./localNoteStore');
     for (const c of candidates) {
       if (c.nullifierHash && spentByNh.get(c.nullifierHash)) {
-        markNoteSpent(`${chainId}-${sym}-${c.commitment}`); // already withdrawn on-chain
+        markNoteSpentByKey(c.storageKey); // already withdrawn on-chain
         continue;
       }
       const amt = parseFloat(c.amount);
@@ -676,15 +681,31 @@ export function getLocalVaultNoteTotals(chainId: number): Record<string, number>
   const details: Record<string, number> = {};
   if (typeof window === "undefined") return details;
 
+  const newPrefix    = `siphon-note-${chainId}-`;
+  const legacyPrefix = `${chainId}-`;
+
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (!key || !key.startsWith(`${chainId}-`)) continue;
+    if (!key) continue;
+    const isNew    = key.startsWith(newPrefix);
+    const isLegacy = !isNew && key.startsWith(legacyPrefix);
+    if (!isNew && !isLegacy) continue;
+
+    // Extract symbol: new format = siphon-note-{chainId}-{SYM}-{commitment} (part index 3)
+    //                 legacy      = {chainId}-{SYM}-{commitment}             (part index 1)
     const parts = key.split("-");
-    if (parts.length < 3) continue;
-    const sym = parts[1].toUpperCase();
+    const symIdx = isNew ? 3 : 1;
+    if (parts.length <= symIdx) continue;
+    const sym = parts[symIdx].toUpperCase();
     try {
       const d = JSON.parse(localStorage.getItem(key) || "{}");
       if (!d?.amount || d.spent === true || d.spent === "true") continue;
+      if (!d.commitment) continue;
+      // Dedup: if a new-format encrypted entry exists for this commitment, skip the plaintext one
+      if (!isNew && d.commitment) {
+        const newKey = `siphon-note-${chainId}-${sym}-${d.commitment}`;
+        if (localStorage.getItem(newKey)) continue;
+      }
       const amt = parseFloat(String(d.amount));
       if (!Number.isFinite(amt)) continue;
       details[sym] = (details[sym] || 0) + amt;
@@ -806,7 +827,7 @@ export async function generateSwapProof(
   for (const meta of metas) {
     if (_noteKey && meta.key !== _noteKey) continue;
     if (!meta.commitment || !meta.amount) continue;
-    if (meta.spent === true || meta.spent === 'true') continue;
+    if (meta.spent === 'true') continue;
     const data = await readNote(meta.key, signer);
     if (!data || !data.nullifier || !data.commitment) continue;
     const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _inToken.decimals).toString());
@@ -973,7 +994,7 @@ export async function generateSplitProof(
   for (const meta of metas) {
     if (_noteKey && meta.key !== _noteKey) continue;
     if (!meta.commitment || !meta.amount) continue;
-    if (meta.spent === true || meta.spent === 'true') continue;
+    if (meta.spent === 'true') continue;
     const data = await readNote(meta.key, signer);
     if (!data || !data.nullifier || !data.commitment) continue;
     const amountWei = BigInt(ethers.parseUnits(data.amount.toString(), _token.decimals).toString());
@@ -1078,6 +1099,14 @@ export async function generateZKData(
   try {
     // NON-deduped, index-ordered leaves (see swap path): a Set drops duplicate leaf values and
     // shifts indices, producing a phantom Merkle root that the vault rejects (InvalidStateRoot).
+    // Always bust the cache here — a stale/partial set from the balance scan (which runs every 60s
+    // and can hit RPC 429s mid-scan) would produce a snapshotRoot the vault doesn't know, causing
+    // the "note set out of sync" error even for a perfectly valid note.
+    // Bust vault + leaf caches so a redeployment is picked up immediately.
+    const _ck = `${_chainId}:${tokenAddress.toLowerCase()}`;
+    vaultInfoCache.delete(_ck);
+    orderedLeavesCache.delete(_ck);
+    orderedLeavesInflight.delete(_ck);
     leaves = await getOnChainLeaves(tokenAddress, _chainId);
     console.log("Found leaves count:", leaves.length);
   } catch (err) {
@@ -1096,7 +1125,10 @@ export async function generateZKData(
       const { writeNote, readNote } = await import('./localNoteStore');
       const serverComms = await fetchCommitments(signer);
       for (const c of serverComms) {
-        const key = `${c.decrypted.chainId}-${c.asset}-${c.decrypted.commitment}`;
+        // Key must match what scanNoteMeta returns (new-format), so the serverCommitmentIds
+        // lookup in handler.ts finds the entry. Old-format key here caused a permanent miss.
+        const { noteKey: mkNoteKey } = await import('./localNoteStore');
+        const key = mkNoteKey(Number(c.decrypted.chainId), String(c.asset), c.decrypted.commitment);
         // Track server id for every unspent note so we can mark it spent after withdrawal.
         if (c.spent === 'false') {
           serverCommitmentIds[key] = c.id;
@@ -1212,7 +1244,7 @@ export async function generateZKData(
     // TWAP/grid: spend exactly the named slice note, not a greedy mix of others.
     if (_noteKey && key !== _noteKey) continue;
     if (!meta.commitment || !meta.amount) continue;
-    if (meta.spent === true || meta.spent === 'true') { diag.spent++; continue; }
+    if (meta.spent === 'true') { diag.spent++; continue; }
 
     const data = _zkSigner ? await readNote(key, _zkSigner) : null;
     if (!data) {
@@ -1388,11 +1420,23 @@ export async function generateZKData(
   if (signer) {
     try {
       const { claimFromPool } = await import('./sparePool');
+      const inputNullifiers = new Set(selectedNotes.map(n => n.data.nullifier));
       const claimed = await claimFromPool(signer);
       changeNullifier     = BigInt(claimed.nullifier);
       changeSecret        = BigInt(claimed.secret);
       changePrecommitment = BigInt(claimed.precommitment);
       changePoolId        = claimed.id;
+      // Circuit asserts changeNullifier ≠ every inputNullifier. A stale pool entry (not
+      // resolved after a prior tx) can return a nullifier already used as an input, causing
+      // the circuit to fail at line 95. Detect it and fall back to deterministic derivation.
+      if (inputNullifiers.has(claimed.nullifier)) {
+        console.warn('[generateZKData] pool returned a nullifier matching an input note — falling back to deterministic change secrets');
+        const nullifierXor = selectedNotes.reduce((acc, n) => acc ^ BigInt(n.data.nullifier), 0n);
+        changeNullifier     = BigInt(F.toObject(poseidon([nullifierXor, 1n])));
+        changeSecret        = BigInt(F.toObject(poseidon([nullifierXor, 2n])));
+        changePrecommitment = BigInt(F.toObject(poseidon([changeNullifier, changeSecret])));
+        changePoolId        = null;
+      }
     } catch (poolErr) {
       console.warn('[generateZKData] pool claim failed, using deterministic fallback:', poolErr);
       const nullifierXor  = selectedNotes.reduce((acc, n) => acc ^ BigInt(n.data.nullifier), 0n);
@@ -1449,7 +1493,7 @@ export async function generateZKData(
   // instead of minting a broken strategy. (The executor's on-chain check is the ultimate backstop.)
   if (snapshotRoot !== onChainRoot) {
     try {
-      const known = await withRetry(() => merkleTreeContract.rootExists(snapshotRoot));
+      const known = await withRetry(() => merkleTreeContract.rootExists(snapshotRoot), 2);
       if (!known) {
         return { error: 'Could not build a valid proof against the current chain state (note set out of sync) — refresh and retry in a moment.' };
       }
@@ -1547,7 +1591,7 @@ export async function generateZKData(
   const zkData: ZKData = {
     withdrawalTxData,
     changeValue,
-    newDepositKey: `${_chainId}-${_token.symbol}-${changeCommitmentOnChain.toString()}`,
+    newDepositKey: (await import('./localNoteStore')).noteKey(_chainId, _token.symbol, changeCommitmentOnChain.toString()),
     newDeposit: {
       secret:        changeSecret.toString(),
       nullifier:     changeNullifier.toString(),

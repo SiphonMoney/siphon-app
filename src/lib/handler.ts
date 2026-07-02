@@ -123,18 +123,27 @@ export async function deposit(_token: string, _amount: string) {
     const tokenAddress = token.symbol === 'ETH' ? NATIVE_TOKEN : token.address;
     const signerAddress = await signer.getAddress();
 
-    // Store full secrets in temp hint BEFORE sending tx so they survive a page refresh
-    // between mining and the final writeNote. Key is precommitment (known pre-tx).
-    depositId = `${currentChainId()}-${_token}-${commitmentData.precommitment}`;
-    localStorage.setItem(depositId, JSON.stringify({
+    // Pre-compute commitment before tx: Poseidon(amountWei, precommitment).
+    // Write it encrypted as spent:'pending' immediately — no plaintext hint needed.
+    const { buildPoseidon } = await import('circomlibjs');
+    const poseidon = await buildPoseidon();
+    const F = poseidon.F;
+    const preComputedCommitment = BigInt(
+      F.toObject(poseidon([decAmount, BigInt(commitmentData.precommitment)]))
+    ).toString();
+
+    const { writeNoteTyped, noteKey } = await import('./localNoteStore');
+    depositId = noteKey(currentChainId(), _token, preComputedCommitment);
+    await writeNoteTyped(currentChainId(), _token, {
       nullifier:     commitmentData.nullifier,
       secret:        commitmentData.secret,
+      commitment:    preComputedCommitment,
       precommitment: commitmentData.precommitment,
       nullifierHash: commitmentData.nullifierHash ?? '',
       amount:        _amount,
-      pending:       true,
-    }));
-    console.log("Stored deposit hint (with secrets) in localStorage:", depositId);
+      spent:         'pending',
+    }, signer);
+    console.log('[deposit] pre-tx note written encrypted, commitment:', preComputedCommitment);
 
     const contract = await getEntrypointContract(signer);
     let receipt: TransactionReceipt | null = null;
@@ -227,25 +236,30 @@ export async function deposit(_token: string, _amount: string) {
 
     const [, leafBN] = abiCoder.decode(['uint256', 'uint256', 'uint256'], leafLog.data);
     const commitment = leafBN.toString();
+    finalDepositId = commitment;
 
-    // Write encrypted note under the final commitment key, then remove the temp hint.
-    // Temp hint is removed AFTER writeNote succeeds so secrets are never orphaned.
-    finalDepositId = `${currentChainId()}-${_token}-${commitment}`;
+    // Flip the pre-written pending note to spent:'false'.
+    // If on-chain commitment differs from pre-computed (shouldn't happen), write fresh.
     try {
-      const { writeNote } = await import('./localNoteStore');
-      await writeNote(finalDepositId, {
-        nullifier:     commitmentData.nullifier,
-        secret:        commitmentData.secret,
-        commitment,
-        precommitment: commitmentData.precommitment,
-        nullifierHash: commitmentData.nullifierHash ?? '',
-        amount:        _amount,
-        spent:         false,
-      }, signer);
-      localStorage.removeItem(depositId!);
+      const { writeNoteTyped, markNoteSpentTyped, noteKey } = await import('./localNoteStore');
+      if (commitment === preComputedCommitment) {
+        markNoteSpentTyped(currentChainId(), _token, commitment, 'false');
+      } else {
+        // Quarantine the pre-computed entry and write the real one
+        markNoteSpentTyped(currentChainId(), _token, preComputedCommitment, 'true');
+        await writeNoteTyped(currentChainId(), _token, {
+          nullifier:     commitmentData.nullifier,
+          secret:        commitmentData.secret,
+          commitment,
+          precommitment: commitmentData.precommitment,
+          nullifierHash: commitmentData.nullifierHash ?? '',
+          amount:        _amount,
+          spent:         'false',
+        }, signer);
+        console.warn('[deposit] on-chain commitment differed from pre-computed — wrote fresh note', commitment);
+      }
     } catch (e) {
-      console.warn('Encrypted localStorage write failed — temp hint preserved for recovery:', e);
-      // Don't remove depositId — the pending hint still holds the secrets
+      console.warn('[deposit] Failed to confirm note after tx:', e);
     }
 
     // Save commitment to Supabase (localStorage is fallback)
@@ -301,18 +315,14 @@ export async function deposit(_token: string, _amount: string) {
   } catch (err: unknown) {
     const message = friendlyTxError(err);
     console.error("Error during deposit:", message);
-    // Only remove the temp hint if the tx never mined (finalDepositId not set).
-    // If the tx mined but writeNote failed, keep the hint — it holds the secrets for recovery.
+    // If the tx never mined, quarantine the pre-written pending note so it isn't
+    // shown as spendable. If it did mine (finalDepositId set), leave it — it was
+    // already flipped to spent:'false' above.
     if (depositId && !finalDepositId) {
-      const raw = localStorage.getItem(depositId);
-      // If hint has no nullifier the tx never sent — safe to remove.
-      // If it has nullifier the tx may have mined — keep it for recovery.
       try {
-        const parsed = raw ? JSON.parse(raw) : {};
-        if (!parsed.nullifier) localStorage.removeItem(depositId);
-      } catch {
-        localStorage.removeItem(depositId);
-      }
+        const { markNoteSpentByKey } = await import('./localNoteStore');
+        markNoteSpentByKey(depositId, 'true');
+      } catch { /* best-effort */ }
     }
     return { success: false, error: message };
   }
@@ -412,23 +422,23 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
       return { success: false, error: message };
     }
 
-    // Pre-tx change-note backup. The durable writeNote below runs only AFTER tx.wait(), so a tab
-    // close / crash in the mine→persist window would strand the change value. Write a recoverable
-    // plaintext hint NOW (the secret is already known); recoverPendingHints finalizes it from chain
-    // state, and it's removed once the durable write succeeds. FUND-SAFETY.
-    if (zkData.changeValue > 0n && zkData.newDeposit?.precommitment) {
+    // Pre-tx change note: write it encrypted as spent:'pending' before submitting.
+    // changeCommitment is already known (circuit input), so we can write the full
+    // encrypted note now — no plaintext hint needed. On confirm → flip to 'false'.
+    // On revert → flip to 'true' (quarantined). Crash-safe: note survives page refresh.
+    if (zkData.changeValue > 0n && zkData.newDeposit?.commitment) {
       try {
-        localStorage.setItem(`change-hint-${zkData.newDeposit.precommitment}`, JSON.stringify({
+        const { writeNoteTyped: _wn } = await import('./localNoteStore');
+        await _wn(currentChainId(), token.symbol, {
           nullifier:     zkData.newDeposit.nullifier,
           secret:        zkData.newDeposit.secret,
-          precommitment: zkData.newDeposit.precommitment,
+          commitment:    zkData.newDeposit.commitment,
+          precommitment: zkData.newDeposit.precommitment ?? '',
           nullifierHash: zkData.newDeposit.nullifierHash ?? '',
           amount:        zkData.newDeposit.amount,
-          chainId:       currentChainId(),
-          symbol:        token.symbol,
-          pending:       true,
-        }));
-      } catch { /* quota — non-fatal */ }
+          spent:         'pending',
+        }, signer);
+      } catch (e) { console.warn('[withdraw] pre-tx change note write failed:', e); }
     }
 
     // 3) Send actual withdrawal transaction
@@ -453,11 +463,11 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
 
       // 4) Mark ALL spent notes — localStorage, server commitments table, and nullifier registry
       try {
-        const { markNoteSpent } = await import('./localNoteStore');
+        const { markNoteSpentByKey } = await import('./localNoteStore');
         const { markCommitmentSpent, markCommitmentSpentByCommitment } = await import('./commitmentStore');
         const { getTradeExecutorBaseUrl } = await import('./tradeExecutorClient');
         for (const key of zkData.spentDepositKeys) {
-          markNoteSpent(key);
+          markNoteSpentByKey(key);
           const serverId = zkData.serverCommitmentIds[key];
           if (serverId) {
             markCommitmentSpent(signer, serverId, 'true').catch(e =>
@@ -466,8 +476,11 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
           } else {
             // No pre-known server id (a re-hydrated/synced note) — mark spent by the commitment
             // value so the used note leaves the Supabase spendable set and can't re-hydrate or
-            // inflate the backup balance. Key format: `${chainId}-${symbol}-${commitment}`.
-            const commitment = key.split('-')[2];
+            // inflate the backup balance.
+            // Old format: `{chainId}-{symbol}-{commitment}` → commitment at index 2
+            // New format: `siphon-note-{chainId}-{symbol}-{commitment}` → commitment at index 4
+            const parts = key.split('-');
+            const commitment = key.startsWith('siphon-note-') ? parts[4] : parts[2];
             if (commitment) {
               markCommitmentSpentByCommitment(signer, commitment)
                 .then(n => n > 0 && console.log(`[withdraw] marked ${n} Supabase commitment(s) spent by value for`, key))
@@ -492,27 +505,18 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
         console.warn("Failed to mark local deposits spent");
       }
 
-      // 5) Save change note only when changeValue > 0.
+      // 5) Confirm change note only when changeValue > 0.
       // Zero-value change notes are on-chain (circuit always inserts a leaf) but have no
       // spendable value — no point tracking them in localStorage or the commitments table.
-      if (zkData.changeValue > 0n) {
+      if (zkData.changeValue > 0n && zkData.newDeposit?.commitment) {
+        // Flip the pre-written pending note to spent:'false' — it's now confirmed on-chain.
         try {
-          const { writeNote } = await import('./localNoteStore');
-          await writeNote(zkData.newDepositKey, {
-            nullifier:     zkData.newDeposit.nullifier,
-            secret:        zkData.newDeposit.secret,
-            commitment:    zkData.newDeposit.commitment!,
-            precommitment: zkData.newDeposit.precommitment,
-            nullifierHash: zkData.newDeposit.nullifierHash ?? '',
-            amount:        zkData.newDeposit.amount,
-            spent:         false,
-          }, signer);
+          const { markNoteSpentTyped } = await import('./localNoteStore');
+          markNoteSpentTyped(currentChainId(), token.symbol, zkData.newDeposit.commitment, 'false');
         } catch (e) {
-          console.warn('Encrypted change note write failed:', e);
+          console.warn('[withdraw] Failed to confirm change note:', e);
         }
-        console.log("Saved change commitment locally:", zkData.newDepositKey);
-        // Durable copy is now written — drop the pre-tx recovery hint.
-        try { localStorage.removeItem(`change-hint-${zkData.newDeposit.precommitment}`); } catch { /* ignore */ }
+        console.log('[withdraw] change note confirmed:', zkData.newDeposit.commitment);
 
         // Sync change note to Supabase commitments table (best-effort)
         try {
@@ -574,6 +578,13 @@ export async function withdraw(_token: string, _amount: string, _recipient: stri
     } catch (err: unknown) {
       const message = friendlyTxError(err);
       console.error("Error during withdraw transaction:", message);
+      // Quarantine the pre-written change note (tx reverted — note is not on-chain).
+      if (zkData.changeValue > 0n && zkData.newDeposit?.commitment) {
+        try {
+          const { markNoteSpentTyped } = await import('./localNoteStore');
+          markNoteSpentTyped(currentChainId(), token.symbol, zkData.newDeposit.commitment, 'true');
+        } catch { /* best-effort */ }
+      }
       // Release pool entry so it can be reused by the next withdrawal attempt.
       if (zkData.changePoolId) {
         try {

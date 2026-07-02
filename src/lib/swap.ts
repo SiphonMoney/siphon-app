@@ -98,14 +98,23 @@ export async function instantSwap(
 
         if (receipt && receipt.status === 1) {
             // Store new commitment if remaining balance > 0
-            if (zkData.changeValue > 0n) {
-                localStorage.setItem(zkData.newDepositKey, JSON.stringify(zkData.newDeposit));
+            if (zkData.changeValue > 0n && zkData.newDeposit) {
+                try {
+                    const { writeNote } = await import('./localNoteStore');
+                    await writeNote(zkData.newDepositKey, {
+                        nullifier:     zkData.newDeposit.nullifier,
+                        secret:        zkData.newDeposit.secret,
+                        commitment:    zkData.newDeposit.commitment!,
+                        precommitment: zkData.newDeposit.precommitment,
+                        nullifierHash: zkData.newDeposit.nullifierHash ?? '',
+                        amount:        zkData.newDeposit.amount,
+                        spent:         false,
+                    }, signer);
+                } catch (e) { console.warn('[swap] change note write failed:', e); }
             }
             if (zkData.spentDepositKey) {
-                localStorage.setItem(zkData.spentDepositKey, JSON.stringify({
-                    ...zkData.spentDeposit,
-                    spent: true
-                }));
+                const { markNoteSpentByKey } = await import('./localNoteStore');
+                markNoteSpentByKey(zkData.spentDepositKey);
             }
             return {
                 success: true,

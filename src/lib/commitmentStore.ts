@@ -141,6 +141,20 @@ export async function getServerBackedVaultTotals(
     const dedupeKey = `${sym}:${d.commitment}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
+    // Cross-check localStorage — if the note is already marked spent locally, don't count it.
+    // This handles the case where a withdrawal marked it spent locally but Supabase wasn't
+    // updated yet (e.g. markCommitmentSpent failed or the key format mismatch bug).
+    if (typeof window !== 'undefined') {
+      const newKey    = `siphon-note-${chainId}-${sym}-${d.commitment}`;
+      const legacyKey = `${chainId}-${sym}-${d.commitment}`;
+      const raw = localStorage.getItem(newKey) || localStorage.getItem(legacyKey);
+      if (raw) {
+        try {
+          const local = JSON.parse(raw);
+          if (local.spent === true || local.spent === 'true') continue;
+        } catch { /* skip */ }
+      }
+    }
     const amt = Number(d.amount);
     if (!Number.isFinite(amt) || amt <= 0) continue;
     totals[sym] = (totals[sym] ?? 0) + amt;

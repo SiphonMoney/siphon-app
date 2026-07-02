@@ -306,7 +306,8 @@ export async function resolvePendingOutputNotes(signer?: Signer | null): Promise
           continue;
         }
 
-        const noteKey = `${chainId}-${symbol}-${hit.commitment}`;
+        const { noteKey: mkNoteKey } = await import('./localNoteStore');
+        const noteKey = mkNoteKey(chainId, symbol, hit.commitment);
         const existing = localStorage.getItem(noteKey);
         // A note is "already good" only if it's readable AND its stored secret reproduces the leaf.
         // A readable-but-inconsistent note (a stale artifact from an older resolve) must be REPAIRED

@@ -8,10 +8,12 @@ function uniqueUrls(urls: (string | undefined)[]): string[] {
 export function getServerRpcUrls(chainId: number): string[] {
   if (chainId === 8453) {
     return uniqueUrls([
+      'https://base.drpc.org',
       process.env.BASE_MAINNET_RPC,
       process.env.BASE_RPC_URL,
       NETWORKS[8453].rpcUrl,
       'https://mainnet.base.org',
+      'https://1rpc.io/base',
     ]);
   }
   if (chainId === 84532) {

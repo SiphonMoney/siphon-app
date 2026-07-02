@@ -78,10 +78,7 @@ const executingIds = new Set<string>();
 /** Decrypt ARMED results locally and authorize any that triggered. */
 export async function processArmedStrategies(userId: string): Promise<string[]> {
   const clientKey = getStoredClientKey(userId);
-  if (!clientKey) {
-    console.warn("[strategyApi] No FHE client key on this device — cannot decrypt ARMED results.");
-    return [];
-  }
+  if (!clientKey) return [];
 
   const { success, strategies } = await getStrategies(userId);
   if (!success || !strategies) return [];

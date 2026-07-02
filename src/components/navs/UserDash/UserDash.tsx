@@ -78,7 +78,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     }
   }, [activeChainId, switchingChain]);
 
-  const fetchVaultBalances = useCallback(async (options?: { syncServerNotes?: boolean }) => {
+  const fetchVaultBalances = useCallback(async (options?: { syncServerNotes?: boolean; skipOnChainCheck?: boolean }) => {
     // Show local note totals INSTANTLY (pure localStorage read, no RPC) so funds appear right
     // away instead of sitting on "Updating…" until the full chain scan finishes. The on-chain
     // reconcile below refines this a moment later. Only fills when nothing is shown yet, so the
@@ -89,7 +89,11 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
       for (const sym of ['ETH', 'USDC']) {
         if ((localNow[sym] ?? 0) > 0) quick[sym] = localNow[sym];
       }
-      setSiphonVaultBalances((prev) => prev ?? quick);
+      // Only fill if nothing is shown yet, OR if the current display is empty (all zeroes).
+      // Prevents a bad prior scan from locking out the local quick-read.
+      setSiphonVaultBalances((prev) =>
+        prev === null || Object.values(prev).every((v) => v <= 0) ? quick : prev
+      );
     }
     // Finalize any vault-mode swap outputs whose on-chain deposit has landed so they count
     // toward the vault balance below. No signer → localStorage-only (avoids a wallet popup).
@@ -128,6 +132,10 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     // throttled RPC must never leave the panel stuck on "Updating…" or — worse — collapse to
     // "No funds detected" when the funds are safely in your encrypted backup. Cap it with a
     // timeout; on failure fall back to note totals WITHOUT zeroing the balance.
+    // Background poll: skip all network calls — just keep the last verified display.
+    // The refresh button and initial load do the full on-chain check.
+    if (options?.skipOnChainCheck) return;
+
     let details: Record<string, number> = {};
     let reconcileOk = false;
     try {
@@ -148,8 +156,7 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     // what your encrypted backup says is withdrawable — NOT an empty localStorage (which is empty
     // right after a cache clear, before re-hydration finishes). Only fetched when the reconcile
     // failed AND a signer is available without a wallet popup (enc key already derived), so the
-    // 60s poll never prompts. The chain stays authoritative for actually spending (withdraw does
-    // full verification); this is display-only resilience.
+    // manual refresh never prompts unnecessarily.
     let server: Record<string, number> = {};
     if (!reconcileOk && wallet && isInitialized()) {
       try {
@@ -168,9 +175,6 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
     const display: Record<string, number> = {};
     for (const sym of ['ETH', 'USDC']) {
       const onChain = details[sym] ?? 0;
-      // Prefer the verified on-chain figure; if the reconcile ran cleanly, trust it (0 is real).
-      // If it did NOT run, show the best available backup total (localStorage, else Supabase) so a
-      // transient RPC failure never reads as lost funds.
       const amount = reconcileOk
         ? onChain
         : Math.max(local[sym] ?? 0, server[sym] ?? 0);
@@ -194,10 +198,15 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   }, [fetchVaultBalances]);
 
   useEffect(() => {
-    fetchVaultBalances();
-    const interval = setInterval(fetchVaultBalances, 60_000);
+    fetchVaultBalances(); // initial load — does full on-chain check
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet, activeChainId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => fetchVaultBalances({ skipOnChainCheck: true }), 60_000);
     return () => clearInterval(interval);
-  }, [wallet, fetchVaultBalances]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Refresh the (public) wallet balances whenever the wallet or selected chain changes.
   useEffect(() => {
