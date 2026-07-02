@@ -7,13 +7,16 @@ function uniqueUrls(urls: (string | undefined)[]): string[] {
 /** Ordered upstream RPC URLs — primary first, then public fallbacks. */
 export function getServerRpcUrls(chainId: number): string[] {
   if (chainId === 8453) {
+    // Your configured RPC (a paid key) FIRST; reliable public nodes next; free-tier dRPC LAST —
+    // its free tier times out even single-block eth_getLogs scans (`code 30`), which stalled
+    // Base withdraws. The proxy also demotes drpc for getLogs, but keep it last here regardless.
     return uniqueUrls([
-      'https://base.drpc.org',
       process.env.BASE_MAINNET_RPC,
       process.env.BASE_RPC_URL,
       NETWORKS[8453].rpcUrl,
       'https://mainnet.base.org',
       'https://1rpc.io/base',
+      'https://base.drpc.org',
     ]);
   }
   if (chainId === 84532) {

@@ -36,8 +36,15 @@ export async function POST(req: NextRequest) {
   // instead of wasting one on the free Alchemy key set as BASE_MAINNET_RPC. Paid Alchemy still
   // works when it's the only option — it just isn't tried first for logs.
   if (body.includes('eth_getLogs')) {
+    // Nodes whose FREE tier can't reliably serve our getLogs scans go to the BACK:
+    //   - publicnode rejects historical getLogs as "archive" without a paid token
+    //   - free-tier Alchemy caps getLogs at a 10-BLOCK range
+    //   - free-tier Infura throttles (429 as JSON-RPC -32005)
+    //   - free-tier dRPC (base.drpc.org) times out even single-block scans with
+    //     `code 30: Request timeout on the free tier` — the exact failure seen on Base withdraws.
+    // A paid key for any of these still works when it's the only option; it just isn't tried first.
     const capped = (u: string) =>
-      u.includes('publicnode') || u.includes('alchemy') || u.includes('infura');
+      u.includes('publicnode') || u.includes('alchemy') || u.includes('infura') || u.includes('drpc');
     urls = [...urls].sort((a, b) => (capped(a) ? 1 : 0) - (capped(b) ? 1 : 0));
   }
 
@@ -56,9 +63,18 @@ export async function POST(req: NextRequest) {
         lastText = text;
         lastStatus = res.status;
 
-        // Rate limited — either an HTTP 429, or (Infura free-tier) a JSON-RPC -32005 / "Too Many
-        // Requests" wrapped in a 200. Back off + retry this node, then fall through to the next.
-        if (res.status === 429 || text.includes('-32005') || text.includes('Too Many Requests')) {
+        // Rate limited / free-tier overloaded — either an HTTP 429, or a JSON-RPC error wrapped in
+        // a 200: Infura's -32005 / "Too Many Requests", or dRPC's free-tier `code 30 / Request
+        // timeout on the free tier`. Back off + retry this node, then fall through to the next
+        // upstream. Without the dRPC case this surfaced straight to the client and aborted the
+        // whole leaf scan → withdraw stuck on "WITHDRAWING…".
+        if (
+          res.status === 429 ||
+          text.includes('-32005') ||
+          text.includes('Too Many Requests') ||
+          text.includes('Request timeout on the free tier') ||
+          (text.includes('"code": 30') || text.includes('"code":30'))
+        ) {
           await sleep(300 * 2 ** attempt);
           continue;
         }
