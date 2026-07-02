@@ -76,7 +76,7 @@ import { getSelectedChainId, getTokens, getZkWithdrawRecipient, getNetwork, NATI
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData, type TokenInfo } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
-import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } from "../../../lib/multiLegBuilder";
+import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool, computeArmingFeeWei, collectArmingFee } from "../../../lib/multiLegBuilder";
 import { getOrCreateClientKey } from "../../../lib/fhe";
 import { getSigner } from "../../../lib/nexus";
 import { reserveStrategyNotes } from "../../../lib/strategyNoteReservation";
@@ -912,6 +912,20 @@ export default function Build({
       }
     }
 
+    // Part A arming fee (anti-spam): single-shot orders pay the BASE fee upfront as a shielded
+    // deposit into the protocol fee-vault — same mechanism as multi-leg. windowHours=0 → base fee
+    // only, since single-shot orders have no execution window (yet). Covers the FHE evaluation an
+    // order consumes even if it never triggers. Best-effort: skipped if the fee pool is empty or
+    // the deposit fails. MUST run before generateZKData — the deposit bumps the Merkle root and
+    // the proof has to be built against the post-deposit tree.
+    const ssArmingFeeWei = await computeArmingFeeWei(token, 0, token.symbol === 'ETH' ? (ethUsd ?? 0) : undefined);
+    if (ssArmingFeeWei > 0n) {
+      showAppToast(`Collecting arming fee ($${armingFeeUsd(0).toFixed(2)})…`, 'info', 5000);
+    }
+    const ssArming = await collectArmingFee(CHAIN_ID, token, ssArmingFeeWei);
+    console.log('[Fee] single-shot arming fee:', armingFeeUsd(0), 'USD →', ssArming.armingCollectedWei.toString(), 'wei', token.symbol,
+      ssArming.armingPrecommitment ? `(precommitment ${ssArming.armingPrecommitment.slice(0, 12)}…)` : '(skipped)');
+
     showAppToast(`Generating ZK proof for ${effectiveAmountStr} ${assetIn}...`, 'info', 5000);
     console.log('[Strategy] Generating ZK proof...');
 
@@ -971,6 +985,10 @@ export default function Build({
       from_chain:        String(getSelectedChainId()),
       output_mode:       outputMode,
       output_precommitment: outputPrecommitment,
+      // Part A arming fee — already deposited on-chain into the fee-vault; the executor records
+      // the accrual (kind='arming', swept=True) and marks the pool precommitment used.
+      arming_fee_wei:    ssArming.armingCollectedWei > 0n ? ssArming.armingCollectedWei.toString() : undefined,
+      arming_precommitment: ssArming.armingPrecommitment,
     };
 
     console.log('[Strategy] Encrypting client-side and submitting to trade-executor:', strategyData);

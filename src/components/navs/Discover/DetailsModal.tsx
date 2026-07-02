@@ -12,7 +12,7 @@ import { buildGraphRunPlan } from "../../../lib/graphRunPlan";
 import { submitEncryptedStrategy } from "../../../lib/strategySubmit";
 import { generateZKData } from "../../../lib/zkHandler";
 import { createVaultOutputNote } from "../../../lib/outputNoteResolver";
-import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool } from "../../../lib/multiLegBuilder";
+import { buildTwapLegs, buildGridLegs, submitSplitOnChain, resolveSwapPool, computeArmingFeeWei, collectArmingFee } from "../../../lib/multiLegBuilder";
 import { armingFeeUsd, FEE } from "../../../lib/feeModel";
 import { getOrCreateClientKey } from "../../../lib/fhe";
 import { NATIVE_TOKEN } from "../../../lib/networks";
@@ -399,7 +399,6 @@ export default function DetailsModal({
   const baseFee = calculateFixedCost();
   const hourlyFee = calculateVariableCost(runDuration);
   const totalCost = calculateRunFee(runDuration);
-  const ethUsd = coinPrices.ETH || 3000;
 
   const runSummary = useMemo(() => {
     const depositNode = modalStrategyNodes.find((n) => (n.data as NodeData)?.type === "deposit");
@@ -458,6 +457,23 @@ export default function DetailsModal({
       stepCount: displayStepNodes.length,
     };
   }, [modalStrategyNodes, runModeValues, coinPrices, displayStepNodes, activeChainId, estimateSlippagePct, totalCost]);
+
+  // Cost review must mirror what is actually CHARGED (fee_calc.py + collectArmingFee):
+  // multi-leg (TWAP/Range) pays base + hourly×window upfront and enforces execution_window_sec;
+  // single-shot orders pay the BASE arming fee only — no expiry is enforced on them (yet), so
+  // showing an hourly component there would overstate the charge. Both collect the arming fee
+  // in the INPUT asset. Per-fill execution fee = max($0.20, bps·notional) + $0.10 gas, capped
+  // at 50% of the fill.
+  const costIsMultiLeg = runSummary.strategyKind === "TWAP" || runSummary.strategyKind === "Range";
+  const armingUsd = costIsMultiLeg ? totalCost : baseFee;
+  const inputCoinUsd = coinPrices[runSummary.inputCoin?.toUpperCase?.() ?? ""] ??
+    (["USDC", "USDT"].includes((runSummary.inputCoin || "").toUpperCase()) ? 1 : 0);
+  const execFeeUsd = runSummary.inputUsd > 0
+    ? Math.min(
+        Math.max(FEE.MIN_EXEC_USD, (FEE.EXEC_BPS / 10000) * runSummary.inputUsd) + FEE.GAS_REIMBURSE_USD,
+        runSummary.inputUsd / 2,
+      )
+    : 0;
 
   const formatUsd = (value: number) =>
     value > 0 ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—";
@@ -773,6 +789,17 @@ export default function DetailsModal({
         return;
       }
 
+      // Part A arming fee (anti-spam): single-shot orders pay the BASE fee upfront as a shielded
+      // deposit into the protocol fee-vault (windowHours=0 → base only; no execution window on
+      // single-shot yet). Best-effort — skipped if the fee pool is empty or the deposit fails.
+      // MUST run before generateZKData: the deposit bumps the Merkle root, so the proof has to be
+      // built against the post-deposit tree.
+      const ssArmingFeeWei = await computeArmingFeeWei(
+        tokenInfo, 0, coinPrices[tokenInfo.symbol.toUpperCase()] ?? undefined);
+      if (ssArmingFeeWei > 0n) addLog(`Arming fee: $${armingFeeUsd(0).toFixed(2)} (${ssArmingFeeWei} wei ${tokenInfo.symbol})`);
+      const ssArming = await collectArmingFee(fromChainId, tokenInfo, ssArmingFeeWei);
+      if (ssArming.armingCollectedWei > 0n) addLog('Arming fee collected (shielded, fee-vault)');
+
       // Generate ZK proof for strategy execution using full deposit amount
       addLog(`Generating ZK proof on ${getNetwork(fromChainId).name}...`);
       const zkResult = await generateZKData(
@@ -825,6 +852,11 @@ export default function DetailsModal({
         to_chain: String(toChainId ?? fromChainId),
         output_mode: outputMode,
         output_precommitment: outputPrecommitment,
+        // Part A arming fee — already deposited on-chain; executor records the accrual
+        // (kind='arming', swept=True) and marks the pool precommitment used.
+        ...(ssArming.armingCollectedWei > 0n
+          ? { arming_fee_wei: ssArming.armingCollectedWei.toString(), arming_precommitment: ssArming.armingPrecommitment }
+          : {}),
         zk_proof: {
           pA: withdrawalTxData.pA,
           pB: withdrawalTxData.pB,
@@ -1085,53 +1117,77 @@ export default function DetailsModal({
                     <dt>Base fee (min)</dt>
                     <dd>${baseFee.toFixed(2)}</dd>
                   </div>
-                  <div className="builder-run-receipt-cost-row">
-                    <dt>Hourly fee (${FEE.PER_HOUR_ARM_USD.toFixed(2)} × {runDurationHours}h)</dt>
-                    <dd>${hourlyFee.toFixed(2)}</dd>
-                  </div>
-                  <div className="builder-run-receipt-cost-row">
-                    <dt>Execution window</dt>
-                    <dd>
-                      <select
-                        className="builder-run-receipt-duration"
-                        value={runDuration}
-                        onChange={(e) => setRunDuration(e.target.value)}
-                        aria-label="Execution window"
-                      >
-                        <option value="1h">1 hour</option>
-                        <option value="2h">2 hours</option>
-                        <option value="3h">3 hours</option>
-                        <option value="6h">6 hours</option>
-                        <option value="12h">12 hours</option>
-                        <option value="24h">24 hours</option>
-                        <option value="2d">2 days</option>
-                        <option value="3d">3 days</option>
-                        <option value="7d">7 days</option>
-                        <option value="14d">14 days</option>
-                        <option value="30d">30 days</option>
-                        <option value="60d">60 days</option>
-                        <option value="90d">90 days</option>
-                        <option value="180d">180 days</option>
-                        <option value="365d">365 days</option>
-                      </select>
-                    </dd>
-                  </div>
+                  {costIsMultiLeg ? (
+                    <>
+                      <div className="builder-run-receipt-cost-row">
+                        <dt>Hourly fee (${FEE.PER_HOUR_ARM_USD.toFixed(2)} × {runDurationHours}h)</dt>
+                        <dd>${hourlyFee.toFixed(2)}</dd>
+                      </div>
+                      <div className="builder-run-receipt-cost-row">
+                        <dt>Execution window</dt>
+                        <dd>
+                          <select
+                            className="builder-run-receipt-duration"
+                            value={runDuration}
+                            onChange={(e) => setRunDuration(e.target.value)}
+                            aria-label="Execution window"
+                          >
+                            <option value="1h">1 hour</option>
+                            <option value="2h">2 hours</option>
+                            <option value="3h">3 hours</option>
+                            <option value="6h">6 hours</option>
+                            <option value="12h">12 hours</option>
+                            <option value="24h">24 hours</option>
+                            <option value="2d">2 days</option>
+                            <option value="3d">3 days</option>
+                            <option value="7d">7 days</option>
+                            <option value="14d">14 days</option>
+                            <option value="30d">30 days</option>
+                            <option value="60d">60 days</option>
+                            <option value="90d">90 days</option>
+                            <option value="180d">180 days</option>
+                            <option value="365d">365 days</option>
+                          </select>
+                        </dd>
+                      </div>
+                    </>
+                  ) : (
+                    // Single-shot orders have no enforced execution window — they stay armed
+                    // until they fire. Only the base arming fee applies (no hourly component).
+                    <div className="builder-run-receipt-cost-row">
+                      <dt>Execution window</dt>
+                      <dd>Until filled (no expiry)</dd>
+                    </div>
+                  )}
                   <div className="builder-run-receipt-cost-row">
                     <dt>Arming fee (upfront, non-refundable)</dt>
                     <dd>
-                      ${totalCost.toFixed(2)} USD
+                      ${armingUsd.toFixed(2)} USD
                       <span className="builder-run-receipt-cost-sub">
-                        ≈ {(totalCost / ethUsd).toFixed(6)} ETH
+                        {inputCoinUsd > 0
+                          ? `≈ ${(armingUsd / inputCoinUsd).toFixed(6)} ${runSummary.inputCoin} (paid from wallet)`
+                          : `collected in ${runSummary.inputCoin || "the input asset"}`}
                       </span>
                     </dd>
                   </div>
                   <div className="builder-run-receipt-cost-row">
                     <dt>Execution fee (per fill)</dt>
                     <dd>
-                      {(FEE.EXEC_BPS / 100).toFixed(2)}% of trade
-                      <span className="builder-run-receipt-cost-sub">
-                        min ${(FEE.MIN_EXEC_USD + FEE.GAS_REIMBURSE_USD).toFixed(2)} per fill
-                      </span>
+                      {costIsMultiLeg || execFeeUsd <= 0 ? (
+                        <>
+                          {(FEE.EXEC_BPS / 100).toFixed(2)}% + ${FEE.GAS_REIMBURSE_USD.toFixed(2)} gas
+                          <span className="builder-run-receipt-cost-sub">
+                            min ${(FEE.MIN_EXEC_USD + FEE.GAS_REIMBURSE_USD).toFixed(2)} · max 50% of fill
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          ${execFeeUsd.toFixed(2)}
+                          <span className="builder-run-receipt-cost-sub">
+                            max($0.20, {(FEE.EXEC_BPS / 100).toFixed(2)}%) + ${FEE.GAS_REIMBURSE_USD.toFixed(2)} gas · deducted from the fill
+                          </span>
+                        </>
+                      )}
                     </dd>
                   </div>
                   <div className="builder-run-receipt-cost-row">

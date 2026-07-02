@@ -31,6 +31,7 @@ import {
   type ZKData,
 } from "./zkHandler";
 import { computeRangeGridLegs } from "./strategySpec";
+import { armingFeeUsd } from "./feeModel";
 import { encryptPrice, encryptPriceCents } from "./fhe";
 import { getNetwork, NATIVE_TOKEN, getZkWithdrawRecipient } from "./networks";
 import { getSigner } from "./nexus";
@@ -172,6 +173,88 @@ export interface MultiLegResult {
   armingPrecommitment?: string;   // the protocol precommitment that slice was minted to
 }
 
+/**
+ * Part A arming fee in input-asset wei for a given execution window. Resolves the USD price of
+ * asset_in (caller hint → stablecoin $1 → Hermes ETH/USD fallback); 0n when no price is available
+ * (graceful: the order arms without the fee rather than blocking).
+ */
+export async function computeArmingFeeWei(
+  inToken: TokenInfo,
+  windowHours: number,
+  usdPriceHint?: number,
+): Promise<bigint> {
+  let inUsd = usdPriceHint && usdPriceHint > 0
+    ? usdPriceHint
+    : (inToken.symbol === "USDC" || inToken.symbol === "USDT" ? 1 : 0);
+  if (inToken.symbol === "ETH" && inUsd <= 0) {
+    try {
+      const pr = await fetch("https://hermes.pyth.network/v2/updates/price/latest?ids[]=0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace");
+      const pj = await pr.json();
+      const p = pj?.parsed?.[0]?.price;
+      if (p) inUsd = Number(p.price) * 10 ** Number(p.expo);
+    } catch { /* keep 0 → no arming fee this time */ }
+  }
+  return inUsd > 0
+    ? BigInt(Math.floor(armingFeeUsd(windowHours) / inUsd * 10 ** inToken.decimals))
+    : 0n;
+}
+
+/**
+ * Part A — collect the upfront arming fee as a shielded deposit into the fee-vault under a
+ * protocol precommitment served by the executor's fee pool (deposit() only needs the
+ * precommitment, not the secret — the treasury wallet holds the secret and withdraws later).
+ * Best-effort: if the pool is empty or the deposit fails, returns collected=0n and the order
+ * proceeds without the fee. Invalidates the leaf cache on success (the deposit inserts a leaf,
+ * so any proof generated afterwards must scan the post-deposit tree).
+ *
+ * Used by BOTH the multi-leg (TWAP/grid) path and single-shot orders.
+ */
+export async function collectArmingFee(
+  chainId: number,
+  inToken: TokenInfo,
+  armingFeeWei: bigint,
+): Promise<{ armingPrecommitment?: string; armingCollectedWei: bigint }> {
+  const signer = getSigner();
+  if (armingFeeWei <= 0n || !signer) return { armingCollectedWei: 0n };
+  try {
+    const r = await fetch(`${getTradeExecutorBaseUrl()}/fee-pool/next?chain_id=${chainId}&asset=${inToken.symbol}`);
+    const j = await r.json();
+    if (!j?.precommitment) return { armingCollectedWei: 0n };
+
+    const net = getNetwork(chainId);
+    const asset = inToken.symbol === "ETH" ? NATIVE_TOKEN : inToken.address;
+    const ep = new Contract(net.entrypoint, ["function deposit(address,uint256,uint256) payable returns (uint256)"], signer);
+    // Explicit gas → skip MetaMask's eth_estimateGas (its Infura RPC rate-limits under load).
+    // deposit() does a depth-32 Poseidon Merkle insert (~977k gas measured) — each level is an
+    // external PoseidonT3 call, so the 63/64 forwarding rule starves a too-low limit and the
+    // insert reverts (status 0) with gasUsed < limit. 1.5M gives headroom; unused gas refunds.
+    const overrides = { gasLimit: 1_500_000n, ...(inToken.symbol === "ETH" ? { value: armingFeeWei } : {}) };
+    // MetaMask smart/delegated accounts (EIP-7702) cap concurrent unconfirmed txs; if one is
+    // briefly in-flight the submit is rejected with -32603 "in-flight transaction limit reached".
+    // Back off and retry — the prior tx confirms and frees the slot.
+    let tx;
+    for (let attempt = 0; ; attempt++) {
+      try { tx = await ep.deposit(asset, armingFeeWei, BigInt(j.precommitment), overrides); break; }
+      catch (err) {
+        const msg = String((err as { message?: string })?.message || err);
+        if (msg.includes("in-flight transaction limit") && attempt < 4) {
+          await new Promise(res => setTimeout(res, 4000));
+          continue;
+        }
+        throw err;
+      }
+    }
+    await tx.wait();
+    // The deposit inserted a leaf and bumped the on-chain Merkle root — drop the stale leaf cache
+    // so any proof built after this reads path + root from the SAME post-deposit snapshot.
+    try { invalidateLeafCache(asset); } catch { /* best-effort */ }
+    return { armingPrecommitment: String(j.precommitment), armingCollectedWei: armingFeeWei };
+  } catch (e) {
+    console.warn("[Fee] arming-fee deposit skipped:", e);
+    return { armingCollectedWei: 0n };
+  }
+}
+
 /** A single-slice withdraw proof → the leg's zk_proof wire shape. */
 function withdrawProofToLegProof(tx: ZKData["withdrawalTxData"]): BuiltLeg["zk_proof"] {
   return {
@@ -212,49 +295,10 @@ async function buildLegsFromSplit(
 
   // Part A — upfront arming fee. The split circuit needs every output's secret, so a protocol-owned
   // fee SLICE is impossible; instead collect the arming fee as a SEPARATE shielded deposit into the
-  // fee-vault with a protocol precommitment (deposit() only needs the precommitment, not the secret).
-  // Best-effort: if the pool is empty / it reverts, strategy creation continues without the fee.
-  let armingPrecommitment: string | undefined;
-  let armingCollectedWei = 0n;
-  if (armingFeeWei > 0n && signer) {
-    try {
-      const r = await fetch(`${getTradeExecutorBaseUrl()}/fee-pool/next?chain_id=${chainId}&asset=${inToken.symbol}`);
-      const j = await r.json();
-      if (j?.precommitment) {
-        const net = getNetwork(chainId);
-        const asset = inToken.symbol === "ETH" ? NATIVE_TOKEN : inToken.address;
-        const ep = new Contract(net.entrypoint, ["function deposit(address,uint256,uint256) payable returns (uint256)"], signer);
-        // Explicit gas → skip MetaMask's eth_estimateGas (its Infura RPC rate-limits under load).
-        // deposit() does a depth-32 Poseidon Merkle insert (~977k gas measured) — each level is an
-        // external PoseidonT3 call, so the 63/64 forwarding rule starves a too-low limit and the
-        // insert reverts (status 0) with gasUsed < limit. 1.5M gives headroom; unused gas refunds.
-        const overrides = { gasLimit: 1_500_000n, ...(inToken.symbol === "ETH" ? { value: armingFeeWei } : {}) };
-        // MetaMask smart/delegated accounts (EIP-7702) cap concurrent unconfirmed txs; if one is
-        // briefly in-flight the submit is rejected with -32603 "in-flight transaction limit reached".
-        // Back off and retry — the prior tx confirms and frees the slot.
-        let tx;
-        for (let attempt = 0; ; attempt++) {
-          try { tx = await ep.deposit(asset, armingFeeWei, BigInt(j.precommitment), overrides); break; }
-          catch (err) {
-            const msg = String((err as { message?: string })?.message || err);
-            if (msg.includes("in-flight transaction limit") && attempt < 4) {
-              await new Promise(res => setTimeout(res, 4000));
-              continue;
-            }
-            throw err;
-          }
-        }
-        await tx.wait();
-        armingPrecommitment = String(j.precommitment);
-        armingCollectedWei = armingFeeWei;
-        // This deposit inserts a leaf and bumps the on-chain Merkle root. generateSplitProof below
-        // reads stateRoot live but leaves from cache — drop the stale cache so the split's path and
-        // root come from the SAME post-deposit snapshot (else Split circuit `root === stateRoot` at
-        // line 55 fails). Same vault the split note lives in, so this is the cache key to clear.
-        try { invalidateLeafCache(asset); } catch { /* best-effort */ }
-      }
-    } catch (e) { console.warn("[Fee] arming-fee deposit skipped:", e); }
-  }
+  // fee-vault with a protocol precommitment (see collectArmingFee). Must run BEFORE
+  // generateSplitProof: the deposit bumps the Merkle root, and the split's path + root must come
+  // from the same post-deposit snapshot (collectArmingFee invalidates the leaf cache).
+  const { armingPrecommitment, armingCollectedWei } = await collectArmingFee(chainId, inToken, armingFeeWei);
 
   // 1. Split one deposit note into N slice notes (private, on-chain).
   const split = await generateSplitProof(chainId, inToken, sliceCount);
