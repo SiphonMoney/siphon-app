@@ -89,7 +89,11 @@ export default function Nexus({
         style={{
           paddingTop: viewMode === "blueprint" ? "0" : "2rem",
           height: "100%",
-          overflow: viewMode === "blueprint" ? "hidden" : "hidden",
+          // userdash is a document-style page whose cards can exceed the viewport — let it
+          // scroll. blueprint/run are canvas views that manage their own panning/scrolling
+          // and must stay clipped.
+          overflowY: viewMode === "userdash" ? "auto" : "hidden",
+          overflowX: "hidden",
           display: "flex",
           flexDirection: "column",
         }}

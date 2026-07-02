@@ -11,10 +11,14 @@
 
 import {
   getOrCreateClientKey,
-  deriveServerKey,
   encryptPrice,
   encryptConditionTree,
 } from "@/lib/fhe";
+import { ensureServerKeyUploaded } from "@/lib/fheKeyWarmup";
+
+// Re-export so existing callers keep working (implementation moved to fheKeyWarmup.ts,
+// which caches the derived server key and skips redundant re-uploads).
+export { ensureServerKeyUploaded };
 import { ensureClientKeyInDecryptor, isTeeAutonomousMode } from "@/lib/decryptorClient";
 import { getTradeExecutorBaseUrl } from "@/lib/tradeExecutorClient";
 import { appendUserActivity } from "@/lib/userActivityLog";
@@ -47,35 +51,6 @@ function authHeaders(): HeadersInit {
   const token = process.env.NEXT_PUBLIC_API_TOKEN || "";
   if (token) headers["X-API-TOKEN"] = token;
   return headers;
-}
-
-/**
- * Ensure the trade-executor has this user's FHE server key on file. The server key is
- * re-derivable from the client key, so if the backend doesn't have it (first strategy,
- * or DB reset) we derive and upload it. Returns once a key is guaranteed present.
- */
-export async function ensureServerKeyUploaded(
-  userId: string,
-  clientKey: string,
-  onUpload?: () => void,
-): Promise<void> {
-  // Always upload — the server does an upsert, so this is safe and idempotent.
-  // Skipping the /hasServerKey check avoids the key-mismatch bug where a stale
-  // server key from a previous browser/device causes all FHE evaluations to decrypt
-  // to garbage (the browser encrypts with the new client key, the server evaluates
-  // with the old server key, decryption always returns 0 / never triggers).
-  onUpload?.();
-  const base = getTradeExecutorBaseUrl();
-  const serverKey = await deriveServerKey(clientKey);
-  const res = await fetch(`${base}/uploadServerKey`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ user_id: userId, server_key: serverKey }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(formatSubmitError(res.status, text));
-  }
 }
 
 export interface StrategyInput {

@@ -19,6 +19,14 @@ import {
   installWalletChainSync,
 } from '../../../lib/networks';
 import { showAppToast } from '../../../lib/appToast';
+import { getStoredClientKey } from '../../../lib/fhe';
+import {
+  getFheKeyState,
+  getCachedServerKey,
+  warmFheKeys,
+  FHE_KEYS_EVENT,
+  type FheKeyState,
+} from '../../../lib/fheKeyWarmup';
 
 interface UnifiedBalance {
   symbol: string;
@@ -45,6 +53,43 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
   const [activeChainId, setActiveChainId] = useState<number>(DEFAULT_CHAIN_ID);
   const [switchingChain, setSwitchingChain] = useState(false);
   const activeNetwork = getNetwork(activeChainId);
+  // FHE keys (generated at wallet connect by TeeClientKeySync → warmFheKeys). Only truncated
+  // previews + sizes are held in state — never the full ~23MB server key string.
+  const [fheState, setFheState] = useState<FheKeyState>(() => getFheKeyState());
+  const [fheClientKey, setFheClientKey] = useState<{ preview: string; bytes: number } | null>(null);
+  const [fheServerKey, setFheServerKey] = useState<{ preview: string; bytes: number } | null>(null);
+
+  useEffect(() => {
+    const addr = wallet?.address;
+    if (!addr) { setFheClientKey(null); setFheServerKey(null); return; }
+    let cancelled = false;
+    const trunc = (k: string) => `${k.slice(0, 26)}…${k.slice(-12)}`;
+    const refresh = async () => {
+      setFheState(getFheKeyState());
+      const ck = getStoredClientKey(addr);
+      if (!cancelled) setFheClientKey(ck ? { preview: trunc(ck), bytes: Math.floor(ck.length / 2) } : null);
+      const sk = await getCachedServerKey(addr).catch(() => null);
+      if (!cancelled) setFheServerKey(sk ? { preview: trunc(sk), bytes: Math.floor(sk.length / 2) } : null);
+    };
+    void refresh();
+    const onKeys = () => { void refresh(); };
+    window.addEventListener(FHE_KEYS_EVENT, onKeys);
+    return () => { cancelled = true; window.removeEventListener(FHE_KEYS_EVENT, onKeys); };
+  }, [wallet?.address]);
+
+  const copyFheKey = useCallback(async (which: 'client' | 'server') => {
+    if (!wallet?.address) return;
+    const val = which === 'client'
+      ? getStoredClientKey(wallet.address)
+      : await getCachedServerKey(wallet.address).catch(() => null);
+    if (!val) { showAppToast('Key not generated yet', 'error'); return; }
+    try {
+      await navigator.clipboard.writeText(val);
+      showAppToast(`${which === 'client' ? 'Client' : 'Server'} key copied to clipboard`, 'success');
+    } catch {
+      showAppToast('Clipboard copy failed', 'error');
+    }
+  }, [wallet?.address]);
 
   // Keep the dashboard in sync with the globally-selected EVM network + wallet chain changes.
   useEffect(() => {
@@ -709,6 +754,70 @@ export default function UserDash({ isLoaded = true, walletConnected }: UserDashP
                 Import Notes
               </label>
             </div>
+          </div>
+
+          <div className="userdash-notes-card userdash-fhe-card">
+            <div className="userdash-balance-header">
+              <h2 className="userdash-balance-title">FHE Encryption Keys</h2>
+              <span className={`userdash-fhe-status userdash-fhe-status--${fheState.stage}`}>
+                {fheState.stage === 'generating' ? 'Generating keypair…'
+                  : fheState.stage === 'deriving' ? 'Deriving server key…'
+                  : fheState.stage === 'uploading' ? 'Uploading server key…'
+                  : fheState.stage === 'error' && fheState.serverKeyReady
+                    ? 'Keys ready — executor unreachable, upload retries at order time'
+                  : fheState.stage === 'error' ? 'Key generation failed — retries at order time'
+                  : fheClientKey && fheServerKey ? 'Ready'
+                  : 'Not generated yet'}
+              </span>
+            </div>
+            <p className="userdash-notes-description">
+              Generated automatically when your wallet connects so orders submit instantly.
+              The client key is secret and never leaves this device — it decrypts your strategy
+              triggers. The server key is a public evaluation key shared with the trade executor.
+            </p>
+            <div className="userdash-fhe-rows">
+              <div className="userdash-fhe-row">
+                <span className="userdash-fhe-label">Client key</span>
+                <code className="userdash-fhe-key">{fheClientKey ? fheClientKey.preview : '—'}</code>
+                <span className="userdash-fhe-size">
+                  {fheClientKey ? `${(fheClientKey.bytes / 1024).toFixed(1)} KB` : ''}
+                </span>
+                <button
+                  type="button"
+                  className="userdash-notes-button userdash-notes-button--secondary"
+                  onClick={() => void copyFheKey('client')}
+                  disabled={!fheClientKey}
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="userdash-fhe-row">
+                <span className="userdash-fhe-label">Server key</span>
+                <code className="userdash-fhe-key">{fheServerKey ? fheServerKey.preview : '—'}</code>
+                <span className="userdash-fhe-size">
+                  {fheServerKey ? `${(fheServerKey.bytes / (1024 * 1024)).toFixed(1)} MB` : ''}
+                </span>
+                <button
+                  type="button"
+                  className="userdash-notes-button userdash-notes-button--secondary"
+                  onClick={() => void copyFheKey('server')}
+                  disabled={!fheServerKey}
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            {!fheClientKey && (fheState.stage === 'idle' || fheState.stage === 'error') && (
+              <div className="userdash-notes-actions">
+                <button
+                  type="button"
+                  className="userdash-notes-button userdash-notes-button--primary"
+                  onClick={() => { if (wallet?.address) void warmFheKeys(wallet.address).catch(() => {}); }}
+                >
+                  Generate Keys Now
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

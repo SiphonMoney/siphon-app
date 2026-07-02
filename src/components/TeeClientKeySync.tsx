@@ -8,7 +8,7 @@
 import { useEffect } from "react";
 import { getStoredClientKey, generateKeys, encryptPriceCents } from "@/lib/fhe";
 import { ensureClientKeyInDecryptor, isTeeAutonomousMode } from "@/lib/decryptorClient";
-import { ensureServerKeyUploaded } from "@/lib/strategySubmit";
+import { ensureServerKeyUploaded, warmFheKeys } from "@/lib/fheKeyWarmup";
 import { resolveWalletAddress } from "@/lib/walletAddress";
 import { createVaultOutputNote } from "@/lib/outputNoteResolver";
 import { NATIVE_TOKEN } from "@/lib/networks";
@@ -70,6 +70,33 @@ export default function TeeClientKeySync() {
       const j = await r.json();
       console.log("[FHE SELF-TEST]", j);
       return j;
+    };
+  }, []);
+
+  // FHE key warmup: the moment a wallet connects, pre-generate the client key, derive +
+  // cache the server key (IndexedDB) and pre-upload it to the trade-executor — so the
+  // first order skips the multi-second keygen/derive and the ~20MB upload entirely.
+  // warmFheKeys is single-flight + once-per-wallet, so repeated calls are free.
+  useEffect(() => {
+    const warm = (): boolean => {
+      const userId = resolveWalletAddress();
+      if (!userId) return false;
+      void warmFheKeys(userId).catch(() => {/* logged inside; orders fall back to on-demand keygen */});
+      return true;
+    };
+
+    // MetaMask auto-reconnect can land after mount without firing walletConnected — poll
+    // briefly until an address shows up, then stop.
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    if (!warm()) {
+      timer = setInterval(() => { if (warm()) stop(); }, 2000);
+      setTimeout(stop, 120_000);
+    }
+    window.addEventListener("walletConnected", warm);
+    return () => {
+      stop();
+      window.removeEventListener("walletConnected", warm);
     };
   }, []);
 

@@ -837,3 +837,82 @@
   cursor: not-allowed;
 }
 
+
+/* ── FHE Encryption Keys card ──────────────────────────────────────────────── */
+
+.userdash-fhe-card {
+  grid-column: span 3;   /* full-width row under Activity Log + Notes Backup */
+  height: auto;          /* override the fixed notes-card height — key rows need room */
+  overflow: visible;
+}
+
+.userdash-fhe-status {
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+
+.userdash-fhe-status--ready { color: #7ee2a8; border-color: rgba(126, 226, 168, 0.4); }
+.userdash-fhe-status--generating,
+.userdash-fhe-status--deriving,
+.userdash-fhe-status--uploading { color: #f3d97e; border-color: rgba(243, 217, 126, 0.4); }
+.userdash-fhe-status--error { color: #f08a8a; border-color: rgba(240, 138, 138, 0.4); }
+
+.userdash-fhe-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.userdash-fhe-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.userdash-fhe-label {
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.userdash-fhe-key {
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userdash-fhe-size {
+  font-family: var(--font-source-code), monospace;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .userdash-fhe-card { grid-column: span 1; }
+  .userdash-fhe-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "label size" "key key" "copy copy";
+  }
+  .userdash-fhe-row .userdash-fhe-label { grid-area: label; }
+  .userdash-fhe-row .userdash-fhe-size { grid-area: size; }
+  .userdash-fhe-row .userdash-fhe-key { grid-area: key; }
+  .userdash-fhe-row .userdash-notes-button { grid-area: copy; }
+}
